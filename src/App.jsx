@@ -39,14 +39,35 @@ const StatusBadge = ({status}) => (
   <span className="inline-flex items-center px-2 py-1 text-xs rounded-xl bg-slate-900 text-white">{status}</span>
 )
 
+/* Etikettfärger för leverantörers kategori (robust mot stavning/versaler/åäö) */
+const normalizeKey = (s) =>
+  (s || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')                 // dela diakrit
+    .replace(/[\u0300-\u036f]/g, '')  // ta bort diakrit
+    .replace(/\s+/g, '');             // ta bort mellanslag
+
+const SupplierTypeBadge = ({type}) => {
+  const key = normalizeKey(type);
+  // Nycklar vi matchar: stalhallsleverantor, markforetag, elleverantor, vvsleverantor, ventleverantor
+  let cls = "bg-gray-100 text-gray-700 border border-gray-200"; // default ljusgrå
+  if (key.includes("stalhallsleverantor")) cls = "bg-gray-100 text-gray-700 border border-gray-200";          // ljusgrå
+  else if (key.includes("markforetag"))    cls = "bg-amber-100 text-amber-800 border border-amber-200";       // mellanbrun (amber)
+  else if (key.includes("elleverantor"))   cls = "bg-red-100 text-red-800 border border-red-200";             // ljusröd
+  else if (key.includes("vvsleverantor"))  cls = "bg-sky-100 text-sky-800 border border-sky-200";             // ljusblå
+  else if (key.includes("ventleverantor")) cls = "bg-green-100 text-green-800 border border-green-200";       // ljusgrön
+
+  return <span className={"inline-flex items-center px-2 py-1 text-xs rounded-xl " + cls}>{type}</span>
+}
+
 /* Modal (popup) */
 const Modal = ({ open, onClose, title, children, footer }) => {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50">
-      {/* backdrop */}
       <div className="absolute inset-0 bg-black/50" onClick={onClose}></div>
-      {/* dialog */}
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border">
           <div className="px-5 py-4 border-b flex items-center justify-between">
@@ -147,8 +168,8 @@ const Customers = ({ customers, setCustomers, settings }) => {
   }), [settings]);
 
   const [form, setForm] = React.useState(emptyForm);
-  const [editingId, setEditingId] = React.useState(null); // null = skapa ny, annars redigera
-  const [selected, setSelected] = React.useState(null);   // för popup-detalj
+  const [editingId, setEditingId] = React.useState(null);
+  const [selected, setSelected] = React.useState(null);
 
   const startEdit = (id) => {
     const c = customers.find(x => x.id === id);
@@ -164,10 +185,7 @@ const Customers = ({ customers, setCustomers, settings }) => {
     setEditingId(id);
   };
 
-  const cancelEdit = () => {
-    setForm(emptyForm);
-    setEditingId(null);
-  };
+  const cancelEdit = () => { setForm(emptyForm); setEditingId(null); };
 
   const add = () => {
     const next = [...customers, { id: crypto.randomUUID(), ...form }];
@@ -208,7 +226,6 @@ const Customers = ({ customers, setCustomers, settings }) => {
   return (
     <>
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Formulär: skapa eller redigera */}
         <Card><CardContent className="grid gap-3">
           <div className="flex items-center justify-between">
             <div className="text-lg font-semibold">{editingId ? "Redigera kund" : "Ny kund"}</div>
@@ -261,7 +278,7 @@ const Customers = ({ customers, setCustomers, settings }) => {
                 <div className="col-span-3"><Input placeholder="Namn" value={c.name} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], name:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
                 <div className="col-span-5"><Input placeholder="E-post" value={c.email} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], email:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
                 <div className="col-span-3"><Input placeholder="Telefon" value={c.phone} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], phone:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
-                <div className="col-span-1 flex items-center justify-end"><Button variant="ghost" size="sm" onClick={()=>removeContactRow(idx)}>✕</Button></div>
+                <div className="col-span-1 flex items-center justify-end"><Button variant="ghost" size="sm" onClick={()=>{ const copy=[...form.contacts]; copy.splice(idx,1); setForm({...form, contacts: copy}); }}>✕</Button></div>
               </div>
             ))}
           </div>
@@ -272,7 +289,6 @@ const Customers = ({ customers, setCustomers, settings }) => {
           }
         </CardContent></Card>
 
-        {/* Lista + sök */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <Input placeholder="Sök kund…" value={q} onChange={e=>setQ(e.target.value)} className="max-w-sm" />
@@ -317,7 +333,6 @@ const Customers = ({ customers, setCustomers, settings }) => {
         </div>
       </div>
 
-      {/* Popup-detaljvy */}
       <Modal
         open={!!selected}
         onClose={()=>setSelected(null)}
@@ -362,7 +377,7 @@ const Customers = ({ customers, setCustomers, settings }) => {
   )
 }
 
-/* ---------- Leverantörer (med redigering + popup) ---------- */
+/* ---------- Leverantörer (med redigering + popup + färger) ---------- */
 const Suppliers = ({ suppliers, setSuppliers, settings }) => {
   const empty = React.useMemo(()=>({
     name:"", title:"", company:"", email:"", phone:"", address:"", notes:"", type:(settings.supplierTypes||[])[0] || ""
@@ -423,7 +438,13 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
           <label className="grid gap-1 text-sm">
             <span className="text-slate-600">Kategori</span>
             <Select value={form.type} onChange={v=>setForm({...form, type:v})}>
-              {(settings.supplierTypes||[]).map(x => <option key={x} value={x}>{x}</option>)}
+              {(settings.supplierTypes||[
+                "Stålhallsleverantör",
+                "Markföretag",
+                "El leverantör",
+                "VVS leverantör",
+                "Vent leverantör"
+              ]).map(x => <option key={x} value={x}>{x}</option>)}
             </Select>
           </label>
           <label className="grid gap-1 text-sm"><span className="text-slate-600">Övrig info</span><Textarea value={form.notes} onChange={e=>setForm({...form, notes:e.target.value})}/></label>
@@ -442,7 +463,7 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
                   <div className="font-semibold">{s.name}</div>
                   <div className="text-sm text-slate-500">{s.company} · {s.title}</div>
                 </div>
-                <span className="inline-flex items-center px-2 py-1 text-xs rounded-xl bg-slate-900 text-white">{s.type}</span>
+                <SupplierTypeBadge type={s.type}/>
               </div>
               <div className="text-sm mt-2">{s.email} · {s.phone}</div>
               {s.address && <div className="text-xs text-slate-500">{s.address}</div>}
@@ -458,7 +479,6 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
         </div>
       </div>
 
-      {/* Popup detaljer */}
       <Modal
         open={!!selected}
         onClose={()=>setSelected(null)}
@@ -476,7 +496,7 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
         {selected && (
           <div className="grid gap-2 text-sm">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center px-2 py-1 text-xs rounded-xl bg-slate-900 text-white">{selected.type}</span>
+              <SupplierTypeBadge type={selected.type}/>
             </div>
             {selected.company && <div><span className="text-slate-500">Företag:</span> {selected.company}</div>}
             {(selected.email || selected.phone) && <div><span className="text-slate-500">Kontakt:</span> {selected.email} · {selected.phone}</div>}
@@ -536,7 +556,7 @@ export default function App() {
         phone: "",
         address: "",
         notes: "",
-        type: "Vent Leverantör"
+        type: "Vent leverantör"
       }]
       save(LS.customers, demoCustomers)
       save(LS.suppliers, demoSuppliers)
