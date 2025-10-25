@@ -35,9 +35,16 @@ const CustomerLabelBadge = ({label}) => {
   const cls = map[label] || "bg-gray-100 text-gray-700 border"
   return <span className={"inline-flex items-center px-2 py-1 text-xs rounded-xl " + cls}>{label}</span>
 }
-const StatusBadge = ({status}) => (
-  <span className="inline-flex items-center px-2 py-1 text-xs rounded-xl bg-slate-900 text-white">{status}</span>
-)
+
+/* Statusfärger: Aktiv=orange, Vunnen=grön, Förlorad=grå */
+const StatusBadge = ({status}) => {
+  const key = (status || "").toString().toLowerCase()
+  let cls = "bg-gray-100 text-gray-700"
+  if (key.includes("aktiv")) cls = "bg-orange-500 text-white"
+  if (key.includes("vunn")) cls = "bg-green-600 text-white"
+  if (key.includes("förlor") || key.includes("forlor")) cls = "bg-gray-300 text-gray-900"
+  return <span className={"inline-flex items-center px-2 py-1 text-xs rounded-xl " + cls}>{status}</span>
+}
 
 /* Leverantörskategori-färger */
 const normalizeKey = (s) =>
@@ -183,14 +190,8 @@ const Customers = ({ customers, setCustomers, settings }) => {
     setEditingId(id);
   };
   const cancelEdit = () => { setForm(emptyForm); setEditingId(null); };
-  const add = () => {
-    const next = [...customers, { id: crypto.randomUUID(), ...form }];
-    setCustomers(next); save(LS.customers, next); setForm(emptyForm);
-  };
-  const update = () => {
-    const next = customers.map(c => c.id === editingId ? { ...c, ...form } : c);
-    setCustomers(next); save(LS.customers, next); cancelEdit();
-  };
+  const add = () => { const next=[...customers, { id: crypto.randomUUID(), ...form }]; setCustomers(next); save(LS.customers,next); setForm(emptyForm); };
+  const update = () => { const next=customers.map(c=>c.id===editingId?{...c,...form}:c); setCustomers(next); save(LS.customers,next); cancelEdit(); };
   const remove = (id) => {
     if (!confirm("Ta bort kunden?")) return;
     const next = customers.filter(c => c.id !== id);
@@ -244,7 +245,7 @@ const Customers = ({ customers, setCustomers, settings }) => {
                 <div className="col-span-3"><Input placeholder="Namn" value={c.name} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], name:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
                 <div className="col-span-5"><Input placeholder="E-post" value={c.email} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], email:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
                 <div className="col-span-3"><Input placeholder="Telefon" value={c.phone} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], phone:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
-                <div className="col-span-1 flex items-center justify-end"><Button variant="ghost" size="sm" onClick={()=>removeContactRow(idx)}>✕</Button></div>
+                <div className="col-span-1 flex items-center justify-end"><Button variant="ghost" size="sm" onClick={()=>{ const copy=[...form.contacts]; copy.splice(idx,1); setForm({...form, contacts: copy}); }}>✕</Button></div>
               </div>
             ))}
           </div>
@@ -257,7 +258,8 @@ const Customers = ({ customers, setCustomers, settings }) => {
             <Input placeholder="Sök kund…" value={q} onChange={e=>setQ(e.target.value)} className="max-w-sm" />
           </div>
           <div className="grid gap-3">
-            {filtered.map(c=>(
+            {customers.filter(c => [c.company, c.primaryContact?.name, c.primaryContact?.email].join(" ").toLowerCase().includes(q.toLowerCase()))
+              .map(c=>(
               <Card key={c.id}><CardContent>
                 <div className="flex items-center justify-between">
                   <div>
@@ -321,7 +323,7 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
     return [s.name, s.company, s.title, s.email, s.phone, s.type].some(matchesFreeText);
   });
 
-  const add = () => { const next=[...suppliers, { id: crypto.randomUUID(), ...form }]; setSuppliers(next); save(LS.suppliers, next); setForm(empty); };
+  const add = () => { const next=[...suppliers, { id: crypto.randomUUID(), ...form }]; setSuppliers(next); save(LS.suppliers,next); setForm(empty); };
   const startEdit = (id) => { const s=suppliers.find(x=>x.id===id); if(!s) return;
     setForm({ name:s.name||"", title:s.title||"", company:s.company||"", email:s.email||"", phone:s.phone||"", address:s.address||"", notes:s.notes||"", type:s.type|| (settings.supplierTypes||[])[0]||"" });
     setEditingId(id);
@@ -407,7 +409,35 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
   )
 }
 
-/* ---------- OFFERT (autonummer + koppling till kund/leverantörer + bilagor + konvertera till projekt) ---------- */
+/* ---------- Hjälpkomponent: Drag&Drop av LÄNKAR ---------- */
+const DropLink = ({ onAddUrl }) => {
+  const [highlight, setHighlight] = React.useState(false);
+  const onDrop = (e) => {
+    e.preventDefault(); setHighlight(false);
+    // 1) Om användaren släpper text/URL
+    const text = e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain');
+    if (text && /^https?:\/\//i.test(text.trim())) {
+      onAddUrl(text.trim()); return;
+    }
+    // 2) Om användaren släpper filer: vi kan inte ta emot filer utan backend
+    alert("För att bifoga filer här behöver vi en lagringstjänst (t.ex. OneDrive/SharePoint). Klistra in en DELNINGS-länk istället så länge.");
+  };
+  const onDragOver = (e) => { e.preventDefault(); setHighlight(true); }
+  const onDragLeave = () => setHighlight(false);
+  return (
+    <div
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      className={"rounded-xl border text-xs p-3 " + (highlight ? "bg-amber-50 border-amber-300" : "bg-slate-50 border-slate-200")}
+      title="Dra in en länk (t.ex. OneDrive/SharePoint/Google Drive/Dropbox)…"
+    >
+      Dra & släpp en <b>länk</b> hit (OneDrive/SharePoint/Google Drive/Dropbox) eller klistra in i fältet ovan.
+    </div>
+  )
+}
+
+/* ---------- OFFERT (autonummer + koppling + bilagor + ritningar) ---------- */
 const getNextOfferNumber = (offers) => {
   if (!offers || offers.length === 0) return 310050;
   const max = Math.max(...offers.map(o => Number(o.number || 0)));
@@ -425,7 +455,7 @@ const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects
     customerId: "",
     supplierIds: [],
     notes: "",
-    attachments: [], // {type:'Tidplan'|'Kalkyl'|'Övrigt', url:string}
+    attachments: [], // {id,type:'Tidplan'|'Kalkyl'|'Ritning'|'Övrigt', url:string}
     lost: false,
     converted: false
   }), [offers]);
@@ -441,8 +471,8 @@ const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects
   };
   const cancel = () => { setForm(empty); setEditingId(null); };
 
-  const addAttachment = () => {
-    setForm({...form, attachments:[...form.attachments, { id: crypto.randomUUID(), type:"Tidplan", url:"" }]});
+  const addAttachment = (presetType="Tidplan") => {
+    setForm({...form, attachments:[...form.attachments, { id: crypto.randomUUID(), type:presetType, url:"" }]});
   };
   const removeAttachment = (idx) => {
     const copy=[...form.attachments]; copy.splice(idx,1); setForm({...form, attachments: copy});
@@ -486,13 +516,15 @@ const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects
       startDate: "",
       endDate: "",
       budget: "",
-      progress: 0
+      progress: 0,
+      notes: "",
+      attachments: [] // separata projektbilagor
     };
     const nextProjects = [...projects, proj];
     setProjects(nextProjects); save(LS.projects, nextProjects);
     const nextOffers = offers.map(x => x.id===id ? {...x, converted:true, lost:false} : x);
     setOffers(nextOffers); save(LS.offers, nextOffers);
-    alert(`Projekt skapat från offert ${o.number}. Gå till fliken "Projekt" för att se det.`);
+    alert(`Projekt skapat från offert ${o.number}. Gå till fliken "Projekt" för att redigera.`);
   };
 
   const byText = (o) => {
@@ -548,21 +580,32 @@ const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects
           </div>
         </div>
 
+        {/* Bilagor inkl. Ritning + Dropzone för LÄNKAR */}
         <div className="grid gap-2">
           <div className="flex items-center justify-between">
             <div className="text-sm text-slate-600">Bilagor</div>
-            <Button size="sm" variant="secondary" onClick={addAttachment}>Lägg till länk</Button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={()=>addAttachment("Tidplan")}>+ Tidplan</Button>
+              <Button size="sm" variant="secondary" onClick={()=>addAttachment("Kalkyl")}>+ Kalkyl</Button>
+              <Button size="sm" variant="secondary" onClick={()=>addAttachment("Ritning")}>+ Ritning</Button>
+              <Button size="sm" variant="secondary" onClick={()=>addAttachment("Övrigt")}>+ Övrigt</Button>
+            </div>
           </div>
+
           {form.attachments.map((a, idx)=>(
             <div key={a.id} className="grid grid-cols-12 gap-2">
               <div className="col-span-3">
                 <Select value={a.type} onChange={(v)=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], type:v}; setForm({...form, attachments: copy}); }}>
                   <option>Tidplan</option>
                   <option>Kalkyl</option>
+                  <option>Ritning</option>
                   <option>Övrigt</option>
                 </Select>
               </div>
-              <div className="col-span-8"><Input placeholder="Klistra in länk (PDF/Excel/Google Drive/OneDrive)" value={a.url} onChange={e=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], url:e.target.value}; setForm({...form, attachments: copy}); }}/></div>
+              <div className="col-span-8">
+                <Input placeholder="Klistra in DELNINGS-länk (PDF/Excel/Ritning)" value={a.url} onChange={e=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], url:e.target.value}; setForm({...form, attachments: copy}); }}/>
+                <div className="mt-2"><DropLink onAddUrl={(u)=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], url:u}; setForm({...form, attachments: copy}); }} /></div>
+              </div>
               <div className="col-span-1 flex items-center justify-end">
                 <Button size="sm" variant="ghost" onClick={()=>removeAttachment(idx)}>✕</Button>
               </div>
@@ -592,6 +635,9 @@ const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects
         <div className="grid gap-3">
           {filtered.sort((a,b)=>Number(b.number)-Number(a.number)).map(o=>{
             const c = customers.find(x=>x.id===o.customerId);
+            const status =
+              o.converted ? "Vunnen" :
+              o.lost ? "Förlorad" : "Aktiv";
             return (
               <Card key={o.id}><CardContent>
                 <div className="flex items-center justify-between">
@@ -599,11 +645,7 @@ const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects
                     <div className="text-lg font-semibold">#{o.number} · {o.name}</div>
                     <div className="text-sm text-slate-500">{c?.company || "—"} · {o.address || "Adress saknas"}</div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {o.converted && <StatusBadge status="Vunnen"/>}
-                    {o.lost && <StatusBadge status="Förlorad"/>}
-                    {!o.converted && !o.lost && <StatusBadge status="Aktiv"/>}
-                  </div>
+                  <StatusBadge status={status}/>
                 </div>
 
                 {o.supplierIds.length>0 && (
@@ -641,52 +683,161 @@ const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects
   )
 }
 
-/* ---------- PROJEKT (översikt – skapade från vunna offerter) ---------- */
-const Projects = ({ projects, customers, suppliers }) => {
+/* ---------- PROJEKT (öppna & redigera i popup, inkl. bilagor + ritningar) ---------- */
+const Projects = ({ projects, setProjects, customers, suppliers }) => {
   const [q, setQ] = React.useState("");
+  const [openId, setOpenId] = React.useState(null);
+  const proj = projects.find(p => p.id === openId) || null;
+
+  const updateProject = (patch) => {
+    if (!proj) return;
+    const next = projects.map(p => p.id === proj.id ? { ...p, ...patch } : p);
+    setProjects(next); save(LS.projects, next);
+  };
+
+  const addAttachment = (presetType="Ritning") => {
+    const nextList = [...(proj.attachments||[]), { id: crypto.randomUUID(), type:presetType, url:"" }];
+    updateProject({ attachments: nextList });
+  };
+  const removeAttachment = (idx) => {
+    const copy = [...(proj.attachments||[])]; copy.splice(idx,1);
+    updateProject({ attachments: copy });
+  };
+
+  const addSupplier = (id) => {
+    if (!id) return;
+    const set = new Set([...(proj.suppliers||[]), id]);
+    updateProject({ suppliers: Array.from(set) });
+  };
+  const removeSupplier = (id) => {
+    updateProject({ suppliers: (proj.suppliers||[]).filter(x=>x!==id) });
+  };
+
   const filtered = projects.filter(p => {
     const c = customers.find(x=>x.id===p.customerId);
     const txt = [p.name, p.address, p.offerNumber, c?.company].join(" ").toLowerCase();
     return txt.includes(q.toLowerCase());
   });
 
+  const supplierOptions = [{id:"", name:"— välj leverantör —", company:""}, ...suppliers];
+
   return (
-    <div className="grid gap-4">
-      <div className="flex items-center justify-between">
-        <Input className="max-w-sm" placeholder="Sök projekt (namn, kund, offertnr)..." value={q} onChange={e=>setQ(e.target.value)} />
+    <>
+      <div className="grid gap-4">
+        <div className="flex items-center justify-between">
+          <Input className="max-w-sm" placeholder="Sök projekt (namn, kund, offertnr)..." value={q} onChange={e=>setQ(e.target.value)} />
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          {filtered.sort((a,b)=>Number(b.offerNumber)-Number(a.offerNumber)).map(p=>{
+            const c = customers.find(x=>x.id===p.customerId);
+            return (
+              <Card key={p.id}><CardContent>
+                <div className="flex items-center justify-between">
+                  <div className="text-lg font-semibold">{p.name}</div>
+                  <div className="text-xs text-slate-500">Offert #{p.offerNumber}</div>
+                </div>
+                <div className="text-sm text-slate-500">{c?.company || "—"} · {p.address || "Adress saknas"}</div>
+
+                {p.suppliers && p.suppliers.length>0 && (
+                  <div className="mt-2 text-sm flex flex-wrap gap-2">
+                    {p.suppliers.map(id=>{
+                      const s = suppliers.find(x=>x.id===id); if(!s) return null;
+                      return <span key={id} className="inline-flex items-center gap-2 border rounded-2xl px-2 py-1">{s.name}<SupplierTypeBadge type={s.type}/></span>
+                    })}
+                  </div>
+                )}
+
+                <div className="mt-3">
+                  <div className="text-xs text-slate-500 mb-1">Progress</div>
+                  <div className="w-full h-2 rounded bg-slate-100 overflow-hidden">
+                    <div className="h-2 bg-green-500" style={{width: `${Number(p.progress||0)}%`}} />
+                  </div>
+                </div>
+
+                <div className="mt-3"><Button size="sm" onClick={()=>setOpenId(p.id)}>Öppna / Redigera</Button></div>
+              </CardContent></Card>
+            )
+          })}
+        </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
-        {filtered.sort((a,b)=>Number(b.offerNumber)-Number(a.offerNumber)).map(p=>{
-          const c = customers.find(x=>x.id===p.customerId);
-          return (
-            <Card key={p.id}><CardContent>
+      {/* Edit-modal */}
+      <Modal
+        open={!!proj}
+        onClose={()=>setOpenId(null)}
+        title={proj ? `Projekt: ${proj.name}` : ""}
+        footer={proj && (<Button onClick={()=>setOpenId(null)}>Stäng</Button>)}
+      >
+        {proj && (
+          <div className="grid gap-4">
+            <div className="grid md:grid-cols-2 gap-3">
+              <label className="grid gap-1 text-sm"><span className="text-slate-600">Projektnamn</span>
+                <Input value={proj.name} onChange={e=>updateProject({ name: e.target.value })}/></label>
+              <label className="grid gap-1 text-sm"><span className="text-slate-600">Adress</span>
+                <Input value={proj.address||""} onChange={e=>updateProject({ address: e.target.value })}/></label>
+              <label className="grid gap-1 text-sm"><span className="text-slate-600">Startdatum</span>
+                <Input type="date" value={proj.startDate||""} onChange={e=>updateProject({ startDate: e.target.value })}/></label>
+              <label className="grid gap-1 text-sm"><span className="text-slate-600">Slutdatum</span>
+                <Input type="date" value={proj.endDate||""} onChange={e=>updateProject({ endDate: e.target.value })}/></label>
+              <label className="grid gap-1 text-sm"><span className="text-slate-600">Budget</span>
+                <Input value={proj.budget||""} onChange={e=>updateProject({ budget: e.target.value })} placeholder="ex. 1 250 000 SEK"/></label>
+              <label className="grid gap-1 text-sm"><span className="text-slate-600">Progress (%)</span>
+                <Input type="number" min="0" max="100" value={proj.progress||0} onChange={e=>updateProject({ progress: Math.max(0, Math.min(100, Number(e.target.value)||0)) })}/></label>
+            </div>
+
+            <label className="grid gap-1 text-sm"><span className="text-slate-600">Anteckningar</span>
+              <Textarea value={proj.notes||""} onChange={e=>updateProject({ notes: e.target.value })}/></label>
+
+            <div className="grid gap-2">
+              <div className="text-sm text-slate-600">Leverantörer</div>
+              <Select value="" onChange={addSupplier}>
+                {supplierOptions.map(s => <option key={s.id || 'none'} value={s.id}>{s.name ? `${s.name} – ${s.company}` : s.name}</option>)}
+              </Select>
+              <div className="flex flex-wrap gap-2">
+                {(proj.suppliers||[]).map(id=>{
+                  const s = suppliers.find(x=>x.id===id); if(!s) return null;
+                  return <span key={id} className="inline-flex items-center gap-2 border rounded-2xl px-2 py-1 text-xs">{s.name}<SupplierTypeBadge type={s.type}/><button onClick={()=>removeSupplier(id)}>✕</button></span>
+                })}
+              </div>
+            </div>
+
+            {/* Bilagor inkl. Ritning + Dropzone för LÄNKAR */}
+            <div className="grid gap-2">
               <div className="flex items-center justify-between">
-                <div className="text-lg font-semibold">{p.name}</div>
-                <div className="text-xs text-slate-500">Offert #{p.offerNumber}</div>
-              </div>
-              <div className="text-sm text-slate-500">{c?.company || "—"} · {p.address || "Adress saknas"}</div>
-
-              {p.suppliers && p.suppliers.length>0 && (
-                <div className="mt-2 text-sm flex flex-wrap gap-2">
-                  {p.suppliers.map(id=>{
-                    const s = suppliers.find(x=>x.id===id); if(!s) return null;
-                    return <span key={id} className="inline-flex items-center gap-2 border rounded-2xl px-2 py-1">{s.name}<SupplierTypeBadge type={s.type}/></span>
-                  })}
-                </div>
-              )}
-
-              <div className="mt-3">
-                <div className="text-xs text-slate-500 mb-1">Progress</div>
-                <div className="w-full h-2 rounded bg-slate-100 overflow-hidden">
-                  <div className="h-2 bg-green-500" style={{width: `${Number(p.progress||0)}%`}} />
+                <div className="text-sm text-slate-600">Projektbilagor</div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="secondary" onClick={()=>addAttachment("Ritning")}>+ Ritning</Button>
+                  <Button size="sm" variant="secondary" onClick={()=>addAttachment("Tidplan")}>+ Tidplan</Button>
+                  <Button size="sm" variant="secondary" onClick={()=>addAttachment("Kalkyl")}>+ Kalkyl</Button>
+                  <Button size="sm" variant="secondary" onClick={()=>addAttachment("Övrigt")}>+ Övrigt</Button>
                 </div>
               </div>
-            </CardContent></Card>
-          )
-        })}
-      </div>
-    </div>
+
+              {(proj.attachments||[]).map((a, idx)=>(
+                <div key={a.id} className="grid grid-cols-12 gap-2">
+                  <div className="col-span-3">
+                    <Select value={a.type} onChange={(v)=>{ const copy=[...(proj.attachments||[])]; copy[idx]={...copy[idx], type:v}; updateProject({ attachments: copy }); }}>
+                      <option>Ritning</option>
+                      <option>Tidplan</option>
+                      <option>Kalkyl</option>
+                      <option>Övrigt</option>
+                    </Select>
+                  </div>
+                  <div className="col-span-8">
+                    <Input placeholder="Klistra in DELNINGS-länk (PDF/ritning)" value={a.url} onChange={e=>{ const copy=[...(proj.attachments||[])]; copy[idx]={...copy[idx], url:e.target.value}; updateProject({ attachments: copy }); }}/>
+                    <div className="mt-2"><DropLink onAddUrl={(u)=>{ const copy=[...(proj.attachments||[])]; copy[idx]={...copy[idx], url:u}; updateProject({ attachments: copy }); }} /></div>
+                  </div>
+                  <div className="col-span-1 flex items-center justify-end">
+                    <Button size="sm" variant="ghost" onClick={()=>removeAttachment(idx)}>✕</Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
+    </>
   )
 }
 
@@ -760,7 +911,14 @@ export default function App() {
           setProjects={(v)=>{ setData(d=>({...d, projects:v})); }}
         />
       )}
-      {tab === "projekt"       && <Projects projects={data.projects} customers={data.customers} suppliers={data.suppliers} />}
+      {tab === "projekt"       && (
+        <Projects
+          projects={data.projects}
+          setProjects={(v)=>{ setData(d=>({...d, projects:v})); }}
+          customers={data.customers}
+          suppliers={data.suppliers}
+        />
+      )}
       {tab === "kunder"        && (
         <Customers
           customers={data.customers}
