@@ -1,7 +1,7 @@
 import React from 'react'
 import { LS, load, save, defaultSettings } from './lib/storage.js'
 
-/* --- Små UI-bitar --- */
+/* ---------- Små UI-komponenter ---------- */
 const Card = ({children, className=""}) => (
   <div className={"rounded-2xl bg-white shadow-sm border " + className}>{children}</div>
 )
@@ -24,11 +24,44 @@ const Textarea = (props) => <textarea {...props} className={"border rounded-xl p
 const Select = ({value, onChange, children}) => (
   <select value={value} onChange={(e)=>onChange && onChange(e.target.value)} className="border rounded-xl px-3 py-2 text-sm w-full">{children}</select>
 )
-const Badge = ({children, className=""}) => (
-  <span className={"inline-flex items-center px-2 py-1 text-xs rounded-xl bg-slate-900 text-white " + className}>{children}</span>
+
+/* Etikettfärger för kunder */
+const CustomerLabelBadge = ({label}) => {
+  const map = {
+    "Entreprenad": "bg-orange-100 text-orange-800 border border-orange-200",
+    "Turbovex": "bg-green-100 text-green-800 border border-green-200",
+    "Övrigt": "bg-gray-100 text-gray-700 border border-gray-200"
+  }
+  const cls = map[label] || "bg-gray-100 text-gray-700 border"
+  return <span className={"inline-flex items-center px-2 py-1 text-xs rounded-xl " + cls}>{label}</span>
+}
+const StatusBadge = ({status}) => (
+  <span className="inline-flex items-center px-2 py-1 text-xs rounded-xl bg-slate-900 text-white">{status}</span>
 )
 
-/* --- Layout --- */
+/* Modal (popup) */
+const Modal = ({ open, onClose, title, children, footer }) => {
+  if (!open) return null
+  return (
+    <div className="fixed inset-0 z-50">
+      {/* backdrop */}
+      <div className="absolute inset-0 bg-black/50" onClick={onClose}></div>
+      {/* dialog */}
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border">
+          <div className="px-5 py-4 border-b flex items-center justify-between">
+            <div className="text-lg font-semibold">{title}</div>
+            <Button variant="ghost" onClick={onClose}>Stäng</Button>
+          </div>
+          <div className="p-5 max-h-[65vh] overflow-auto">{children}</div>
+          {footer && <div className="px-5 py-4 border-t bg-slate-50 rounded-b-2xl flex justify-end gap-2">{footer}</div>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Layout ---------- */
 const Sidebar = ({ current, setCurrent, settings }) => {
   const items = [
     { id: "dashboard", label: "Översikt" },
@@ -65,6 +98,7 @@ const Sidebar = ({ current, setCurrent, settings }) => {
     </div>
   )
 }
+
 const Shell = ({ children, current, setCurrent, settings }) => (
   <div className="min-h-screen">
     <div className="max-w-7xl mx-auto grid grid-cols-[16rem,1fr] gap-0">
@@ -74,7 +108,7 @@ const Shell = ({ children, current, setCurrent, settings }) => (
   </div>
 )
 
-/* --- Dashboard --- */
+/* ---------- Dashboard ---------- */
 const Dashboard = ({ offers, projects, activities }) => {
   const activeOffers = offers.filter(o => !o.lost && !o.converted)
   const won = offers.filter(o => o.converted)
@@ -100,185 +134,362 @@ const Dashboard = ({ offers, projects, activities }) => {
   )
 }
 
-/* --- Kunder (med sök + flera kontaktpersoner) --- */
+/* ---------- Kunder (med redigering + flera kontakter + popup) ---------- */
 const Customers = ({ customers, setCustomers, settings }) => {
-  const [q, setQ] = React.useState("")
-  const [form, setForm] = React.useState({
+  const [q, setQ] = React.useState("");
+  const emptyForm = React.useMemo(() => ({
     company: "",
     label: (settings.customerLabels||[])[0] || "Entreprenad",
     status: (settings.customerStatus||[])[0] || "Aktiv",
     primaryContact: { name: "", title: "", email: "", phone: "" },
     address: "",
     contacts: []
-  })
+  }), [settings]);
+
+  const [form, setForm] = React.useState(emptyForm);
+  const [editingId, setEditingId] = React.useState(null); // null = skapa ny, annars redigera
+  const [selected, setSelected] = React.useState(null);   // för popup-detalj
+
+  const startEdit = (id) => {
+    const c = customers.find(x => x.id === id);
+    if (!c) return;
+    setForm(JSON.parse(JSON.stringify({
+      company: c.company || "",
+      label: c.label || (settings.customerLabels||[])[0] || "Entreprenad",
+      status: c.status || (settings.customerStatus||[])[0] || "Aktiv",
+      primaryContact: c.primaryContact || { name:"", title:"", email:"", phone:"" },
+      address: c.address || "",
+      contacts: Array.isArray(c.contacts) ? c.contacts.map(p => ({ id: p.id || crypto.randomUUID(), ...p })) : []
+    })));
+    setEditingId(id);
+  };
+
+  const cancelEdit = () => {
+    setForm(emptyForm);
+    setEditingId(null);
+  };
 
   const add = () => {
-    const next = [...customers, { id: crypto.randomUUID(), ...form }]
-    setCustomers(next)
-    save(LS.customers, next)
-    setForm({
-      company: "",
-      label: (settings.customerLabels||[])[0] || "Entreprenad",
-      status: (settings.customerStatus||[])[0] || "Aktiv",
-      primaryContact: { name: "", title: "", email: "", phone: "" },
-      address: "",
-      contacts: []
-    })
-  }
-  const addContactRow = () => setForm({ ...form, contacts: [...form.contacts, { id: crypto.randomUUID(), name: "", email: "", phone: "" }]})
+    const next = [...customers, { id: crypto.randomUUID(), ...form }];
+    setCustomers(next);
+    save(LS.customers, next);
+    setForm(emptyForm);
+  };
+
+  const update = () => {
+    const next = customers.map(c => c.id === editingId ? { ...c, ...form } : c);
+    setCustomers(next);
+    save(LS.customers, next);
+    cancelEdit();
+  };
+
+  const remove = (id) => {
+    if (!confirm("Ta bort kunden?")) return;
+    const next = customers.filter(c => c.id !== id);
+    setCustomers(next);
+    save(LS.customers, next);
+    if (editingId === id) cancelEdit();
+    if (selected?.id === id) setSelected(null);
+  };
+
+  const addContactRow = () => {
+    setForm({ ...form, contacts: [...form.contacts, { id: crypto.randomUUID(), name: "", email: "", phone: "" }]});
+  };
+  const removeContactRow = (idx) => {
+    const copy = [...form.contacts];
+    copy.splice(idx, 1);
+    setForm({ ...form, contacts: copy });
+  };
+
   const filtered = customers.filter(c =>
     [c.company, c.primaryContact?.name, c.primaryContact?.email].join(" ").toLowerCase().includes(q.toLowerCase())
-  )
+  );
 
   return (
-    <div className="grid md:grid-cols-2 gap-6">
-      <Card><CardContent className="grid gap-3">
-        <div className="text-lg font-semibold">Ny kund</div>
-        <label className="grid gap-1 text-sm">
-          <span className="text-slate-600">Företag</span>
-          <Input value={form.company} onChange={e=>setForm({...form, company:e.target.value})}/>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span className="text-slate-600">Etikett</span>
-          <Select value={form.label} onChange={v=>setForm({...form, label:v})}>
-            {(settings.customerLabels||[]).map(x => <option key={x} value={x}>{x}</option>)}
-          </Select>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span className="text-slate-600">Status</span>
-          <Select value={form.status} onChange={v=>setForm({...form, status:v})}>
-            {(settings.customerStatus||[]).map(x => <option key={x} value={x}>{x}</option>)}
-          </Select>
-        </label>
-        <label className="grid gap-1 text-sm">
-          <span className="text-slate-600">Adress</span>
-          <Input value={form.address} onChange={e=>setForm({...form, address:e.target.value})}/>
-        </label>
+    <>
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Formulär: skapa eller redigera */}
+        <Card><CardContent className="grid gap-3">
+          <div className="flex items-center justify-between">
+            <div className="text-lg font-semibold">{editingId ? "Redigera kund" : "Ny kund"}</div>
+            {editingId && <Button variant="ghost" size="sm" onClick={cancelEdit}>Avbryt</Button>}
+          </div>
 
-        <div className="grid md:grid-cols-2 gap-3">
-          <label className="grid gap-1 text-sm">
-            <span className="text-slate-600">Kontaktperson</span>
-            <Input value={form.primaryContact.name} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, name:e.target.value}})}/>
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Företag</span>
+            <Input value={form.company} onChange={e=>setForm({...form, company:e.target.value})}/>
           </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-slate-600">Titel</span>
-            <Input value={form.primaryContact.title} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, title:e.target.value}})}/>
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-slate-600">E-post</span>
-            <Input type="email" value={form.primaryContact.email} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, email:e.target.value}})}/>
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-slate-600">Telefon</span>
-            <Input value={form.primaryContact.phone} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, phone:e.target.value}})}/>
-          </label>
-        </div>
 
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-slate-500">Ytterligare kontaktpersoner</div>
-          <Button variant="secondary" size="sm" onClick={addContactRow}>Lägg till</Button>
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Etikett</span>
+            <Select value={form.label} onChange={v=>setForm({...form, label:v})}>
+              {(settings.customerLabels||[]).map(x => <option key={x} value={x}>{x}</option>)}
+            </Select>
+          </label>
+
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Status</span>
+            <Select value={form.status} onChange={v=>setForm({...form, status:v})}>
+              {(settings.customerStatus||[]).map(x => <option key={x} value={x}>{x}</option>)}
+            </Select>
+          </label>
+
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Adress</span>
+            <Input value={form.address} onChange={e=>setForm({...form, address:e.target.value})}/>
+          </label>
+
+          <div className="grid md:grid-cols-2 gap-3">
+            <label className="grid gap-1 text-sm"><span className="text-slate-600">Kontaktperson</span>
+              <Input value={form.primaryContact.name} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, name:e.target.value}})}/>
+            </label>
+            <label className="grid gap-1 text-sm"><span className="text-slate-600">Titel</span>
+              <Input value={form.primaryContact.title} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, title:e.target.value}})}/>
+            </label>
+            <label className="grid gap-1 text-sm"><span className="text-slate-600">E-post</span>
+              <Input type="email" value={form.primaryContact.email} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, email:e.target.value}})}/>
+            </label>
+            <label className="grid gap-1 text-sm"><span className="text-slate-600">Telefon</span>
+              <Input value={form.primaryContact.phone} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, phone:e.target.value}})}/>
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-slate-500">Ytterligare kontaktpersoner</div>
+            <Button variant="secondary" size="sm" onClick={addContactRow}>Lägg till</Button>
+          </div>
+
+          <div className="grid gap-2">
+            {form.contacts.map((c, idx)=>(
+              <div key={c.id} className="grid grid-cols-12 gap-2">
+                <div className="col-span-3"><Input placeholder="Namn" value={c.name} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], name:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
+                <div className="col-span-5"><Input placeholder="E-post" value={c.email} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], email:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
+                <div className="col-span-3"><Input placeholder="Telefon" value={c.phone} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], phone:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
+                <div className="col-span-1 flex items-center justify-end"><Button variant="ghost" size="sm" onClick={()=>removeContactRow(idx)}>✕</Button></div>
+              </div>
+            ))}
+          </div>
+
+          {editingId
+            ? <Button onClick={update}>Spara ändringar</Button>
+            : <Button onClick={add}>Spara kund</Button>
+          }
+        </CardContent></Card>
+
+        {/* Lista + sök */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <Input placeholder="Sök kund…" value={q} onChange={e=>setQ(e.target.value)} className="max-w-sm" />
+          </div>
+          <div className="grid gap-3">
+            {filtered.map(c=>(
+              <Card key={c.id}>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-lg font-semibold">{c.company}</div>
+                      <div className="text-sm text-slate-500">{c.address}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CustomerLabelBadge label={c.label}/>
+                      <StatusBadge status={c.status}/>
+                    </div>
+                  </div>
+
+                  {c.primaryContact?.name && (
+                    <div className="mt-2 text-sm">
+                      Primär kontakt: <span className="font-medium">{c.primaryContact.name}</span>
+                      {" "}{c.primaryContact.title ? `(${c.primaryContact.title}) · ` : " · "}
+                      {c.primaryContact.email} · {c.primaryContact.phone}
+                    </div>
+                  )}
+                  {(c.contacts||[]).length>0 && (
+                    <div className="mt-2 text-sm text-slate-500">
+                      Fler kontakter: {c.contacts.map(p=>p.name).filter(Boolean).join(", ")}
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex gap-2">
+                    <Button size="sm" onClick={()=>setSelected(c)}>Öppna</Button>
+                    <Button size="sm" onClick={()=>startEdit(c.id)}>Redigera</Button>
+                    <Button size="sm" variant="outline" onClick={()=>remove(c.id)}>Ta bort</Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
-        <div className="grid gap-2">
-          {form.contacts.map((c, idx)=>(
-            <div key={c.id} className="grid grid-cols-3 gap-2">
-              <Input placeholder="Namn" value={c.name} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], name:e.target.value}; setForm({...form, contacts: copy}); }}/>
-              <Input placeholder="E-post" value={c.email} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], email:e.target.value}; setForm({...form, contacts: copy}); }}/>
-              <Input placeholder="Telefon" value={c.phone} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], phone:e.target.value}; setForm({...form, contacts: copy}); }}/>
+      </div>
+
+      {/* Popup-detaljvy */}
+      <Modal
+        open={!!selected}
+        onClose={()=>setSelected(null)}
+        title={selected ? selected.company : ""}
+        footer={
+          selected && (
+            <>
+              <Button variant="outline" onClick={()=>{ setSelected(null); startEdit(selected.id); }}>Redigera</Button>
+              <Button variant="outline" onClick={()=>remove(selected.id)}>Ta bort</Button>
+              <Button onClick={()=>setSelected(null)}>Stäng</Button>
+            </>
+          )
+        }
+      >
+        {selected && (
+          <div className="grid gap-2 text-sm">
+            <div className="flex items-center gap-2">
+              <CustomerLabelBadge label={selected.label}/>
+              <StatusBadge status={selected.status}/>
             </div>
-          ))}
-        </div>
+            {selected.address && <div><span className="text-slate-500">Adress:</span> {selected.address}</div>}
+            {selected.primaryContact?.name && (
+              <div>
+                <span className="text-slate-500">Primär kontakt:</span> {selected.primaryContact.name}
+                {selected.primaryContact.title ? ` (${selected.primaryContact.title})` : ""} · {selected.primaryContact.email} · {selected.primaryContact.phone}
+              </div>
+            )}
+            {(selected.contacts||[]).length>0 && (
+              <div>
+                <div className="text-slate-500">Fler kontaktpersoner:</div>
+                <ul className="list-disc ml-5">
+                  {selected.contacts.map(p=>(
+                    <li key={p.id || p.email}>{[p.name, p.email, p.phone].filter(Boolean).join(" · ")}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+    </>
+  )
+}
 
-        <Button onClick={add}>Spara kund</Button>
-      </CardContent></Card>
+/* ---------- Leverantörer (med redigering + popup) ---------- */
+const Suppliers = ({ suppliers, setSuppliers, settings }) => {
+  const empty = React.useMemo(()=>({
+    name:"", title:"", company:"", email:"", phone:"", address:"", notes:"", type:(settings.supplierTypes||[])[0] || ""
+  }), [settings]);
 
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <Input placeholder="Sök kund…" value={q} onChange={e=>setQ(e.target.value)} className="max-w-sm" />
-        </div>
+  const [form, setForm] = React.useState(empty);
+  const [editingId, setEditingId] = React.useState(null);
+  const [selected, setSelected] = React.useState(null);
+
+  const add = () => {
+    const next = [...suppliers, { id: crypto.randomUUID(), ...form }];
+    setSuppliers(next);
+    save(LS.suppliers, next);
+    setForm(empty);
+  };
+  const startEdit = (id) => {
+    const s = suppliers.find(x=>x.id===id);
+    if (!s) return;
+    setForm({
+      name: s.name || "", title: s.title || "", company: s.company || "",
+      email: s.email || "", phone: s.phone || "", address: s.address || "",
+      notes: s.notes || "", type: s.type || (settings.supplierTypes||[])[0] || ""
+    });
+    setEditingId(id);
+  };
+  const update = () => {
+    const next = suppliers.map(s => s.id===editingId ? { ...s, ...form } : s);
+    setSuppliers(next);
+    save(LS.suppliers, next);
+    setForm(empty);
+    setEditingId(null);
+  };
+  const cancel = () => { setForm(empty); setEditingId(null); };
+  const remove = (id) => {
+    if (!confirm("Ta bort leverantören?")) return;
+    const next = suppliers.filter(s => s.id !== id);
+    setSuppliers(next);
+    save(LS.suppliers, next);
+    if (editingId === id) cancel();
+    if (selected?.id === id) setSelected(null);
+  };
+
+  return (
+    <>
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card><CardContent className="grid gap-3">
+          <div className="flex items-center justify-between">
+            <div className="text-lg font-semibold">{editingId ? "Redigera leverantör" : "Ny leverantör"}</div>
+            {editingId && <Button variant="ghost" size="sm" onClick={cancel}>Avbryt</Button>}
+          </div>
+
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Namn</span><Input value={form.name} onChange={e=>setForm({...form, name:e.target.value})}/></label>
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Titel</span><Input value={form.title} onChange={e=>setForm({...form, title:e.target.value})}/></label>
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Företag</span><Input value={form.company} onChange={e=>setForm({...form, company:e.target.value})}/></label>
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">E-post</span><Input type="email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})}/></label>
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Telefon</span><Input value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})}/></label>
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Adress</span><Input value={form.address} onChange={e=>setForm({...form, address:e.target.value})}/></label>
+          <label className="grid gap-1 text-sm">
+            <span className="text-slate-600">Kategori</span>
+            <Select value={form.type} onChange={v=>setForm({...form, type:v})}>
+              {(settings.supplierTypes||[]).map(x => <option key={x} value={x}>{x}</option>)}
+            </Select>
+          </label>
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Övrig info</span><Textarea value={form.notes} onChange={e=>setForm({...form, notes:e.target.value})}/></label>
+
+          {editingId
+            ? <Button onClick={update}>Spara ändringar</Button>
+            : <Button onClick={add}>Spara leverantör</Button>
+          }
+        </CardContent></Card>
+
         <div className="grid gap-3">
-          {filtered.map(c=>(
-            <Card key={c.id}><CardContent>
+          {suppliers.map(s => (
+            <Card key={s.id}><CardContent>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-lg font-semibold">{c.company}</div>
-                  <div className="text-sm text-slate-500">{c.address}</div>
+                  <div className="font-semibold">{s.name}</div>
+                  <div className="text-sm text-slate-500">{s.company} · {s.title}</div>
                 </div>
-                <div className="flex gap-2">
-                  <Badge className="bg-white text-slate-700 border">{c.label}</Badge>
-                  <Badge>{c.status}</Badge>
-                </div>
+                <span className="inline-flex items-center px-2 py-1 text-xs rounded-xl bg-slate-900 text-white">{s.type}</span>
               </div>
-              {c.primaryContact?.name && (
-                <div className="mt-2 text-sm">
-                  Primär kontakt: <span className="font-medium">{c.primaryContact.name}</span> ({c.primaryContact.title}) · {c.primaryContact.email} · {c.primaryContact.phone}
-                </div>
-              )}
-              {(c.contacts||[]).length>0 && (
-                <div className="mt-2 text-sm text-slate-500">
-                  Fler kontakter: {c.contacts.map(p=>p.name).filter(Boolean).join(", ")}
-                </div>
-              )}
+              <div className="text-sm mt-2">{s.email} · {s.phone}</div>
+              {s.address && <div className="text-xs text-slate-500">{s.address}</div>}
+              {s.notes && <div className="text-sm mt-2">{s.notes}</div>}
+
+              <div className="mt-3 flex gap-2">
+                <Button size="sm" onClick={()=>setSelected(s)}>Öppna</Button>
+                <Button size="sm" onClick={()=>startEdit(s.id)}>Redigera</Button>
+                <Button size="sm" variant="outline" onClick={()=>remove(s.id)}>Ta bort</Button>
+              </div>
             </CardContent></Card>
           ))}
         </div>
       </div>
-    </div>
-  )
-}
 
-/* --- Leverantörer --- */
-const Suppliers = ({ suppliers, setSuppliers, settings }) => {
-  const [form, setForm] = React.useState({
-    name:"", title:"", company:"", email:"", phone:"", address:"", notes:"", type:(settings.supplierTypes||[])[0] || ""
-  })
-  const add = () => {
-    const next = [...suppliers, { id: crypto.randomUUID(), ...form }]
-    setSuppliers(next)
-    save(LS.suppliers, next)
-    setForm({ name:"", title:"", company:"", email:"", phone:"", address:"", notes:"", type:(settings.supplierTypes||[])[0] || "" })
-  }
-
-  return (
-    <div className="grid md:grid-cols-2 gap-6">
-      <Card><CardContent className="grid gap-3">
-        <div className="text-lg font-semibold">Ny leverantör</div>
-        <label className="grid gap-1 text-sm"><span className="text-slate-600">Namn</span><Input value={form.name} onChange={e=>setForm({...form, name:e.target.value})}/></label>
-        <label className="grid gap-1 text-sm"><span className="text-slate-600">Titel</span><Input value={form.title} onChange={e=>setForm({...form, title:e.target.value})}/></label>
-        <label className="grid gap-1 text-sm"><span className="text-slate-600">Företag</span><Input value={form.company} onChange={e=>setForm({...form, company:e.target.value})}/></label>
-        <label className="grid gap-1 text-sm"><span className="text-slate-600">E-post</span><Input type="email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})}/></label>
-        <label className="grid gap-1 text-sm"><span className="text-slate-600">Telefon</span><Input value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})}/></label>
-        <label className="grid gap-1 text-sm"><span className="text-slate-600">Adress</span><Input value={form.address} onChange={e=>setForm({...form, address:e.target.value})}/></label>
-        <label className="grid gap-1 text-sm">
-          <span className="text-slate-600">Kategori</span>
-          <Select value={form.type} onChange={v=>setForm({...form, type:v})}>
-            {(settings.supplierTypes||[]).map(x => <option key={x} value={x}>{x}</option>)}
-          </Select>
-        </label>
-        <label className="grid gap-1 text-sm"><span className="text-slate-600">Övrig info</span><Textarea value={form.notes} onChange={e=>setForm({...form, notes:e.target.value})}/></label>
-        <Button onClick={add}>Spara leverantör</Button>
-      </CardContent></Card>
-
-      <div className="grid gap-3">
-        {suppliers.map(s => (
-          <Card key={s.id}><CardContent>
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{s.name}</div>
-                <div className="text-sm text-slate-500">{s.company} · {s.title}</div>
-              </div>
-              <Badge>{s.type}</Badge>
+      {/* Popup detaljer */}
+      <Modal
+        open={!!selected}
+        onClose={()=>setSelected(null)}
+        title={selected ? (selected.name || selected.company || "Leverantör") : ""}
+        footer={
+          selected && (
+            <>
+              <Button variant="outline" onClick={()=>{ setSelected(null); startEdit(selected.id); }}>Redigera</Button>
+              <Button variant="outline" onClick={()=>remove(selected.id)}>Ta bort</Button>
+              <Button onClick={()=>setSelected(null)}>Stäng</Button>
+            </>
+          )
+        }
+      >
+        {selected && (
+          <div className="grid gap-2 text-sm">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center px-2 py-1 text-xs rounded-xl bg-slate-900 text-white">{selected.type}</span>
             </div>
-            <div className="text-sm mt-2">{s.email} · {s.phone}</div>
-            {s.address && <div className="text-xs text-slate-500">{s.address}</div>}
-            {s.notes && <div className="text-sm mt-2">{s.notes}</div>}
-          </CardContent></Card>
-        ))}
-      </div>
-    </div>
+            {selected.company && <div><span className="text-slate-500">Företag:</span> {selected.company}</div>}
+            {(selected.email || selected.phone) && <div><span className="text-slate-500">Kontakt:</span> {selected.email} · {selected.phone}</div>}
+            {selected.address && <div><span className="text-slate-500">Adress:</span> {selected.address}</div>}
+            {selected.notes && <div><span className="text-slate-500">Övrigt:</span> {selected.notes}</div>}
+          </div>
+        )}
+      </Modal>
+    </>
   )
 }
 
-/* --- Platshållare (resterande fyller vi i nästa steg) --- */
+/* ---------- Platshållare (vi fyller på i nästa steg) ---------- */
 const Placeholder = ({ title }) => (
   <Card><CardContent>
     <div className="text-lg font-semibold">{title}</div>
@@ -286,7 +497,7 @@ const Placeholder = ({ title }) => (
   </CardContent></Card>
 )
 
-/* --- App --- */
+/* ---------- App ---------- */
 export default function App() {
   const [tab, setTab] = React.useState("dashboard")
   const [settings, setSettings] = React.useState(load(LS.settings, defaultSettings))
@@ -340,8 +551,20 @@ export default function App() {
       {tab === "aktivitet"     && <Placeholder title="Aktivitet" />}
       {tab === "offert"        && <Placeholder title="Offert" />}
       {tab === "projekt"       && <Placeholder title="Projekt" />}
-      {tab === "kunder"        && <Customers customers={data.customers} setCustomers={(v)=>{ setData(d=>({...d, customers:v})); }} settings={settings} />}
-      {tab === "leverantorer"  && <Suppliers suppliers={data.suppliers} setSuppliers={(v)=>{ setData(d=>({...d, suppliers:v})); }} settings={settings} />}
+      {tab === "kunder"        && (
+        <Customers
+          customers={data.customers}
+          setCustomers={(v)=>{ setData(d=>({...d, customers:v})); }}
+          settings={settings}
+        />
+      )}
+      {tab === "leverantorer"  && (
+        <Suppliers
+          suppliers={data.suppliers}
+          setSuppliers={(v)=>{ setData(d=>({...d, suppliers:v})); }}
+          settings={settings}
+        />
+      )}
       {tab === "settings"      && <Placeholder title="Inställningar" />}
 
       <div className="mt-10 text-xs text-slate-500">
