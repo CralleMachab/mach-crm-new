@@ -45,20 +45,18 @@ const normalizeKey = (s) =>
     .toString()
     .trim()
     .toLowerCase()
-    .normalize('NFD')                 // dela diakrit
-    .replace(/[\u0300-\u036f]/g, '')  // ta bort diakrit
-    .replace(/\s+/g, '');             // ta bort mellanslag
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '');
 
 const SupplierTypeBadge = ({type}) => {
   const key = normalizeKey(type);
-  // Nycklar vi matchar: stalhallsleverantor, markforetag, elleverantor, vvsleverantor, ventleverantor
-  let cls = "bg-gray-100 text-gray-700 border border-gray-200"; // default ljusgrå
-  if (key.includes("stalhallsleverantor")) cls = "bg-gray-100 text-gray-700 border border-gray-200";          // ljusgrå
-  else if (key.includes("markforetag"))    cls = "bg-amber-100 text-amber-800 border border-amber-200";       // mellanbrun (amber)
-  else if (key.includes("elleverantor"))   cls = "bg-red-100 text-red-800 border border-red-200";             // ljusröd
-  else if (key.includes("vvsleverantor"))  cls = "bg-sky-100 text-sky-800 border border-sky-200";             // ljusblå
-  else if (key.includes("ventleverantor")) cls = "bg-green-100 text-green-800 border border-green-200";       // ljusgrön
-
+  let cls = "bg-gray-100 text-gray-700 border border-gray-200";          // default ljusgrå
+  if (key.includes("stalhallsleverantor")) cls = "bg-gray-100 text-gray-700 border border-gray-200";   // ljusgrå
+  else if (key.includes("markforetag"))    cls = "bg-amber-100 text-amber-800 border border-amber-200"; // mellanbrun
+  else if (key.includes("elleverantor"))   cls = "bg-red-100 text-red-800 border border-red-200";       // ljusröd
+  else if (key.includes("vvsleverantor"))  cls = "bg-sky-100 text-sky-800 border border-sky-200";       // ljusblå
+  else if (key.includes("ventleverantor")) cls = "bg-green-100 text-green-800 border border-green-200"; // ljusgrön
   return <span className={"inline-flex items-center px-2 py-1 text-xs rounded-xl " + cls}>{type}</span>
 }
 
@@ -377,7 +375,7 @@ const Customers = ({ customers, setCustomers, settings }) => {
   )
 }
 
-/* ---------- Leverantörer (med redigering + popup + färger) ---------- */
+/* ---------- Leverantörer (med redigering + popup + färger + SÖK) ---------- */
 const Suppliers = ({ suppliers, setSuppliers, settings }) => {
   const empty = React.useMemo(()=>({
     name:"", title:"", company:"", email:"", phone:"", address:"", notes:"", type:(settings.supplierTypes||[])[0] || ""
@@ -386,6 +384,34 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
   const [form, setForm] = React.useState(empty);
   const [editingId, setEditingId] = React.useState(null);
   const [selected, setSelected] = React.useState(null);
+
+  // 🔎 SÖK – namn/företag/titel/e-post/telefon ELLER kategori med ord som "vent", "stålhalls", "mark", "el", "vvs"
+  const [q, setQ] = React.useState("");
+  const normQ = normalizeKey(q);
+  const categoryKeyFromQuery = React.useMemo(() => {
+    if (!normQ) return null;
+    if (normQ.includes("stalhalls")) return "stalhallsleverantor";
+    if (normQ.includes("mark"))      return "markforetag";
+    if (normQ.includes("el"))        return "elleverantor";
+    if (normQ.includes("vvs"))       return "vvsleverantor";
+    if (normQ.includes("vent"))      return "ventleverantor";
+    return null;
+  }, [normQ]);
+
+  const matchesFreeText = (s) => (s || "").toLowerCase().includes(q.toLowerCase());
+  const supplierHasCategory = (s, key) => normalizeKey(s.type||"").includes(key);
+
+  const filteredSuppliers = suppliers.filter(s => {
+    if (!q) return true;
+    if (categoryKeyFromQuery) {
+      // Kategori-sök: visa alla i vald kategori
+      return supplierHasCategory(s, categoryKeyFromQuery);
+    }
+    // Fri text: sök i flera fält
+    return [
+      s.name, s.company, s.title, s.email, s.phone, s.type
+    ].some(matchesFreeText);
+  });
 
   const add = () => {
     const next = [...suppliers, { id: crypto.randomUUID(), ...form }];
@@ -456,7 +482,22 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
         </CardContent></Card>
 
         <div className="grid gap-3">
-          {suppliers.map(s => (
+          {/* 🔎 Sökfält */}
+          <div className="mb-2">
+            <Input
+              placeholder="Sök leverantör… (namn, företag, 'vent', 'stålhalls', 'mark', 'el', 'vvs')"
+              value={q}
+              onChange={e=>setQ(e.target.value)}
+              className="max-w-md"
+            />
+            {categoryKeyFromQuery && (
+              <div className="mt-1 text-xs text-slate-500">
+                Visar kategori: <strong>{q}</strong>
+              </div>
+            )}
+          </div>
+
+          {filteredSuppliers.map(s => (
             <Card key={s.id}><CardContent>
               <div className="flex items-center justify-between">
                 <div>
@@ -479,6 +520,7 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
         </div>
       </div>
 
+      {/* Popup-detaljer */}
       <Modal
         open={!!selected}
         onClose={()=>setSelected(null)}
