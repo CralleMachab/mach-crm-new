@@ -8,8 +8,8 @@ const Card = ({children, className=""}) => (
 const CardContent = ({children, className=""}) => (
   <div className={"p-4 " + className}>{children}</div>
 )
-const Button = ({children, className="", onClick, variant="default", size="md", type="button"}) => {
-  const base = "inline-flex items-center justify-center rounded-2xl px-3 py-2 text-sm font-medium transition"
+const Button = ({children, className="", onClick, variant="default", size="md", type="button", disabled=false}) => {
+  const base = "inline-flex items-center justify-center rounded-2xl px-3 py-2 text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
   const variants = {
     default: "bg-black text-white hover:opacity-90",
     ghost: "hover:bg-slate-100",
@@ -17,7 +17,7 @@ const Button = ({children, className="", onClick, variant="default", size="md", 
     secondary: "bg-slate-800/10 hover:bg-slate-800/20"
   }
   const sizes = { sm: "px-2 py-1 text-xs", md: "", lg: "px-4 py-3" }
-  return <button type={type} onClick={onClick} className={[base, variants[variant], sizes[size], className].join(" ")}>{children}</button>
+  return <button type={type} disabled={disabled} onClick={onClick} className={[base, variants[variant], sizes[size], className].join(" ")}>{children}</button>
 }
 const Input = (props) => <input {...props} className={"border rounded-xl px-3 py-2 text-sm w-full " + (props.className||"")} />
 const Textarea = (props) => <textarea {...props} className={"border rounded-xl px-3 py-2 text-sm w-full min-h-[90px] " + (props.className||"")} />
@@ -25,7 +25,7 @@ const Select = ({value, onChange, children}) => (
   <select value={value} onChange={(e)=>onChange && onChange(e.target.value)} className="border rounded-xl px-3 py-2 text-sm w-full">{children}</select>
 )
 
-/* Etikettfärger för kunder */
+/* ---------- Badges & helpers ---------- */
 const CustomerLabelBadge = ({label}) => {
   const map = {
     "Entreprenad": "bg-orange-100 text-orange-800 border border-orange-200",
@@ -39,7 +39,7 @@ const StatusBadge = ({status}) => (
   <span className="inline-flex items-center px-2 py-1 text-xs rounded-xl bg-slate-900 text-white">{status}</span>
 )
 
-/* Etikettfärger för leverantörers kategori (robust mot stavning/versaler/åäö) */
+/* Leverantörskategori-färger */
 const normalizeKey = (s) =>
   (s || "")
     .toString()
@@ -153,7 +153,7 @@ const Dashboard = ({ offers, projects, activities }) => {
   )
 }
 
-/* ---------- Kunder (med redigering + flera kontakter + popup) ---------- */
+/* ---------- Kunder (redigering + fler kontakter + popup) ---------- */
 const Customers = ({ customers, setCustomers, settings }) => {
   const [q, setQ] = React.useState("");
   const emptyForm = React.useMemo(() => ({
@@ -182,44 +182,25 @@ const Customers = ({ customers, setCustomers, settings }) => {
     })));
     setEditingId(id);
   };
-
   const cancelEdit = () => { setForm(emptyForm); setEditingId(null); };
-
   const add = () => {
     const next = [...customers, { id: crypto.randomUUID(), ...form }];
-    setCustomers(next);
-    save(LS.customers, next);
-    setForm(emptyForm);
+    setCustomers(next); save(LS.customers, next); setForm(emptyForm);
   };
-
   const update = () => {
     const next = customers.map(c => c.id === editingId ? { ...c, ...form } : c);
-    setCustomers(next);
-    save(LS.customers, next);
-    cancelEdit();
+    setCustomers(next); save(LS.customers, next); cancelEdit();
   };
-
   const remove = (id) => {
     if (!confirm("Ta bort kunden?")) return;
     const next = customers.filter(c => c.id !== id);
-    setCustomers(next);
-    save(LS.customers, next);
+    setCustomers(next); save(LS.customers, next);
     if (editingId === id) cancelEdit();
     if (selected?.id === id) setSelected(null);
   };
-
-  const addContactRow = () => {
-    setForm({ ...form, contacts: [...form.contacts, { id: crypto.randomUUID(), name: "", email: "", phone: "" }]});
-  };
-  const removeContactRow = (idx) => {
-    const copy = [...form.contacts];
-    copy.splice(idx, 1);
-    setForm({ ...form, contacts: copy });
-  };
-
-  const filtered = customers.filter(c =>
-    [c.company, c.primaryContact?.name, c.primaryContact?.email].join(" ").toLowerCase().includes(q.toLowerCase())
-  );
+  const addContactRow = () => setForm({ ...form, contacts: [...form.contacts, { id: crypto.randomUUID(), name: "", email: "", phone: "" }]} );
+  const removeContactRow = (idx) => { const copy=[...form.contacts]; copy.splice(idx,1); setForm({ ...form, contacts: copy }); };
+  const filtered = customers.filter(c => [c.company, c.primaryContact?.name, c.primaryContact?.email].join(" ").toLowerCase().includes(q.toLowerCase()));
 
   return (
     <>
@@ -229,62 +210,46 @@ const Customers = ({ customers, setCustomers, settings }) => {
             <div className="text-lg font-semibold">{editingId ? "Redigera kund" : "Ny kund"}</div>
             {editingId && <Button variant="ghost" size="sm" onClick={cancelEdit}>Avbryt</Button>}
           </div>
-
           <label className="grid gap-1 text-sm"><span className="text-slate-600">Företag</span>
-            <Input value={form.company} onChange={e=>setForm({...form, company:e.target.value})}/>
-          </label>
-
+            <Input value={form.company} onChange={e=>setForm({...form, company:e.target.value})}/></label>
           <label className="grid gap-1 text-sm"><span className="text-slate-600">Etikett</span>
             <Select value={form.label} onChange={v=>setForm({...form, label:v})}>
               {(settings.customerLabels||[]).map(x => <option key={x} value={x}>{x}</option>)}
-            </Select>
-          </label>
-
+            </Select></label>
           <label className="grid gap-1 text-sm"><span className="text-slate-600">Status</span>
             <Select value={form.status} onChange={v=>setForm({...form, status:v})}>
               {(settings.customerStatus||[]).map(x => <option key={x} value={x}>{x}</option>)}
-            </Select>
-          </label>
-
+            </Select></label>
           <label className="grid gap-1 text-sm"><span className="text-slate-600">Adress</span>
-            <Input value={form.address} onChange={e=>setForm({...form, address:e.target.value})}/>
-          </label>
+            <Input value={form.address} onChange={e=>setForm({...form, address:e.target.value})}/></label>
 
           <div className="grid md:grid-cols-2 gap-3">
             <label className="grid gap-1 text-sm"><span className="text-slate-600">Kontaktperson</span>
-              <Input value={form.primaryContact.name} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, name:e.target.value}})}/>
-            </label>
+              <Input value={form.primaryContact.name} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, name:e.target.value}})}/></label>
             <label className="grid gap-1 text-sm"><span className="text-slate-600">Titel</span>
-              <Input value={form.primaryContact.title} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, title:e.target.value}})}/>
-            </label>
+              <Input value={form.primaryContact.title} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, title:e.target.value}})}/></label>
             <label className="grid gap-1 text-sm"><span className="text-slate-600">E-post</span>
-              <Input type="email" value={form.primaryContact.email} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, email:e.target.value}})}/>
-            </label>
+              <Input type="email" value={form.primaryContact.email} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, email:e.target.value}})}/></label>
             <label className="grid gap-1 text-sm"><span className="text-slate-600">Telefon</span>
-              <Input value={form.primaryContact.phone} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, phone:e.target.value}})}/>
-            </label>
+              <Input value={form.primaryContact.phone} onChange={e=>setForm({...form, primaryContact: {...form.primaryContact, phone:e.target.value}})}/></label>
           </div>
 
           <div className="flex items-center justify-between">
             <div className="text-sm text-slate-500">Ytterligare kontaktpersoner</div>
             <Button variant="secondary" size="sm" onClick={addContactRow}>Lägg till</Button>
           </div>
-
           <div className="grid gap-2">
             {form.contacts.map((c, idx)=>(
               <div key={c.id} className="grid grid-cols-12 gap-2">
                 <div className="col-span-3"><Input placeholder="Namn" value={c.name} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], name:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
                 <div className="col-span-5"><Input placeholder="E-post" value={c.email} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], email:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
                 <div className="col-span-3"><Input placeholder="Telefon" value={c.phone} onChange={e=>{ const copy=[...form.contacts]; copy[idx]={...copy[idx], phone:e.target.value}; setForm({...form, contacts: copy}); }}/></div>
-                <div className="col-span-1 flex items-center justify-end"><Button variant="ghost" size="sm" onClick={()=>{ const copy=[...form.contacts]; copy.splice(idx,1); setForm({...form, contacts: copy}); }}>✕</Button></div>
+                <div className="col-span-1 flex items-center justify-end"><Button variant="ghost" size="sm" onClick={()=>removeContactRow(idx)}>✕</Button></div>
               </div>
             ))}
           </div>
 
-          {editingId
-            ? <Button onClick={update}>Spara ändringar</Button>
-            : <Button onClick={add}>Spara kund</Button>
-          }
+          {editingId ? <Button onClick={update}>Spara ändringar</Button> : <Button onClick={add}>Spara kund</Button>}
         </CardContent></Card>
 
         <div>
@@ -293,89 +258,39 @@ const Customers = ({ customers, setCustomers, settings }) => {
           </div>
           <div className="grid gap-3">
             {filtered.map(c=>(
-              <Card key={c.id}>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-lg font-semibold">{c.company}</div>
-                      <div className="text-sm text-slate-500">{c.address}</div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CustomerLabelBadge label={c.label}/>
-                      <StatusBadge status={c.status}/>
-                    </div>
+              <Card key={c.id}><CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-lg font-semibold">{c.company}</div>
+                    <div className="text-sm text-slate-500">{c.address}</div>
                   </div>
-
-                  {c.primaryContact?.name && (
-                    <div className="mt-2 text-sm">
-                      Primär kontakt: <span className="font-medium">{c.primaryContact.name}</span>
-                      {" "}{c.primaryContact.title ? `(${c.primaryContact.title}) · ` : " · "}
-                      {c.primaryContact.email} · {c.primaryContact.phone}
-                    </div>
-                  )}
-                  {(c.contacts||[]).length>0 && (
-                    <div className="mt-2 text-sm text-slate-500">
-                      Fler kontakter: {c.contacts.map(p=>p.name).filter(Boolean).join(", ")}
-                    </div>
-                  )}
-
-                  <div className="mt-3 flex gap-2">
-                    <Button size="sm" onClick={()=>setSelected(c)}>Öppna</Button>
-                    <Button size="sm" onClick={()=>startEdit(c.id)}>Redigera</Button>
-                    <Button size="sm" variant="outline" onClick={()=>remove(c.id)}>Ta bort</Button>
+                  <div className="flex items-center gap-2">
+                    <CustomerLabelBadge label={c.label}/>
+                    <StatusBadge status={c.status}/>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+                {c.primaryContact?.name && (
+                  <div className="mt-2 text-sm">
+                    Primär kontakt: <span className="font-medium">{c.primaryContact.name}</span>
+                    {" "}{c.primaryContact.title ? `(${c.primaryContact.title}) · ` : " · "}
+                    {c.primaryContact.email} · {c.primaryContact.phone}
+                  </div>
+                )}
+                {(c.contacts||[]).length>0 && (
+                  <div className="mt-2 text-sm text-slate-500">
+                    Fler kontakter: {c.contacts.map(p=>p.name).filter(Boolean).join(", ")}
+                  </div>
+                )}
+              </CardContent></Card>
             ))}
           </div>
         </div>
       </div>
-
-      <Modal
-        open={!!selected}
-        onClose={()=>setSelected(null)}
-        title={selected ? selected.company : ""}
-        footer={
-          selected && (
-            <>
-              <Button variant="outline" onClick={()=>{ setSelected(null); startEdit(selected.id); }}>Redigera</Button>
-              <Button variant="outline" onClick={()=>remove(selected.id)}>Ta bort</Button>
-              <Button onClick={()=>setSelected(null)}>Stäng</Button>
-            </>
-          )
-        }
-      >
-        {selected && (
-          <div className="grid gap-2 text-sm">
-            <div className="flex items-center gap-2">
-              <CustomerLabelBadge label={selected.label}/>
-              <StatusBadge status={selected.status}/>
-            </div>
-            {selected.address && <div><span className="text-slate-500">Adress:</span> {selected.address}</div>}
-            {selected.primaryContact?.name && (
-              <div>
-                <span className="text-slate-500">Primär kontakt:</span> {selected.primaryContact.name}
-                {selected.primaryContact.title ? ` (${selected.primaryContact.title})` : ""} · {selected.primaryContact.email} · {selected.primaryContact.phone}
-              </div>
-            )}
-            {(selected.contacts||[]).length>0 && (
-              <div>
-                <div className="text-slate-500">Fler kontaktpersoner:</div>
-                <ul className="list-disc ml-5">
-                  {selected.contacts.map(p=>(
-                    <li key={p.id || p.email}>{[p.name, p.email, p.phone].filter(Boolean).join(" · ")}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-      </Modal>
     </>
   )
 }
 
-/* ---------- Leverantörer (med redigering + popup + färger + SÖK) ---------- */
+/* ---------- Leverantörer (redigering + popup + färger + sök) ---------- */
 const Suppliers = ({ suppliers, setSuppliers, settings }) => {
   const empty = React.useMemo(()=>({
     name:"", title:"", company:"", email:"", phone:"", address:"", notes:"", type:(settings.supplierTypes||[])[0] || ""
@@ -385,7 +300,6 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
   const [editingId, setEditingId] = React.useState(null);
   const [selected, setSelected] = React.useState(null);
 
-  // 🔎 SÖK – namn/företag/titel/e-post/telefon ELLER kategori med ord som "vent", "stålhalls", "mark", "el", "vvs"
   const [q, setQ] = React.useState("");
   const normQ = normalizeKey(q);
   const categoryKeyFromQuery = React.useMemo(() => {
@@ -403,48 +317,18 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
 
   const filteredSuppliers = suppliers.filter(s => {
     if (!q) return true;
-    if (categoryKeyFromQuery) {
-      // Kategori-sök: visa alla i vald kategori
-      return supplierHasCategory(s, categoryKeyFromQuery);
-    }
-    // Fri text: sök i flera fält
-    return [
-      s.name, s.company, s.title, s.email, s.phone, s.type
-    ].some(matchesFreeText);
+    if (categoryKeyFromQuery) return supplierHasCategory(s, categoryKeyFromQuery);
+    return [s.name, s.company, s.title, s.email, s.phone, s.type].some(matchesFreeText);
   });
 
-  const add = () => {
-    const next = [...suppliers, { id: crypto.randomUUID(), ...form }];
-    setSuppliers(next);
-    save(LS.suppliers, next);
-    setForm(empty);
-  };
-  const startEdit = (id) => {
-    const s = suppliers.find(x=>x.id===id);
-    if (!s) return;
-    setForm({
-      name: s.name || "", title: s.title || "", company: s.company || "",
-      email: s.email || "", phone: s.phone || "", address: s.address || "",
-      notes: s.notes || "", type: s.type || (settings.supplierTypes||[])[0] || ""
-    });
+  const add = () => { const next=[...suppliers, { id: crypto.randomUUID(), ...form }]; setSuppliers(next); save(LS.suppliers, next); setForm(empty); };
+  const startEdit = (id) => { const s=suppliers.find(x=>x.id===id); if(!s) return;
+    setForm({ name:s.name||"", title:s.title||"", company:s.company||"", email:s.email||"", phone:s.phone||"", address:s.address||"", notes:s.notes||"", type:s.type|| (settings.supplierTypes||[])[0]||"" });
     setEditingId(id);
   };
-  const update = () => {
-    const next = suppliers.map(s => s.id===editingId ? { ...s, ...form } : s);
-    setSuppliers(next);
-    save(LS.suppliers, next);
-    setForm(empty);
-    setEditingId(null);
-  };
+  const update = () => { const next=suppliers.map(s=>s.id===editingId?{...s,...form}:s); setSuppliers(next); save(LS.suppliers,next); setForm(empty); setEditingId(null); };
   const cancel = () => { setForm(empty); setEditingId(null); };
-  const remove = (id) => {
-    if (!confirm("Ta bort leverantören?")) return;
-    const next = suppliers.filter(s => s.id !== id);
-    setSuppliers(next);
-    save(LS.suppliers, next);
-    if (editingId === id) cancel();
-    if (selected?.id === id) setSelected(null);
-  };
+  const remove = (id) => { if(!confirm("Ta bort leverantören?")) return; const next=suppliers.filter(s=>s.id!==id); setSuppliers(next); save(LS.suppliers,next); if(editingId===id) cancel(); if(selected?.id===id) setSelected(null); };
 
   return (
     <>
@@ -465,36 +349,19 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
             <span className="text-slate-600">Kategori</span>
             <Select value={form.type} onChange={v=>setForm({...form, type:v})}>
               {(settings.supplierTypes||[
-                "Stålhallsleverantör",
-                "Markföretag",
-                "El leverantör",
-                "VVS leverantör",
-                "Vent leverantör"
+                "Stålhallsleverantör","Markföretag","El leverantör","VVS leverantör","Vent leverantör"
               ]).map(x => <option key={x} value={x}>{x}</option>)}
             </Select>
           </label>
           <label className="grid gap-1 text-sm"><span className="text-slate-600">Övrig info</span><Textarea value={form.notes} onChange={e=>setForm({...form, notes:e.target.value})}/></label>
 
-          {editingId
-            ? <Button onClick={update}>Spara ändringar</Button>
-            : <Button onClick={add}>Spara leverantör</Button>
-          }
+          {editingId ? <Button onClick={update}>Spara ändringar</Button> : <Button onClick={add}>Spara leverantör</Button>}
         </CardContent></Card>
 
         <div className="grid gap-3">
-          {/* 🔎 Sökfält */}
           <div className="mb-2">
-            <Input
-              placeholder="Sök leverantör… (namn, företag, 'vent', 'stålhalls', 'mark', 'el', 'vvs')"
-              value={q}
-              onChange={e=>setQ(e.target.value)}
-              className="max-w-md"
-            />
-            {categoryKeyFromQuery && (
-              <div className="mt-1 text-xs text-slate-500">
-                Visar kategori: <strong>{q}</strong>
-              </div>
-            )}
+            <Input placeholder="Sök leverantör… (namn, företag, 'vent', 'stålhalls', 'mark', 'el', 'vvs')" value={q} onChange={e=>setQ(e.target.value)} className="max-w-md" />
+            {categoryKeyFromQuery && <div className="mt-1 text-xs text-slate-500">Visar kategori: <strong>{q}</strong></div>}
           </div>
 
           {filteredSuppliers.map(s => (
@@ -520,26 +387,15 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
         </div>
       </div>
 
-      {/* Popup-detaljer */}
       <Modal
         open={!!selected}
         onClose={()=>setSelected(null)}
         title={selected ? (selected.name || selected.company || "Leverantör") : ""}
-        footer={
-          selected && (
-            <>
-              <Button variant="outline" onClick={()=>{ setSelected(null); startEdit(selected.id); }}>Redigera</Button>
-              <Button variant="outline" onClick={()=>remove(selected.id)}>Ta bort</Button>
-              <Button onClick={()=>setSelected(null)}>Stäng</Button>
-            </>
-          )
-        }
+        footer={selected && (<><Button variant="outline" onClick={()=>{ setSelected(null); startEdit(selected.id); }}>Redigera</Button><Button variant="outline" onClick={()=>remove(selected.id)}>Ta bort</Button><Button onClick={()=>setSelected(null)}>Stäng</Button></>)}
       >
         {selected && (
           <div className="grid gap-2 text-sm">
-            <div className="flex items-center gap-2">
-              <SupplierTypeBadge type={selected.type}/>
-            </div>
+            <div className="flex items-center gap-2"><SupplierTypeBadge type={selected.type}/></div>
             {selected.company && <div><span className="text-slate-500">Företag:</span> {selected.company}</div>}
             {(selected.email || selected.phone) && <div><span className="text-slate-500">Kontakt:</span> {selected.email} · {selected.phone}</div>}
             {selected.address && <div><span className="text-slate-500">Adress:</span> {selected.address}</div>}
@@ -551,11 +407,294 @@ const Suppliers = ({ suppliers, setSuppliers, settings }) => {
   )
 }
 
-/* ---------- Platshållare (vi fyller på i nästa steg) ---------- */
+/* ---------- OFFERT (autonummer + koppling till kund/leverantörer + bilagor + konvertera till projekt) ---------- */
+const getNextOfferNumber = (offers) => {
+  if (!offers || offers.length === 0) return 310050;
+  const max = Math.max(...offers.map(o => Number(o.number || 0)));
+  return isFinite(max) && max >= 310050 ? max + 1 : 310050;
+};
+
+const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects }) => {
+  const [q, setQ] = React.useState("");
+  const [editingId, setEditingId] = React.useState(null);
+
+  const empty = React.useMemo(() => ({
+    number: getNextOfferNumber(offers),
+    name: "",
+    address: "",
+    customerId: "",
+    supplierIds: [],
+    notes: "",
+    attachments: [], // {type:'Tidplan'|'Kalkyl'|'Övrigt', url:string}
+    lost: false,
+    converted: false
+  }), [offers]);
+
+  const [form, setForm] = React.useState(empty);
+
+  React.useEffect(()=>{ if (editingId===null) setForm(empty); }, [offers]); // uppdatera numret efter spar
+
+  const startEdit = (id) => {
+    const o = offers.find(x=>x.id===id); if(!o) return;
+    setForm(JSON.parse(JSON.stringify(o)));
+    setEditingId(id);
+  };
+  const cancel = () => { setForm(empty); setEditingId(null); };
+
+  const addAttachment = () => {
+    setForm({...form, attachments:[...form.attachments, { id: crypto.randomUUID(), type:"Tidplan", url:"" }]});
+  };
+  const removeAttachment = (idx) => {
+    const copy=[...form.attachments]; copy.splice(idx,1); setForm({...form, attachments: copy});
+  };
+
+  const addSupplierLink = (id) => {
+    if(!id) return;
+    if (form.supplierIds.includes(id)) return;
+    setForm({...form, supplierIds:[...form.supplierIds, id]});
+  };
+  const removeSupplierLink = (id) => {
+    setForm({...form, supplierIds: form.supplierIds.filter(x=>x!==id)});
+  };
+
+  const create = () => {
+    const rec = { id: crypto.randomUUID(), ...form };
+    const next = [...offers, rec];
+    setOffers(next); save(LS.offers, next);
+    setForm({...empty, number: getNextOfferNumber(next)});
+  };
+  const update = () => {
+    const next = offers.map(o => o.id===editingId ? {...o, ...form} : o);
+    setOffers(next); save(LS.offers, next); cancel();
+  };
+  const markLost = (id) => {
+    const next = offers.map(o => o.id===id ? {...o, lost:true, converted:false} : o);
+    setOffers(next); save(LS.offers, next);
+  };
+
+  const convertToProject = (id) => {
+    const o = offers.find(x=>x.id===id); if(!o) return;
+    if (o.converted) return;
+    // skapa projekt
+    const proj = {
+      id: crypto.randomUUID(),
+      name: o.name || `Projekt ${o.number}`,
+      address: o.address || "",
+      customerId: o.customerId || "",
+      offerNumber: o.number,
+      suppliers: o.supplierIds || [],
+      startDate: "",
+      endDate: "",
+      budget: "",
+      progress: 0
+    };
+    const nextProjects = [...projects, proj];
+    setProjects(nextProjects); save(LS.projects, nextProjects);
+    const nextOffers = offers.map(x => x.id===id ? {...x, converted:true, lost:false} : x);
+    setOffers(nextOffers); save(LS.offers, nextOffers);
+    alert(`Projekt skapat från offert ${o.number}. Gå till fliken "Projekt" för att se det.`);
+  };
+
+  const byText = (o) => {
+    const c = customers.find(x=>x.id===o.customerId);
+    const txt = [o.number, o.name, o.address, c?.company].join(" ").toLowerCase();
+    return txt.includes(q.toLowerCase());
+  };
+  const filtered = offers.filter(byText);
+
+  const customerOptions = [{id:"", company:"— välj kund —"}, ...customers];
+  const supplierOptions = [{id:"", name:"— välj leverantör —", company:""}, ...suppliers];
+
+  return (
+    <div className="grid md:grid-cols-2 gap-6">
+      {/* Form */}
+      <Card><CardContent className="grid gap-3">
+        <div className="flex items-center justify-between">
+          <div className="text-lg font-semibold">{editingId ? `Redigera offert #${form.number}` : `Ny offert #${form.number}`}</div>
+          {editingId && <Button variant="ghost" size="sm" onClick={cancel}>Avbryt</Button>}
+        </div>
+
+        <label className="grid gap-1 text-sm"><span className="text-slate-600">Projektnamn</span>
+          <Input value={form.name} onChange={e=>setForm({...form, name:e.target.value})}/></label>
+
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Kund</span>
+            <Select value={form.customerId} onChange={v=>setForm({...form, customerId:v})}>
+              {customerOptions.map(c => <option key={c.id || 'none'} value={c.id}>{c.company}</option>)}
+            </Select>
+          </label>
+          <label className="grid gap-1 text-sm"><span className="text-slate-600">Adress</span>
+            <Input value={form.address} onChange={e=>setForm({...form, address:e.target.value})}/></label>
+        </div>
+
+        <div className="grid gap-2">
+          <div className="text-sm text-slate-600">Leverantörer</div>
+          <div className="flex gap-2">
+            <Select value="" onChange={addSupplierLink}>
+              {supplierOptions.map(s => <option key={s.id || 'none'} value={s.id}>{s.name ? `${s.name} – ${s.company}` : s.name}</option>)}
+            </Select>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {form.supplierIds.map(id => {
+              const s = suppliers.find(x=>x.id===id);
+              if (!s) return null;
+              return (
+                <span key={id} className="inline-flex items-center gap-2 border rounded-2xl px-2 py-1 text-xs">
+                  {s.name} <SupplierTypeBadge type={s.type}/>
+                  <button onClick={()=>removeSupplierLink(id)} title="Ta bort">✕</button>
+                </span>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-slate-600">Bilagor</div>
+            <Button size="sm" variant="secondary" onClick={addAttachment}>Lägg till länk</Button>
+          </div>
+          {form.attachments.map((a, idx)=>(
+            <div key={a.id} className="grid grid-cols-12 gap-2">
+              <div className="col-span-3">
+                <Select value={a.type} onChange={(v)=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], type:v}; setForm({...form, attachments: copy}); }}>
+                  <option>Tidplan</option>
+                  <option>Kalkyl</option>
+                  <option>Övrigt</option>
+                </Select>
+              </div>
+              <div className="col-span-8"><Input placeholder="Klistra in länk (PDF/Excel/Google Drive/OneDrive)" value={a.url} onChange={e=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], url:e.target.value}; setForm({...form, attachments: copy}); }}/></div>
+              <div className="col-span-1 flex items-center justify-end">
+                <Button size="sm" variant="ghost" onClick={()=>removeAttachment(idx)}>✕</Button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <label className="grid gap-1 text-sm"><span className="text-slate-600">Anteckningar</span>
+          <Textarea value={form.notes} onChange={e=>setForm({...form, notes:e.target.value})}/></label>
+
+        <div className="flex gap-2">
+          {editingId ? (
+            <Button onClick={update}>Spara ändringar</Button>
+          ) : (
+            <Button onClick={create} disabled={!form.customerId || !form.name}>Spara offert</Button>
+          )}
+          {!editingId && <Button variant="outline" onClick={()=>setForm(empty)}>Rensa</Button>}
+        </div>
+      </CardContent></Card>
+
+      {/* Lista */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <Input className="max-w-sm" placeholder="Sök (nummer, namn, adress, kund)..." value={q} onChange={e=>setQ(e.target.value)} />
+        </div>
+
+        <div className="grid gap-3">
+          {filtered.sort((a,b)=>Number(b.number)-Number(a.number)).map(o=>{
+            const c = customers.find(x=>x.id===o.customerId);
+            return (
+              <Card key={o.id}><CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-lg font-semibold">#{o.number} · {o.name}</div>
+                    <div className="text-sm text-slate-500">{c?.company || "—"} · {o.address || "Adress saknas"}</div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {o.converted && <StatusBadge status="Vunnen"/>}
+                    {o.lost && <StatusBadge status="Förlorad"/>}
+                    {!o.converted && !o.lost && <StatusBadge status="Aktiv"/>}
+                  </div>
+                </div>
+
+                {o.supplierIds.length>0 && (
+                  <div className="mt-2 text-sm flex flex-wrap gap-2">
+                    {o.supplierIds.map(id=>{
+                      const s = suppliers.find(x=>x.id===id); if(!s) return null;
+                      return <span key={id} className="inline-flex items-center gap-2 border rounded-2xl px-2 py-1">{s.name}<SupplierTypeBadge type={s.type}/></span>
+                    })}
+                  </div>
+                )}
+                {o.attachments.length>0 && (
+                  <div className="mt-2 text-sm">
+                    Bilagor:{" "}
+                    {o.attachments.map(a=><a key={a.id} href={a.url} target="_blank" rel="noreferrer" className="underline mr-2">{a.type}</a>)}
+                  </div>
+                )}
+                {o.notes && <div className="mt-2 text-sm text-slate-700">{o.notes}</div>}
+
+                <div className="mt-3 flex gap-2">
+                  {!o.converted && !o.lost && (
+                    <>
+                      <Button size="sm" onClick={()=>startEdit(o.id)}>Redigera</Button>
+                      <Button size="sm" onClick={()=>convertToProject(o.id)}>Markera som vunnen → Projekt</Button>
+                      <Button size="sm" variant="outline" onClick={()=>markLost(o.id)}>Markera som förlorad</Button>
+                    </>
+                  )}
+                  {(o.converted || o.lost) && <Button size="sm" onClick={()=>startEdit(o.id)}>Öppna</Button>}
+                </div>
+              </CardContent></Card>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- PROJEKT (översikt – skapade från vunna offerter) ---------- */
+const Projects = ({ projects, customers, suppliers }) => {
+  const [q, setQ] = React.useState("");
+  const filtered = projects.filter(p => {
+    const c = customers.find(x=>x.id===p.customerId);
+    const txt = [p.name, p.address, p.offerNumber, c?.company].join(" ").toLowerCase();
+    return txt.includes(q.toLowerCase());
+  });
+
+  return (
+    <div className="grid gap-4">
+      <div className="flex items-center justify-between">
+        <Input className="max-w-sm" placeholder="Sök projekt (namn, kund, offertnr)..." value={q} onChange={e=>setQ(e.target.value)} />
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        {filtered.sort((a,b)=>Number(b.offerNumber)-Number(a.offerNumber)).map(p=>{
+          const c = customers.find(x=>x.id===p.customerId);
+          return (
+            <Card key={p.id}><CardContent>
+              <div className="flex items-center justify-between">
+                <div className="text-lg font-semibold">{p.name}</div>
+                <div className="text-xs text-slate-500">Offert #{p.offerNumber}</div>
+              </div>
+              <div className="text-sm text-slate-500">{c?.company || "—"} · {p.address || "Adress saknas"}</div>
+
+              {p.suppliers && p.suppliers.length>0 && (
+                <div className="mt-2 text-sm flex flex-wrap gap-2">
+                  {p.suppliers.map(id=>{
+                    const s = suppliers.find(x=>x.id===id); if(!s) return null;
+                    return <span key={id} className="inline-flex items-center gap-2 border rounded-2xl px-2 py-1">{s.name}<SupplierTypeBadge type={s.type}/></span>
+                  })}
+                </div>
+              )}
+
+              <div className="mt-3">
+                <div className="text-xs text-slate-500 mb-1">Progress</div>
+                <div className="w-full h-2 rounded bg-slate-100 overflow-hidden">
+                  <div className="h-2 bg-green-500" style={{width: `${Number(p.progress||0)}%`}} />
+                </div>
+              </div>
+            </CardContent></Card>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Platshållare ---------- */
 const Placeholder = ({ title }) => (
   <Card><CardContent>
     <div className="text-lg font-semibold">{title}</div>
-    <div className="text-sm text-slate-600 mt-1">Detta är en platshållare. Vi fyller på i nästa steg.</div>
+    <div className="text-sm text-slate-600 mt-1">Detta är en platshållare. Vi kan bygga ut den när du vill.</div>
   </CardContent></Card>
 )
 
@@ -571,6 +710,7 @@ export default function App() {
     activities: load(LS.activities, []),
   })
 
+  // Demo-data första gången (om allt är tomt)
   React.useEffect(() => {
     const isEmpty =
       data.customers.length===0 &&
@@ -578,7 +718,6 @@ export default function App() {
       data.offers.length===0 &&
       data.projects.length===0 &&
       data.activities.length===0
-
     if (isEmpty) {
       const demoCustomers = [{
         id: crypto.randomUUID(),
@@ -611,8 +750,17 @@ export default function App() {
     <Shell current={tab} setCurrent={setTab} settings={settings}>
       {tab === "dashboard"     && <Dashboard offers={data.offers} projects={data.projects} activities={data.activities} />}
       {tab === "aktivitet"     && <Placeholder title="Aktivitet" />}
-      {tab === "offert"        && <Placeholder title="Offert" />}
-      {tab === "projekt"       && <Placeholder title="Projekt" />}
+      {tab === "offert"        && (
+        <Offers
+          offers={data.offers}
+          setOffers={(v)=>{ setData(d=>({...d, offers:v})); }}
+          customers={data.customers}
+          suppliers={data.suppliers}
+          projects={data.projects}
+          setProjects={(v)=>{ setData(d=>({...d, projects:v})); }}
+        />
+      )}
+      {tab === "projekt"       && <Projects projects={data.projects} customers={data.customers} suppliers={data.suppliers} />}
       {tab === "kunder"        && (
         <Customers
           customers={data.customers}
