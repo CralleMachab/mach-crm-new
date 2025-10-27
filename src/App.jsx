@@ -466,7 +466,7 @@ const DropLink = ({ onAddUrl }) => {
   )
 }
 
-/* ---------- OFFERT (autonummer + koppling + bilagor + ritningar) ---------- */
+/* ---------- OFFERT (autonummer + koppling + bilagor + OneDrive) ---------- */
 const getNextOfferNumber = (offers) => {
   if (!offers || offers.length === 0) return 310050;
   const max = Math.max(...offers.map(o => Number(o.number || 0)));
@@ -609,43 +609,60 @@ const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects
           </div>
         </div>
 
-        {/* Bilagor inkl. Ritning + Dropzone för LÄNKAR */}
-        <div className="grid gap-2">
+        {/* === Bilagor === */}
+        <div className="mt-2 border-t pt-3">
           <div className="flex items-center justify-between">
             <div className="text-sm text-slate-600">Bilagor</div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="secondary" onClick={()=>addAttachment("Tidplan")}>+ Tidplan</Button>
               <Button size="sm" variant="secondary" onClick={()=>addAttachment("Kalkyl")}>+ Kalkyl</Button>
               <Button size="sm" variant="secondary" onClick={()=>addAttachment("Ritning")}>+ Ritning</Button>
               <Button size="sm" variant="secondary" onClick={()=>addAttachment("Övrigt")}>+ Övrigt</Button>
+
+              {/* Ny OneDrive-knapp */}
+              <Button
+                size="sm"
+                onClick={()=>{
+                  pickFromOneDrive({
+                    onPicked: (urls) => {
+                      const added = urls.map(u => ({ id: crypto.randomUUID(), type: "Ritning", url: u }));
+                      setForm(f => ({ ...f, attachments: [...(f.attachments || []), ...added] }));
+                    }
+                  });
+                }}
+              >
+                📁 Välj från OneDrive
+              </Button>
             </div>
           </div>
 
-          {form.attachments.map((a, idx)=>(
-            <div key={a.id} className="grid grid-cols-12 gap-2">
-              <div className="col-span-3">
-                <Select value={a.type} onChange={(v)=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], type:v}; setForm({...form, attachments: copy}); }}>
-                  <option>Tidplan</option>
-                  <option>Kalkyl</option>
-                  <option>Ritning</option>
-                  <option>Övrigt</option>
-                </Select>
+          {/* Lista över bilagor */}
+          <div className="mt-2 grid gap-2">
+            {form.attachments.map((a, idx)=>(
+              <div key={a.id} className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-3">
+                  <Select value={a.type} onChange={(v)=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], type:v}; setForm({...form, attachments: copy}); }}>
+                    <option>Tidplan</option>
+                    <option>Kalkyl</option>
+                    <option>Ritning</option>
+                    <option>Övrigt</option>
+                  </Select>
+                </div>
+                <div className="col-span-8">
+                  <Input placeholder="Klistra in DELNINGS-länk" value={a.url} onChange={e=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], url:e.target.value}; setForm({...form, attachments: copy}); }}/>
+                </div>
+                <div className="col-span-1 flex items-center justify-end">
+                  <Button size="sm" variant="ghost" onClick={()=>removeAttachment(idx)}>✕</Button>
+                </div>
               </div>
-              <div className="col-span-8">
-                <Input placeholder="Klistra in DELNINGS-länk (PDF/Excel/Ritning)" value={a.url} onChange={e=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], url:e.target.value}; setForm({...form, attachments: copy}); }}/>
-                <div className="mt-2"><DropLink onAddUrl={(u)=>{ const copy=[...form.attachments]; copy[idx]={...copy[idx], url:u}; setForm({...form, attachments: copy}); }} /></div>
-              </div>
-              <div className="col-span-1 flex items-center justify-end">
-                <Button size="sm" variant="ghost" onClick={()=>removeAttachment(idx)}>✕</Button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        <label className="grid gap-1 text-sm"><span className="text-slate-600">Anteckningar</span>
+        <label className="grid gap-1 text-sm mt-2"><span className="text-slate-600">Anteckningar</span>
           <Textarea value={form.notes} onChange={e=>setForm({...form, notes:e.target.value})}/></label>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 mt-1">
           {editingId ? (
             <Button onClick={update}>Spara ändringar</Button>
           ) : (
@@ -710,7 +727,8 @@ const Offers = ({ offers, setOffers, customers, suppliers, projects, setProjects
       </div>
     </div>
   )
-}
+};
+
 
 /* ---------- PROJEKT (öppna & redigera i popup, inkl. bilagor + ritningar) ---------- */
 const Projects = ({ projects, setProjects, customers, suppliers }) => {
