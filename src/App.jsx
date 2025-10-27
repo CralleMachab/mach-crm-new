@@ -23,7 +23,36 @@ const Input = (props) => <input {...props} className={"border rounded-xl px-3 py
 const Textarea = (props) => <textarea {...props} className={"border rounded-xl px-3 py-2 text-sm w-full min-h-[90px] " + (props.className||"")} />
 const Select = ({value, onChange, children}) => (
   <select value={value} onChange={(e)=>onChange && onChange(e.target.value)} className="border rounded-xl px-3 py-2 text-sm w-full">{children}</select>
-)
+)// --- OneDrive Picker helper ---
+function pickFromOneDrive({ onPicked, multi = true, filter = "folder,.pdf,.xlsx,.xls,.docx,.pptx,.dwg" }) {
+  const clientId = import.meta.env.VITE_ONEDRIVE_CLIENT_ID;
+  if (!clientId || !window.OneDrive) {
+    alert("OneDrive Picker saknas eller VITE_ONEDRIVE_CLIENT_ID är inte satt.");
+    return;
+  }
+
+  const odOptions = {
+    clientId,
+    action: "share",
+    multiSelect: !!multi,
+    viewType: "all",
+    advanced: {
+      filter,
+    },
+    success: (res) => {
+      const urls = (res?.value || []).map(v => v.webUrl).filter(Boolean);
+      if (urls.length && onPicked) onPicked(urls);
+    },
+    cancel: () => {},
+    error: (e) => {
+      console.error("OneDrive Picker error:", e);
+      alert("Kunde inte hämta från OneDrive. Kontrollera behörigheter eller försök igen.");
+    }
+  };
+
+  window.OneDrive.open(odOptions);
+}
+
 
 /* ---------- Badges & helpers ---------- */
 const CustomerLabelBadge = ({label}) => {
