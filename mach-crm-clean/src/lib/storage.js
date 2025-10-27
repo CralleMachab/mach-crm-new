@@ -34,9 +34,7 @@ export function loadAll() {
     offers: load(LS.offers, []),
     projects: load(LS.projects, []),
     activities: load(LS.activities, []),
-    settings: load(LS.settings, {
-      // plats för framtida inställningar
-    }),
+    settings: load(LS.settings, {}),
   };
 }
 
@@ -66,16 +64,16 @@ export function importJSON(jsonString) {
 }
 
 // --- OneDrive File Picker -----------------------------------------------
-// OBS! Kräver att index.html har:
+// Kräver i index.html:
 // <script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
-// Samt att Netlify har env-variabeln VITE_ONEDRIVE_CLIENT_ID (Application (client) ID)
-// och att Azure App Registration är Multi-tenant + SPA Redirect URI = din Netlify-URL.
+// Kräver i Netlify env: VITE_ONEDRIVE_CLIENT_ID (Application/Client ID)
+// Azure-appen ska vara Multi-tenant och ha SPA-redirect till exakt din Netlify-URL.
 
 export function pickFromOneDrive({ onPicked }) {
   const clientId = import.meta.env.VITE_ONEDRIVE_CLIENT_ID;
 
-  // Debug – syns i webbläsarens Konsol (F12 → Console)
-  console.log("DEBUG OneDrive:", {
+  // Tydlig debug – syns alltid i Console
+  console.log("DEBUG OneDrive start", {
     clientId,
     origin: window.location.origin,
     hasOneDrive: !!window.OneDrive,
@@ -88,31 +86,45 @@ export function pickFromOneDrive({ onPicked }) {
 
   const odOptions = {
     clientId,
-    action: "share",            // ger delningsbar länk vi kan spara
+    // Viktigt: använd "query" i stället för "share" för att undvika delningspolicy-problem.
+    action: "query",
     multiSelect: true,
     openInNewWindow: true,
     advanced: {
-      // Måste matcha exakt i Azure → App registrations → Authentication → SPA Redirect URIs
+      // Måste finnas som SPA-redirect i Azure → Authentication
       redirectUri: window.location.origin,
-      // Scopes – kräver ofta admin consent om tenant är låst
-      scopes: ["Files.ReadWrite", "offline_access", "User.Read"],
+      // Minimala scopes (räcker för att läsa och hämta webUrl)
+      scopes: ["Files.Read", "User.Read"],
+      // Filtrera om du vill: filter: "folder,.pdf,.xlsx,.xls,.docx,.pptx,.dwg"
     },
     success: (result) => {
       try {
+        console.log("DEBUG OneDrive success raw", result);
         const urls = (result?.value || [])
           .map(f => f.webUrl)
           .filter(Boolean);
+        console.log("DEBUG OneDrive urls", urls);
         if (urls.length && onPicked) onPicked(urls);
       } catch (e) {
         console.error("parse success result failed", e, result);
+        alert("Kunde inte tolka svar från OneDrive.");
       }
     },
     cancel: () => {
       console.log("OneDrive canceled");
     },
     error: (e) => {
-      console.error("OneDrive error", e);
-      alert("Kunde inte hämta från OneDrive – kontrollera behörigheter i Microsoft.");
+      // Visa så mycket info som möjligt
+      try {
+        console.error("OneDrive error (full)", e);
+        if (e && e.message) {
+          alert("OneDrive-fel: " + e.message);
+        } else {
+          alert("Kunde inte hämta från OneDrive – kontrollera behörigheter i Microsoft.");
+        }
+      } catch (_) {
+        alert("Kunde inte hämta från OneDrive – kontrollera behörigheter i Microsoft.");
+      }
     },
   };
 
@@ -120,6 +132,6 @@ export function pickFromOneDrive({ onPicked }) {
     window.OneDrive.open(odOptions);
   } catch (e) {
     console.error("Picker launch failed", e);
-    alert("Kunde inte öppna OneDrive-fönstret. Kontrollera popup-inställningar.");
+    alert("Kunde inte öppna OneDrive-fönstret (popup/cookies/policy?).");
   }
 }
