@@ -574,9 +574,13 @@ function ProjectCard({ state, setState, id }) {
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-semibold">Projektfiler</h4>
           <div className="flex gap-2">
-            <button className="border rounded-xl px-3 py-2" onClick={addProjectFiles}>
-              + Lägg till filer (OneDrive)
-            </button>
+           <button className="border rounded-xl px-3 py-2 flex items-center gap-2" onClick={addProjectFiles}>
+  {/* OneDrive-ikon (inline SVG) */}
+  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M16.5 6.5a4.5 4.5 0 0 0-8.3-1.9A4 4 0 0 0 4 8.5a4 4 0 0 0 .2 1.2A4.5 4.5 0 0 0 5 18h11a4 4 0 0 0 .5-7.9A4.5 4.5 0 0 0 16.5 6.5z" />
+  </svg>
+  Lägg till filer (OneDrive)
+</button>
           </div>
         </div>
         <ul className="space-y-2">
