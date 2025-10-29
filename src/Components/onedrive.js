@@ -1,5 +1,5 @@
 // src/components/onedrive.js
-// Identisk OneDrive-picker som i Offerter, utdragen till en gemensam helper.
+// Gemensam OneDrive-picker (samma som i Offerter)
 
 export function pickOneDriveFiles({ clientId, onSuccess, onError }) {
   if (!window.OneDrive) {
