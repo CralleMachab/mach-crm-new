@@ -7,42 +7,11 @@ import {
   setActiveContact, addContact,
   setProjectOfferLinks, buildProjectSyncedFiles,
 } from "../lib/storage";
+import { pickOneDriveFiles } from "./components/onedrive";
 
-// === OneDrive File Picker ===
-// Kräver att du har denna rad i public/index.html (du har det redan):
-// <script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
-const ONEDRIVE_CLIENT_ID = 48bd814b-47b9-4310-8c9d-af61d450cedc; // sätt ditt Entra App-ID här
-
-function pickOneDriveFiles(cb) {
-  if (!window.OneDrive) {
-    alert("OneDrive SDK ej laddad (kontrollera script-tag i index.html).");
-    return;
-  }
-  const opt = {
-    clientId: ONEDRIVE_CLIENT_ID,
-    action: "share",
-    multiSelect: true,
-    openInNewWindow: true,
-    advanced: { redirectUri: window.location.origin },
-    success: (files) => {
-      const out = (files.value || []).map((f) => ({
-        id: f.id,
-        name: f.name,
-        link: f.links?.sharingLink?.webUrl || f.webUrl,
-        webUrl: f.webUrl,
-        size: f.size,
-        isFolder: !!f.folder,
-      }));
-      cb(out);
-    },
-    cancel: () => {},
-    error: (e) => {
-      console.error("OneDrive Picker error", e);
-      alert("Kunde inte hämta från OneDrive. Kontrollera behörigheter eller försök igen.");
-    },
-  };
-  window.OneDrive.open(opt);
-}
+// === OneDrive client-id ===
+// Sätt ditt Entra "Application (client) ID" här (samma som i Offerter)
+const ONEDRIVE_CLIENT_ID = "DIN-APPLICATION-CLIENT-ID-HÄR";
 
 // ===== Helpers UI =====
 function entityLabel(t) {
@@ -373,7 +342,6 @@ function EntityCard({ state, setState, id }) {
   function onAddContact() {
     setState((s) => {
       const nxt = { ...s };
-      // lägger till tom kontakt och sätter activeContactId om tomt
       const entity = nxt.entities.find((x) => x.id === e.id);
       if (!entity.contacts) entity.contacts = [];
       const newContact = { id: crypto.randomUUID(), name: "", role: "", phone: "", email: "" };
@@ -383,7 +351,6 @@ function EntityCard({ state, setState, id }) {
       upsertEntity(nxt, entity);
       return nxt;
     });
-    // refresha local
     setTimeout(() => {
       const fresh = loadState().entities.find((x) => x.id === e.id);
       setLocal(fresh);
@@ -492,11 +459,14 @@ function ProjectCard({ state, setState, id }) {
     setIsEdit(false);
   }
 
-  // Lägg till egna projektfiler från OneDrive
+  // Lägg till egna projektfiler från OneDrive (IDENTISK logik som Offerter)
   function addProjectFiles() {
-    pickOneDriveFiles((files) => {
-      const copy = { ...p, files: (p.files || []).concat(files), updatedAt: new Date().toISOString() };
-      setState((s) => { const nxt = { ...s }; upsertProject(nxt, copy); return nxt; });
+    pickOneDriveFiles({
+      clientId: ONEDRIVE_CLIENT_ID,
+      onSuccess: (files) => {
+        const copy = { ...p, files: (p.files || []).concat(files), updatedAt: new Date().toISOString() };
+        setState((s) => { const nxt = { ...s }; upsertProject(nxt, copy); return nxt; });
+      }
     });
   }
 
@@ -574,13 +544,12 @@ function ProjectCard({ state, setState, id }) {
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-semibold">Projektfiler</h4>
           <div className="flex gap-2">
-           <button className="border rounded-xl px-3 py-2 flex items-center gap-2" onClick={addProjectFiles}>
-  {/* OneDrive-ikon (inline SVG) */}
-  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M16.5 6.5a4.5 4.5 0 0 0-8.3-1.9A4 4 0 0 0 4 8.5a4 4 0 0 0 .2 1.2A4.5 4.5 0 0 0 5 18h11a4 4 0 0 0 .5-7.9A4.5 4.5 0 0 0 16.5 6.5z" />
-  </svg>
-  Lägg till filer (OneDrive)
-</button>
+            <button className="border rounded-xl px-3 py-2 flex items-center gap-2" onClick={addProjectFiles}>
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M16.5 6.5a4.5 4.5 0 0 0-8.3-1.9A4 4 0 0 0 4 8.5a4 4 0 0 0 .2 1.2A4.5 4.5 0 0 0 5 18h11a4 4 0 0 0 .5-7.9A4.5 4.5 0 0 0 16.5 6.5z" />
+              </svg>
+              Lägg till filer (OneDrive)
+            </button>
           </div>
         </div>
         <ul className="space-y-2">
