@@ -3,9 +3,45 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mach CRM – Prototyp</title>
-    <meta name="robots" content="noindex" />
+    <title>Mach CRM</title>
+
+    <!-- (valfritt) Tailwind via CDN för enkel styling -->
     <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- OneDrive File Picker -->
+    <script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
+  </head>
+  <body class="bg-slate-50 text-slate-900">
+    <div id="root"></div>
+
+    <!-- Din app -->
+    <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Döda ALL legacy “drag & drop/klistra in länk”-rutor om något råkar renderas -->
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const BAD_SNIPPETS = [
+          "Klistra in en DELNINGS-länk",
+          "lagringstjänst (t.ex. OneDrive/SharePoint)",
+          "drag and drop"
+        ];
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        const toRemove = new Set();
+        let n;
+        while ((n = walker.nextNode())) {
+          const val = (n.nodeValue || "").trim().toLowerCase();
+          if (val && BAD_SNIPPETS.some(s => val.includes(s.toLowerCase()))) {
+            let el = n.parentElement;
+            for (let i = 0; i < 3 && el && el.parentElement; i++) el = el.parentElement;
+            if (el) toRemove.add(el);
+          }
+        }
+        toRemove.forEach(el => el.remove());
+      });
+    </script>
+  </body>
+</html>
+
 
     <!-- OneDrive File Picker -->
 <script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
