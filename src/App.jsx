@@ -10,7 +10,7 @@ import {
 import { pickOneDriveFiles } from "./components/onedrive";
 
 // Sätt ditt Entra "Application (client) ID" här
-const ONEDRIVE_CLIENT_ID = "DIN-APPLICATION-CLIENT-ID-HÄR";
+const ONEDRIVE_CLIENT_ID = 48bd814b-47b9-4310-8c9d-af61d450cedc;
 
 function entityLabel(t) { return t==="customer"?"Kund": t==="supplier"?"Leverantör":"Projekt"; }
 function formatDate(iso) { if(!iso) return ""; const d=new Date(iso); return d.toLocaleDateString("sv-SE",{year:"numeric",month:"short",day:"numeric"}); }
