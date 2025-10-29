@@ -11,7 +11,7 @@ import {
 // === OneDrive File Picker ===
 // Kräver att du har denna rad i public/index.html (du har det redan):
 // <script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
-const ONEDRIVE_CLIENT_ID = "DIN-APP-ID-HÄR"; // sätt ditt Entra App-ID här
+const ONEDRIVE_CLIENT_ID = 48bd814b-47b9-4310-8c9d-af61d450cedc; // sätt ditt Entra App-ID här
 
 function pickOneDriveFiles(cb) {
   if (!window.OneDrive) {
