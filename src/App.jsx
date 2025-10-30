@@ -1,7 +1,7 @@
 // src/App.jsx
 import React from "react";
 
-// ✅ DITT Application (client) ID från Entra — inom citattecken!
+// ✅ Sätt ditt Application (client) ID från Entra här – inom citattecken!
 const ONEDRIVE_CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
 
 export default function App() {
