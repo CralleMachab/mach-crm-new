@@ -1,7 +1,7 @@
 // src/App.jsx
 import React from "react";
 
-// ✅ Ditt Entra Application (client) ID här — med citattecken!
+// ✅ Ditt Entra Application (client) ID — MED citattecken
 const ONEDRIVE_CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
 
 export default function App() {
@@ -10,29 +10,15 @@ export default function App() {
       alert("❌ OneDrive SDK laddades inte. Kontrollera att index.html har raden med js.live.net/v7.2/OneDrive.js");
       return;
     }
-
-    if (!ONEDRIVE_CLIENT_ID) {
-      alert("❌ Saknar ONEDRIVE_CLIENT_ID i App.jsx!");
-      return;
-    }
-
-    console.log("✅ OneDrive SDK hittad, öppnar väljare...");
-
     window.OneDrive.open({
       clientId: ONEDRIVE_CLIENT_ID,
       action: "share",
       multiSelect: true,
       openInNewWindow: true,
       advanced: { redirectUri: window.location.origin },
-      success: (files) => {
-        console.log("✅ Filer valda:", files);
-        alert("✅ Väljaren fungerade! Antal filer: " + (files?.value?.length || 0));
-      },
-      cancel: () => alert("Avbröts."),
-      error: (e) => {
-        console.error("❌ Fel i OneDrive Picker:", e);
-        alert("❌ Fel i OneDrive Picker: " + (e?.message || e));
-      },
+      success: (files) => alert("✅ Väljaren fungerade! Antal filer: " + (files?.value?.length || 0)),
+      cancel: () => {},
+      error: (e) => alert("❌ Fel i OneDrive Picker: " + (e?.message || e)),
     });
   }
 
