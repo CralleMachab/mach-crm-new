@@ -1,6 +1,13 @@
+# netlify.toml
 [build]
-command = "npm run build"
-publish = "dist"
+  command = "npm run build"
+  publish = "dist"
 
 [build.environment]
-NODE_VERSION = "20"
+  NODE_VERSION = "20"
+
+# ✅ Gör att alla React-rutter fungerar (mycket viktigt)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
