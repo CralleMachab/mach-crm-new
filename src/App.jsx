@@ -1,11 +1,37 @@
 // src/App.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
-/* ================== KONFIG ================== */
-// Byt till ditt Entra "Application (client) ID" – MED citattecken:
+/* ===================== ERROR BOUNDARY ===================== */
+class ErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error){ return { error }; }
+  componentDidCatch(error, info){ console.error("🔥 Render error:", error, info); }
+  render(){
+    if (this.state.error) {
+      return (
+        <div style={{padding:"24px", fontFamily:"system-ui"}}>
+          <div style={{background:"#fee2e2", border:"1px solid #ef4444", color:"#991b1b", padding:"16px", borderRadius:12}}>
+            <h2 style={{margin:"0 0 8px 0"}}>❌ Ett fel uppstod i appen</h2>
+            <pre style={{whiteSpace:"pre-wrap"}}>{String(this.state.error?.message || this.state.error)}</pre>
+            <p style={{marginTop:8, fontSize:12, opacity:.8}}>
+              Felet visas här i stället för vit sida. Vi fixar det när vi ser texten.
+            </p>
+          </div>
+          <div style={{marginTop:16}}>
+            <button onClick={()=>location.reload()} style={{padding:"8px 12px", border:"1px solid #000", borderRadius:8}}>Ladda om</button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/* ===================== KONFIG ===================== */
+// Ditt Entra "Application (client) ID" – MED citattecken:
 const ONEDRIVE_CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
 
-/* ================== OneDrive-hjälpare ================== */
+/* ===================== OneDrive helper ===================== */
 function pickOneDriveFiles({ clientId, onSuccess, onError }) {
   try {
     if (typeof window === "undefined" || !window.OneDrive) {
@@ -51,111 +77,64 @@ function pickOneDriveFiles({ clientId, onSuccess, onError }) {
   }
 }
 
-/* ================== LITEN LOKAL STORE ================== */
-function uuid() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return "id-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-function loadState() {
-  try { return JSON.parse(localStorage.getItem("machcrm") || "{}"); } catch { return {}; }
-}
-function saveState(s) { localStorage.setItem("machcrm", JSON.stringify(s)); }
+/* ===================== LOKAL STORE (enkel) ===================== */
+function uuid(){ if (typeof crypto!=="undefined" && crypto.randomUUID) return crypto.randomUUID(); return "id-"+Math.random().toString(36).slice(2)+Date.now().toString(36); }
+function loadState(){ try { return JSON.parse(localStorage.getItem("machcrm") || "{}"); } catch { return {}; } }
+function saveState(s){ localStorage.setItem("machcrm", JSON.stringify(s)); }
 
-/* ===== Entities (Kund/Leverantör) ===== */
-function newEntity(type) {
-  return {
-    id: uuid(),
-    type, // 'customer' | 'supplier'
-    companyName: "",
-    orgNo: "",
-    phone: "",
-    email: "",
-    address: "",
-    notes: "",
-    contacts: [],
-    activeContactId: null,
-    reminders: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+function newEntity(type){
+  return { id: uuid(), type, companyName:"", orgNo:"", phone:"", email:"", address:"", notes:"",
+    contacts:[], activeContactId:null, reminders:[], createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
 }
-function upsertEntity(state, entity) {
-  if (!state.entities) state.entities = [];
-  const i = state.entities.findIndex(e => e.id === entity.id);
-  if (i >= 0) state.entities[i] = entity; else state.entities.push(entity);
+function upsertEntity(state, entity){
+  if(!state.entities) state.entities = [];
+  const i = state.entities.findIndex(e=>e.id===entity.id);
+  if (i>=0) state.entities[i] = entity; else state.entities.push(entity);
   state.updatedAt = new Date().toISOString();
 }
-function setActiveContact(state, entityId, contactId) {
-  const e = (state.entities || []).find(x => x.id === entityId);
-  if (e) {
-    e.activeContactId = contactId;
-    e.updatedAt = new Date().toISOString();
-  }
+function setActiveContact(state, entityId, contactId){
+  const e = (state.entities||[]).find(x=>x.id===entityId);
+  if (e){ e.activeContactId = contactId; e.updatedAt = new Date().toISOString(); }
   return state;
 }
 
-/* ===== Offerter ===== */
-function newOffer(customerId = null) {
-  return {
-    id: uuid(),
-    customerId,
-    title: "Ny offert",
-    status: "Utkast", // Utkast, Skickad, Accepterad, Avslagen
-    amount: "",
-    notes: "",
-    files: [], // OneDrive-filer/mappar
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+function newOffer(customerId=null){
+  return { id: uuid(), customerId, title:"Ny offert", status:"Utkast", amount:"", notes:"", files:[],
+    createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
 }
-function upsertOffer(state, offer) {
-  if (!state.offers) state.offers = [];
-  const i = state.offers.findIndex(o => o.id === offer.id);
-  if (i >= 0) state.offers[i] = offer; else state.offers.push(offer);
+function upsertOffer(state, offer){
+  if(!state.offers) state.offers = [];
+  const i = state.offers.findIndex(o=>o.id===offer.id);
+  if (i>=0) state.offers[i] = offer; else state.offers.push(offer);
   state.updatedAt = new Date().toISOString();
 }
 
-/* ===== Projekt ===== */
-function newProject(customerId) {
-  return {
-    id: uuid(),
-    name: "Nytt projekt",
-    customerId: customerId || null,
-    status: "",
-    description: "",
-    startDate: "",
-    dueDate: "",
-    files: [],
-    // Framtid: linkedOfferItemIds: []
-    reminders: [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+function newProject(customerId){
+  return { id: uuid(), name:"Nytt projekt", customerId:customerId||null, status:"", description:"",
+    startDate:"", dueDate:"", files:[], reminders:[], createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
 }
-function upsertProject(state, proj) {
-  if (!state.projects) state.projects = [];
-  const i = state.projects.findIndex(p => p.id === proj.id);
-  if (i >= 0) state.projects[i] = proj; else state.projects.push(proj);
+function upsertProject(state, proj){
+  if(!state.projects) state.projects = [];
+  const i = state.projects.findIndex(p=>p.id===proj.id);
+  if (i>=0) state.projects[i] = proj; else state.projects.push(proj);
   state.updatedAt = new Date().toISOString();
 }
 
-/* ================== UI HELPERS ================== */
+/* ===================== UI HELPERS ===================== */
 function entityLabel(t){ return t==="customer"?"Kund":t==="supplier"?"Leverantör":"Projekt"; }
-function formatDate(iso){ if(!iso) return ""; const d=new Date(iso); return d.toLocaleDateString("sv-SE",{year:"numeric",month:"short",day:"numeric"}); }
-function reminderStatus(r){const t=new Date();t.setHours(0,0,0,0);const d=new Date(r.dueDate);d.setHours(0,0,0,0);if(r.done)return"done";if(d<t)return"overdue";if(+d===+t)return"today";return"upcoming";}
+function reminderStatus(r){const t=new Date();t.setHours(0,0,0,0);const d=new Date(r.dueDate||t);d.setHours(0,0,0,0);if(r.done)return"done";if(d<t)return"overdue";if(+d===+t)return"today";return"upcoming";}
 
-/* ================== STORE HOOK ================== */
+/* ===================== STORE HOOK ===================== */
 function useStore(){
   const initial = loadState();
-  const [state,setState] = useState(() => {
+  const [state,setState] = useState(()=>{
     if (initial && (initial.entities || initial.projects || initial.offers)) return initial;
-    // seed om tomt
-    const s = { entities: [], suppliers: [], projects: [], offers: [] };
+    const s = { entities: [], projects: [], offers: [] };
     const c = newEntity("customer"); c.companyName="Exempel AB";
     c.contacts=[{id:uuid(),name:"Anna Andersson",role:"Inköp",phone:"",email:""}];
     c.activeContactId=c.contacts[0].id; upsertEntity(s,c);
     const sup = newEntity("supplier"); sup.type="supplier"; sup.companyName="Leverantören i Norden"; upsertEntity(s,sup);
-    const off = newOffer(c.id); off.title="Offert #1001"; off.status="Utkast"; upsertOffer(s, off);
+    const off = newOffer(c.id); off.title="Offert #1001"; upsertOffer(s, off);
     const p = newProject(c.id); p.name="Exempelprojekt"; upsertProject(s,p);
     saveState(s);
     return s;
@@ -164,8 +143,16 @@ function useStore(){
   return [state,setState];
 }
 
-/* ================== APP ================== */
+/* ===================== APP (med ErrorBoundary) ===================== */
 export default function App(){
+  return (
+    <ErrorBoundary>
+      <AppInner/>
+    </ErrorBoundary>
+  );
+}
+
+function AppInner(){
   const [state,setState]=useStore();
   const [search,setSearch]=useState("");
   const [modal,setModal]=useState(null); // {kind:'entity'|'project'|'offer', id}
@@ -191,7 +178,7 @@ export default function App(){
   },[state]);
   const pickedRem=useMemo(()=> allReminders
     .filter(r=> remFilter==="all"?true: remFilter==="done"?r.done: reminderStatus(r)===remFilter)
-    .sort((a,b)=> new Date(a.dueDate)-new Date(b.dueDate)), [allReminders,remFilter]);
+    .sort((a,b)=> new Date(a.dueDate||0)-new Date(b.dueDate||0)), [allReminders,remFilter]);
 
   function openEntity(id){ setModal({kind:"entity",id}); }
   function openProject(id){ setModal({kind:"project",id}); }
@@ -241,7 +228,7 @@ export default function App(){
   );
 }
 
-/* ================== GEMENSAMMA UI ================== */
+/* ===================== GEMENSAM UI ===================== */
 function ListCard({title,count,items,onOpen}){
   return (
     <div className="bg-white rounded-2xl shadow p-4">
@@ -299,7 +286,7 @@ function Modal({children,onClose}){
   );
 }
 
-/* ================== ENTITY CARD ================== */
+/* ===================== ENTITY CARD ===================== */
 function EntityCard({state,setState,id}){
   const e=state.entities.find(x=>x.id===id);
   const [local,setLocal]=useState(e);
@@ -365,7 +352,7 @@ function EntityCard({state,setState,id}){
   );
 }
 
-/* ================== OFFERS ================== */
+/* ===================== OFFERS ===================== */
 function OffersPanel({offers, entities, onOpen, onCreate}){
   const getCust = (id)=> entities?.find(e=>e.id===id);
   return (
@@ -479,7 +466,7 @@ function OfferCard({state,setState,id}){
   );
 }
 
-/* ================== PROJECTS ================== */
+/* ===================== PROJECTS ===================== */
 function ProjectsPanel({projects,entities,onOpen,onCreate}){
   const sorted=(projects||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"sv"));
   return (
@@ -555,6 +542,7 @@ function ProjectCard({state,setState,id}){
         </div>
       </div>
 
+      {/* Projektfiler */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-semibold">Projektfiler</h4>
