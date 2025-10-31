@@ -1,7 +1,7 @@
 // src/App.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
-/* ===================== ERROR BOUNDARY ===================== */
+/* ============== ERROR BOUNDARY (visa fel istället för vit sida) ============== */
 class ErrorBoundary extends React.Component {
   constructor(props){ super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error){ return { error }; }
@@ -28,7 +28,7 @@ class ErrorBoundary extends React.Component {
 }
 
 /* ===================== KONFIG ===================== */
-// Ditt Entra "Application (client) ID" – MED citattecken:
+// Entra "Application (client) ID" – MED citattecken:
 const ONEDRIVE_CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
 
 /* ===================== OneDrive helper ===================== */
@@ -123,6 +123,7 @@ function upsertProject(state, proj){
 /* ===================== UI HELPERS ===================== */
 function entityLabel(t){ return t==="customer"?"Kund":t==="supplier"?"Leverantör":"Projekt"; }
 function reminderStatus(r){const t=new Date();t.setHours(0,0,0,0);const d=new Date(r.dueDate||t);d.setHours(0,0,0,0);if(r.done)return"done";if(d<t)return"overdue";if(+d===+t)return"today";return"upcoming";}
+function formatDate(iso){ if(!iso) return ""; const d=new Date(iso); return d.toLocaleDateString("sv-SE",{year:"numeric",month:"short",day:"numeric"}); }
 
 /* ===================== STORE HOOK ===================== */
 function useStore(){
@@ -348,6 +349,41 @@ function EntityCard({state,setState,id}){
           </div>
         ) : <div className="text-sm text-gray-500">Ingen kontakt vald. Lägg till en kontaktperson.</div>}
       </div>
+    </div>
+  );
+}
+
+/* ===================== REMINDERS PANEL (saknades) ===================== */
+function RemindersPanel({ items, onOpen, setFilter }) {
+  return (
+    <div className="bg-white rounded-2xl shadow p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold">Påminnelser (alla)</h2>
+        <select onChange={(e)=>setFilter(e.target.value)} className="border rounded-xl px-2 py-2">
+          <option value="all">Alla</option>
+          <option value="today">Förfaller idag</option>
+          <option value="overdue">Försenade</option>
+          <option value="upcoming">Kommande</option>
+          <option value="done">Klara</option>
+        </select>
+      </div>
+      <ul className="divide-y">
+        {items.map((r) => (
+          <li key={`${r.refKind}-${r.refId}-${r.id}`} className="py-3 cursor-pointer" onClick={()=>onOpen(r)}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">{r.type || "påminnelse"}: {r.subject || ""}</div>
+                <div className="text-xs text-gray-500">
+                  {formatDate(r.dueDate)} • {r.owner} ({entityLabel(r.ownerType)})
+                </div>
+              </div>
+              <div className="text-xs">
+                {{today:"Idag",overdue:"Försenad",upcoming:"Kommande",done:"Klar"}[reminderStatus(r)]}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
