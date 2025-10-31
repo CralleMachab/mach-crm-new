@@ -1,7 +1,57 @@
 // src/App.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
-// ====== Minimal “storage” i localStorage (tills din lib/storage.js används) ======
+/* ================== KONFIG ================== */
+// Byt till ditt Entra "Application (client) ID" – MED citattecken:
+const ONEDRIVE_CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
+
+/* ================== OneDrive-hjälpare (inbakat) ================== */
+function pickOneDriveFiles({ clientId, onSuccess, onError }) {
+  try {
+    if (typeof window === "undefined" || !window.OneDrive) {
+      const err = new Error("OneDrive SDK ej laddad. Kontrollera index.html-skriptet.");
+      onError?.(err);
+      alert("❌ OneDrive SDK ej laddad. Kontrollera att index.html har js.live.net/v7.2/OneDrive.js");
+      return;
+    }
+    if (!clientId) {
+      const err = new Error("Saknar clientId (ONEDRIVE_CLIENT_ID).");
+      onError?.(err);
+      alert("❌ Saknar ONEDRIVE_CLIENT_ID i App.jsx");
+      return;
+    }
+    window.OneDrive.open({
+      clientId,
+      action: "share",
+      multiSelect: true,
+      openInNewWindow: true,
+      advanced: { redirectUri: window.location.origin },
+      success: (files) => {
+        const out = (files?.value || []).map((f) => ({
+          id: f.id,
+          name: f.name,
+          link: f.links?.sharingLink?.webUrl || f.webUrl,
+          webUrl: f.webUrl,
+          size: f.size,
+          isFolder: !!f.folder,
+        }));
+        onSuccess?.(out);
+      },
+      cancel: () => {},
+      error: (e) => {
+        console.error("OneDrive Picker error", e);
+        alert("❌ Kunde inte hämta från OneDrive. Kontrollera behörigheter i Entra eller försök igen.");
+        onError?.(e);
+      },
+    });
+  } catch (e) {
+    console.error(e);
+    onError?.(e);
+    alert("❌ Oväntat fel i OneDrive-hämtning.");
+  }
+}
+
+/* ================== LITEN LOKAL STORE ================== */
 function uuid() { return crypto.randomUUID(); }
 function loadState() {
   try { return JSON.parse(localStorage.getItem("machcrm") || "{}"); } catch { return {}; }
@@ -62,14 +112,17 @@ function upsertProject(state, proj) {
   state.updatedAt = new Date().toISOString();
 }
 
-// ===== Helpers UI =====
+/* ================== UI HELPERS ================== */
 function entityLabel(t){ return t==="customer"?"Kund":t==="supplier"?"Leverantör":"Projekt"; }
 function formatDate(iso){ if(!iso) return ""; const d=new Date(iso); return d.toLocaleDateString("sv-SE",{year:"numeric",month:"short",day:"numeric"}); }
 function reminderStatus(r){const t=new Date();t.setHours(0,0,0,0);const d=new Date(r.dueDate);d.setHours(0,0,0,0);if(r.done)return"done";if(d<t)return"overdue";if(+d===+t)return"today";return"upcoming";}
 
-// ===== Store hook =====
-function useStore(){ const [state,setState]=useState(()=> (loadState().entities||loadState().projects) ? loadState() : seed());
-  useEffect(()=>{ saveState(state); },[state]); return [state,setState]; }
+/* ================== STORE HOOK ================== */
+function useStore(){
+  const [state,setState]=useState(()=> (loadState().entities||loadState().projects) ? loadState() : seed());
+  useEffect(()=>{ saveState(state); },[state]);
+  return [state,setState];
+}
 
 // Start-data om tomt
 function seed(){
@@ -81,6 +134,7 @@ function seed(){
   saveState(s); return s;
 }
 
+/* ================== APP ================== */
 export default function App(){
   const [state,setState]=useStore();
   const [search,setSearch]=useState("");
@@ -148,7 +202,7 @@ export default function App(){
   );
 }
 
-// ===== UI blocks =====
+/* ================== UI BLOCKS ================== */
 function ListCard({title,count,items,onOpen}){
   return (
     <div className="bg-white rounded-2xl shadow p-4">
@@ -249,7 +303,7 @@ function Modal({children,onClose}){
   );
 }
 
-// ===== Entity Card =====
+/* ================== ENTITY CARD ================== */
 function EntityCard({state,setState,id}){
   const e=state.entities.find(x=>x.id===id);
   const [local,setLocal]=useState(e);
@@ -315,7 +369,7 @@ function EntityCard({state,setState,id}){
   );
 }
 
-// ===== Project Card =====
+/* ================== PROJECT CARD ================== */
 function ProjectCard({state,setState,id}){
   const p=state.projects.find(x=>x.id===id);
   const [local,setLocal]=useState(p);
@@ -328,6 +382,22 @@ function ProjectCard({state,setState,id}){
   function update(k,v){ setLocal(x=>({...x,[k]:v})); }
   function onSave(){ const toSave={...local,updatedAt:new Date().toISOString()};
     setState(s=>{const nxt={...s}; upsertProject(nxt,toSave); return nxt;}); setIsEdit(false); }
+
+  // ===== OneDrive: lägg till filer till projektet =====
+  function addProjectFiles(){
+    pickOneDriveFiles({
+      clientId: ONEDRIVE_CLIENT_ID,
+      onSuccess: (files)=>{
+        const copy = { ...p, files: (p.files || []).concat(files), updatedAt: new Date().toISOString() };
+        setState(s=>{ const nxt={...s}; upsertProject(nxt,copy); return nxt; });
+      }
+    });
+  }
+
+  function removeProjectFile(fileId){
+    const copy = { ...p, files: (p.files || []).filter(x=>x.id!==fileId), updatedAt: new Date().toISOString() };
+    setState(s=>{ const nxt={...s}; upsertProject(nxt,copy); return nxt; });
+  }
 
   return (
     <div className="space-y-6">
@@ -350,14 +420,22 @@ function ProjectCard({state,setState,id}){
         </div>
       </div>
 
-      {/* En enkel lista över (framtida) projektfiler — OneDrive lägger vi i steg 2 */}
+      {/* Projektfiler + OneDrive-knapp */}
       <div className="bg-white rounded-2xl shadow p-4">
-        <h4 className="font-semibold mb-2">Projektfiler</h4>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-semibold">Projektfiler</h4>
+          <button className="border rounded-xl px-3 py-2" onClick={addProjectFiles}>
+            + Lägg till filer (OneDrive)
+          </button>
+        </div>
         <ul className="space-y-2">
           {(local.files||[]).length ? local.files.map(f=>(
             <li key={f.id} className="flex items-center justify-between">
               <a className="text-blue-600 hover:underline" href={f.link || f.webUrl} target="_blank" rel="noreferrer">{f.name}</a>
-              <span className="text-xs text-gray-500">{typeof f.size==="number" ? (f.size/1024/1024).toFixed(2)+" MB" : ""}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500">{typeof f.size==="number" ? (f.size/1024/1024).toFixed(2)+" MB" : ""}</span>
+                {isEdit && <button className="text-red-600 text-sm" onClick={()=>removeProjectFile(f.id)}>Ta bort</button>}
+              </div>
             </li>
           )) : <li className="text-sm text-gray-500">Inga filer ännu.</li>}
         </ul>
@@ -366,7 +444,7 @@ function ProjectCard({state,setState,id}){
   );
 }
 
-// ===== Small inputs =====
+/* ================== SMALL INPUTS ================== */
 function Field({label,value,onChange,disabled,colSpan}){
   return (
     <div className={colSpan===2 ? "col-span-2": ""}>
