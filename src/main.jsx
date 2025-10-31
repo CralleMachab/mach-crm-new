@@ -1,14 +1,12 @@
 // src/main.jsx
 import React from "react";
-import ReactDOM from "react-dom/client";
+import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 
-console.log("✅ main.jsx laddades");
-const root = document.getElementById("root");
-console.log("✅ root hittad:", !!root);
-
-ReactDOM.createRoot(root).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+const rootEl = document.getElementById("root");
+if (!rootEl) {
+  document.body.innerHTML = "<pre>❌ Kunde inte hitta #root i index.html</pre>";
+} else {
+  const root = createRoot(rootEl);
+  root.render(<App />);
+}
