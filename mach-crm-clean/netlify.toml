@@ -1,6 +1,15 @@
+# netlify.toml
+
 [build]
-command = "npm run build"
-publish = "dist"
+  command = "npm run build"
+  publish = "dist"
 
 [build.environment]
-NODE_VERSION = "20"
+  NODE_VERSION = "20"
+
+# ✅ Viktigt för single-page apps (React/Vite)
+# Gör att alla vägar pekar till index.html så appen laddas korrekt.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
