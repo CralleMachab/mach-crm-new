@@ -61,6 +61,7 @@ function loadState() {
 }
 function saveState(s) { localStorage.setItem("machcrm", JSON.stringify(s)); }
 
+/* ===== Entities (Kund/Leverantör) ===== */
 function newEntity(type) {
   return {
     id: uuid(),
@@ -93,6 +94,28 @@ function setActiveContact(state, entityId, contactId) {
   return state;
 }
 
+/* ===== Offerter ===== */
+function newOffer(customerId = null) {
+  return {
+    id: uuid(),
+    customerId,
+    title: "Ny offert",
+    status: "Utkast", // Utkast, Skickad, Accepterad, Avslagen
+    amount: "",
+    notes: "",
+    files: [], // OneDrive-filer/mappar
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+function upsertOffer(state, offer) {
+  if (!state.offers) state.offers = [];
+  const i = state.offers.findIndex(o => o.id === offer.id);
+  if (i >= 0) state.offers[i] = offer; else state.offers.push(offer);
+  state.updatedAt = new Date().toISOString();
+}
+
+/* ===== Projekt ===== */
 function newProject(customerId) {
   return {
     id: uuid(),
@@ -103,7 +126,7 @@ function newProject(customerId) {
     startDate: "",
     dueDate: "",
     files: [],
-    // Koppling till offertfiler (framtid): linkedOfferItemIds:[]
+    // Framtid: linkedOfferItemIds: []
     reminders: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -125,15 +148,14 @@ function reminderStatus(r){const t=new Date();t.setHours(0,0,0,0);const d=new Da
 function useStore(){
   const initial = loadState();
   const [state,setState] = useState(() => {
-    if (initial && (initial.entities || initial.projects)) return initial;
+    if (initial && (initial.entities || initial.projects || initial.offers)) return initial;
     // seed om tomt
-    const s = { entities: [], projects: [], offers: [] };
-    const c = newEntity("customer");
-    c.companyName="Exempel AB";
+    const s = { entities: [], suppliers: [], projects: [], offers: [] };
+    const c = newEntity("customer"); c.companyName="Exempel AB";
     c.contacts=[{id:uuid(),name:"Anna Andersson",role:"Inköp",phone:"",email:""}];
-    c.activeContactId=c.contacts[0].id;
-    upsertEntity(s,c);
+    c.activeContactId=c.contacts[0].id; upsertEntity(s,c);
     const sup = newEntity("supplier"); sup.type="supplier"; sup.companyName="Leverantören i Norden"; upsertEntity(s,sup);
+    const off = newOffer(c.id); off.title="Offert #1001"; off.status="Utkast"; upsertOffer(s, off);
     const p = newProject(c.id); p.name="Exempelprojekt"; upsertProject(s,p);
     saveState(s);
     return s;
@@ -146,11 +168,12 @@ function useStore(){
 export default function App(){
   const [state,setState]=useStore();
   const [search,setSearch]=useState("");
-  const [modal,setModal]=useState(null); // {kind:'entity'|'project', id}
+  const [modal,setModal]=useState(null); // {kind:'entity'|'project'|'offer', id}
   const [remFilter,setRemFilter]=useState("all");
 
   const customers=useMemo(()=> (state.entities||[]).filter(e=>e.type==="customer").sort((a,b)=>a.companyName.localeCompare(b.companyName,"sv")), [state.entities]);
   const suppliers=useMemo(()=> (state.entities||[]).filter(e=>e.type==="supplier").sort((a,b)=>a.companyName.localeCompare(b.companyName,"sv")), [state.entities]);
+  const offers=useMemo(()=> (state.offers||[]).slice().sort((a,b)=> (b.updatedAt||"").localeCompare(a.updatedAt||"")), [state.offers]);
 
   const filterBy = (arr)=>{
     const q=search.trim().toLowerCase();
@@ -172,19 +195,24 @@ export default function App(){
 
   function openEntity(id){ setModal({kind:"entity",id}); }
   function openProject(id){ setModal({kind:"project",id}); }
+  function openOffer(id){ setModal({kind:"offer",id}); }
   function closeModal(){ setModal(null); }
 
   function createEntity(type){ const e=newEntity(type); setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;}); setTimeout(()=>openEntity(e.id),0); }
   function createProject(){ const firstCust=(state.entities||[]).find(e=>e.type==="customer"); const p=newProject(firstCust?.id);
     setState(s=>{const nxt={...s}; upsertProject(nxt,p); return nxt;}); setTimeout(()=>openProject(p.id),0); }
+  function createOffer(){ const firstCust=(state.entities||[]).find(e=>e.type==="customer"); const o=newOffer(firstCust?.id || null);
+    setState(s=>{const nxt={...s}; upsertOffer(nxt,o); return nxt;}); setTimeout(()=>openOffer(o.id),0); }
 
   return (
     <div className="mx-auto max-w-7xl p-4">
       <header className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold">Mach CRM</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button className="border rounded-xl px-3 py-2" onClick={()=>createEntity("customer")}>+ Ny kund</button>
           <button className="border rounded-xl px-3 py-2" onClick={()=>createEntity("supplier")}>+ Ny leverantör</button>
+          <button className="border rounded-xl px-3 py-2" onClick={createOffer}>+ Ny offert</button>
+          <button className="border rounded-xl px-3 py-2" onClick={createProject}>+ Nytt projekt</button>
         </div>
       </header>
 
@@ -197,20 +225,23 @@ export default function App(){
 
         <section className="lg:col-span-2 space-y-4">
           <RemindersPanel items={pickedRem} onOpen={r=> r.refKind==="entity"?openEntity(r.refId):openProject(r.refId)} setFilter={setRemFilter}/>
+          <OffersPanel offers={offers} entities={state.entities} onOpen={openOffer} onCreate={createOffer}/>
           <ProjectsPanel projects={state.projects} entities={state.entities} onOpen={openProject} onCreate={createProject}/>
         </section>
       </div>
 
       {modal && (
         <Modal onClose={closeModal}>
-          {modal.kind==="entity" ? <EntityCard state={state} setState={setState} id={modal.id}/> : <ProjectCard state={state} setState={setState} id={modal.id}/> }
+          {modal.kind==="entity" && <EntityCard state={state} setState={setState} id={modal.id}/> }
+          {modal.kind==="offer"  && <OfferCard state={state} setState={setState} id={modal.id}/> }
+          {modal.kind==="project"&& <ProjectCard state={state} setState={setState} id={modal.id}/> }
         </Modal>
       )}
     </div>
   );
 }
 
-/* ================== UI BLOCKS ================== */
+/* ================== GEMENSAMMA UI ================== */
 function ListCard({title,count,items,onOpen}){
   return (
     <div className="bg-white rounded-2xl shadow p-4">
@@ -236,65 +267,22 @@ function ListCard({title,count,items,onOpen}){
     </div>
   );
 }
-
-function RemindersPanel({items,onOpen,setFilter}){
+function Field({label,value,onChange,disabled,colSpan}){
   return (
-    <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold">Påminnelser (alla)</h2>
-        <select onChange={e=>setFilter(e.target.value)} className="border rounded-xl px-2 py-2">
-          <option value="all">Alla</option>
-          <option value="today">Förfaller idag</option>
-          <option value="overdue">Försenade</option>
-          <option value="upcoming">Kommande</option>
-          <option value="done">Klara</option>
-        </select>
-      </div>
-      <ul className="divide-y">
-        {items.map(r=>(
-          <li key={`${r.refKind}-${r.refId}-${r.id}`} className="py-3 cursor-pointer" onClick={()=>onOpen(r)}>
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium">{r.type}: {r.subject || ""}</div>
-                <div className="text-xs text-gray-500">{formatDate(r.dueDate)} • {r.owner} ({entityLabel(r.ownerType)})</div>
-              </div>
-              <div className="text-xs">{{today:"Idag",overdue:"Försenad",upcoming:"Kommande",done:"Klar"}[reminderStatus(r)]}</div>
-            </div>
-          </li>
-        ))}
-      </ul>
+    <div className={colSpan===2 ? "col-span-2": ""}>
+      <div className="text-xs font-medium text-gray-600 mb-1">{label}</div>
+      <input className="w-full border rounded-xl px-3 py-2" value={value || ""} disabled={disabled} onChange={e=>onChange?.(e.target.value)} />
     </div>
   );
 }
-
-function ProjectsPanel({projects,entities,onOpen,onCreate}){
-  const sorted=(projects||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"sv"));
+function TextArea({label,value,onChange,disabled}){
   return (
-    <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold">Projekt</h2>
-        <button className="border rounded-xl px-3 py-2" onClick={onCreate}>+ Nytt projekt</button>
-      </div>
-      <ul className="divide-y">
-        {sorted.map(p=>{
-          const cust=entities?.find(e=>e.id===p.customerId);
-          return (
-            <li key={p.id} className="py-3 cursor-pointer hover:bg-gray-50 px-2 rounded-xl" onClick={()=>onOpen(p.id)}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-gray-500">{cust ? cust.companyName : "—"} • {p.status || ""}</div>
-                </div>
-                <div className="text-xs text-gray-500">{(p.files||[]).length} filer</div>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+    <div className="col-span-2">
+      <div className="text-xs font-medium text-gray-600 mb-1">{label}</div>
+      <textarea rows={3} className="w-full border rounded-xl px-3 py-2" value={value || ""} disabled={disabled} onChange={e=>onChange?.(e.target.value)} />
     </div>
   );
 }
-
 function Modal({children,onClose}){
   return (
     <div className="fixed inset-0 z-50">
@@ -377,7 +365,148 @@ function EntityCard({state,setState,id}){
   );
 }
 
-/* ================== PROJECT CARD ================== */
+/* ================== OFFERS ================== */
+function OffersPanel({offers, entities, onOpen, onCreate}){
+  const getCust = (id)=> entities?.find(e=>e.id===id);
+  return (
+    <div className="bg-white rounded-2xl shadow p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold">Offerter</h2>
+        <button className="border rounded-xl px-3 py-2" onClick={onCreate}>+ Ny offert</button>
+      </div>
+      <ul className="divide-y">
+        {(offers||[]).map(o=>{
+          const cust = getCust(o.customerId);
+          return (
+            <li key={o.id} className="py-3 cursor-pointer hover:bg-gray-50 px-2 rounded-xl" onClick={()=>onOpen(o.id)}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">{o.title}</div>
+                  <div className="text-xs text-gray-500">{cust ? cust.companyName : "—"} • {o.status}</div>
+                </div>
+                <div className="text-xs text-gray-500">{(o.files||[]).length} filer</div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+function OfferCard({state,setState,id}){
+  const o = (state.offers||[]).find(x=>x.id===id);
+  const [local,setLocal]=useState(o);
+  const [isEdit,setIsEdit]=useState(false);
+  const customers=(state.entities||[]).filter(e=>e.type==="customer");
+
+  useEffect(()=>{ setLocal(o); },[o?.id]);
+  if(!o) return null;
+
+  function update(k,v){ setLocal(x=>({...x,[k]:v})); }
+  function onSave(){ const toSave={...local,updatedAt:new Date().toISOString()};
+    setState(s=>{const nxt={...s}; upsertOffer(nxt,toSave); return nxt;}); setIsEdit(false); }
+
+  function addFiles(){
+    pickOneDriveFiles({
+      clientId: ONEDRIVE_CLIENT_ID,
+      onSuccess: (files)=>{
+        const copy = { ...o, files: (o.files || []).concat(files), updatedAt: new Date().toISOString() };
+        setState(s=>{ const nxt={...s}; upsertOffer(nxt,copy); return nxt; });
+      }
+    });
+  }
+  function removeFile(fileId){
+    const copy = { ...o, files: (o.files || []).filter(x=>x.id!==fileId), updatedAt: new Date().toISOString() };
+    setState(s=>{ const nxt={...s}; upsertOffer(nxt,copy); return nxt; });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold">Offert: {o.title}</h3>
+        <div className="flex gap-2">
+          {!isEdit ? <button className="border rounded-xl px-3 py-2" onClick={()=>setIsEdit(true)}>Redigera</button>
+                   : <button className="bg-black text-white rounded-xl px-3 py-2" onClick={onSave}>Spara</button>}
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow p-4 grid grid-cols-2 gap-3">
+        <div>
+          <div className="text-xs font-medium text-gray-600 mb-1">Titel</div>
+          <input className="w-full border rounded-xl px-3 py-2" value={local.title || ""} disabled={!isEdit} onChange={e=>update("title",e.target.value)}/>
+        </div>
+        <div>
+          <div className="text-xs font-medium text-gray-600 mb-1">Kund</div>
+          <select className="w-full border rounded-xl px-2 py-2" value={local.customerId || ""} disabled={!isEdit} onChange={e=>update("customerId",e.target.value)}>
+            <option value="">—</option>
+            {customers.map(c=><option key={c.id} value={c.id}>{c.companyName}</option>)}
+          </select>
+        </div>
+        <div>
+          <div className="text-xs font-medium text-gray-600 mb-1">Belopp</div>
+          <input className="w-full border rounded-xl px-3 py-2" value={local.amount || ""} disabled={!isEdit} onChange={e=>update("amount",e.target.value)}/>
+        </div>
+        <div>
+          <div className="text-xs font-medium text-gray-600 mb-1">Status</div>
+          <select className="w-full border rounded-xl px-2 py-2" value={local.status || "Utkast"} disabled={!isEdit} onChange={e=>update("status",e.target.value)}>
+            {["Utkast","Skickad","Accepterad","Avslagen"].map(s=> <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="col-span-2">
+          <TextArea label="Anteckningar" value={local.notes || ""} disabled={!isEdit} onChange={v=>update("notes",v)}/>
+        </div>
+      </div>
+
+      {/* Offertfiler */}
+      <div className="bg-white rounded-2xl shadow p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-semibold">Offertfiler (OneDrive)</h4>
+          <button className="border rounded-xl px-3 py-2" onClick={addFiles}>+ Lägg till filer (OneDrive)</button>
+        </div>
+        <ul className="space-y-2">
+          {(local.files||[]).length ? local.files.map(f=>(
+            <li key={f.id} className="flex items-center justify-between">
+              <a className="text-blue-600 hover:underline" href={f.link || f.webUrl} target="_blank" rel="noreferrer">{f.name}</a>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500">{typeof f.size==="number" ? (f.size/1024/1024).toFixed(2)+" MB" : ""}</span>
+                {isEdit && <button className="text-red-600 text-sm" onClick={()=>removeFile(f.id)}>Ta bort</button>}
+              </div>
+            </li>
+          )) : <li className="text-sm text-gray-500">Inga filer ännu.</li>}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ================== PROJECTS ================== */
+function ProjectsPanel({projects,entities,onOpen,onCreate}){
+  const sorted=(projects||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,"sv"));
+  return (
+    <div className="bg-white rounded-2xl shadow p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold">Projekt</h2>
+        <button className="border rounded-xl px-3 py-2" onClick={onCreate}>+ Nytt projekt</button>
+      </div>
+      <ul className="divide-y">
+        {sorted.map(p=>{
+          const cust=entities?.find(e=>e.id===p.customerId);
+          return (
+            <li key={p.id} className="py-3 cursor-pointer hover:bg-gray-50 px-2 rounded-xl" onClick={()=>onOpen(p.id)}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">{p.name}</div>
+                  <div className="text-xs text-gray-500">{cust ? cust.companyName : "—"} • {p.status || ""}</div>
+                </div>
+                <div className="text-xs text-gray-500">{(p.files||[]).length} filer</div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 function ProjectCard({state,setState,id}){
   const p=state.projects.find(x=>x.id===id);
   const [local,setLocal]=useState(p);
@@ -391,7 +520,6 @@ function ProjectCard({state,setState,id}){
   function onSave(){ const toSave={...local,updatedAt:new Date().toISOString()};
     setState(s=>{const nxt={...s}; upsertProject(nxt,toSave); return nxt;}); setIsEdit(false); }
 
-  // ===== OneDrive: lägg till filer till projektet =====
   function addProjectFiles(){
     pickOneDriveFiles({
       clientId: ONEDRIVE_CLIENT_ID,
@@ -401,7 +529,6 @@ function ProjectCard({state,setState,id}){
       }
     });
   }
-
   function removeProjectFile(fileId){
     const copy = { ...p, files: (p.files || []).filter(x=>x.id!==fileId), updatedAt: new Date().toISOString() };
     setState(s=>{ const nxt={...s}; upsertProject(nxt,copy); return nxt; });
@@ -428,13 +555,10 @@ function ProjectCard({state,setState,id}){
         </div>
       </div>
 
-      {/* Projektfiler + OneDrive-knapp */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-semibold">Projektfiler</h4>
-          <button className="border rounded-xl px-3 py-2" onClick={addProjectFiles}>
-            + Lägg till filer (OneDrive)
-          </button>
+          <button className="border rounded-xl px-3 py-2" onClick={addProjectFiles}>+ Lägg till filer (OneDrive)</button>
         </div>
         <ul className="space-y-2">
           {(local.files||[]).length ? local.files.map(f=>(
@@ -448,24 +572,6 @@ function ProjectCard({state,setState,id}){
           )) : <li className="text-sm text-gray-500">Inga filer ännu.</li>}
         </ul>
       </div>
-    </div>
-  );
-}
-
-/* ================== SMALL INPUTS ================== */
-function Field({label,value,onChange,disabled,colSpan}){
-  return (
-    <div className={colSpan===2 ? "col-span-2": ""}>
-      <div className="text-xs font-medium text-gray-600 mb-1">{label}</div>
-      <input className="w-full border rounded-xl px-3 py-2" value={value || ""} disabled={disabled} onChange={e=>onChange?.(e.target.value)} />
-    </div>
-  );
-}
-function TextArea({label,value,onChange,disabled}){
-  return (
-    <div className="col-span-2">
-      <div className="text-xs font-medium text-gray-600 mb-1">{label}</div>
-      <textarea rows={3} className="w-full border rounded-xl px-3 py-2" value={value || ""} disabled={disabled} onChange={e=>onChange?.(e.target.value)} />
     </div>
   );
 }
