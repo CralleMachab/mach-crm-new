@@ -1,4 +1,5 @@
 // src/App.jsx
+import logo from "./assets/logo.png";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { initAuth, ensureLoginPopup, loadCloud, saveCloud, getAuthStatus, logout } from "./lib/cloud";
 
