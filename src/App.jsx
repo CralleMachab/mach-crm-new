@@ -335,7 +335,7 @@ function AppInner(){
       <header className="flex items-center justify-between mb-4">
   <div className="flex items-center gap-3">
     {/* Logotypen hämtas från src/assets/logo.png */}
-    <img src={logo} alt="Mach" className="h-8 w-auto" onError={(e)=>{e.currentTarget.style.display="none";}} />
+    <img src="/logo.png" alt="Mach" className="h-8 w-auto" onError={(e)=>{e.currentTarget.style.display="none";}} />
     <h1 className="text-xl font-semibold">Mach CRM</h1>
   </div>
   <div className="flex flex-wrap gap-2">
