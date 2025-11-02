@@ -1,5 +1,11 @@
 // src/App.jsx
-import logo from "./assets/logo.png";
+<img
+  src="/logo.png"
+  alt="Mach Entreprenad"
+  className="h-8 w-auto"
+  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+/>
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { initAuth, ensureLoginPopup, loadCloud, saveCloud, getAuthStatus, logout } from "./lib/cloud";
 
