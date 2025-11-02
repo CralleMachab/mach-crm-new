@@ -326,19 +326,20 @@ function AppInner(){
   return (
     <div className="mx-auto max-w-7xl p-4">
       <header className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="Mach" className="h-8 w-auto" onError={(e)=>{e.currentTarget.style.display="none";}} />
-          <h1 className="text-xl font-semibold">Mach CRM</h1>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button className="border rounded-xl px-3 py-2" onClick={()=>createEntity("customer")}>+ Ny kund</button>
-          <button className="border rounded-xl px-3 py-2" onClick={()=>createEntity("supplier")}>+ Ny leverantör</button>
-          <button className="border rounded-xl px-3 py-2" onClick={createOffer}>+ Ny offert</button>
-          <button className="border rounded-xl px-3 py-2" onClick={createProject}>+ Nytt projekt</button>
-          <button className="border rounded-xl px-3 py-2" onClick={createActivity}>+ Ny aktivitet</button>
-          <button className="border rounded-xl px-3 py-2" onClick={openSettings}>⚙️ Inställningar</button>
-        </div>
-      </header>
+  <div className="flex items-center gap-3">
+    {/* Logotypen hämtas från src/assets/logo.png */}
+    <img src={logo} alt="Mach" className="h-8 w-auto" onError={(e)=>{e.currentTarget.style.display="none";}} />
+    <h1 className="text-xl font-semibold">Mach CRM</h1>
+  </div>
+  <div className="flex flex-wrap gap-2">
+    <button className="border rounded-xl px-3 py-2" onClick={()=>createEntity("customer")}>+ Ny kund</button>
+    <button className="border rounded-xl px-3 py-2" onClick={()=>createEntity("supplier")}>+ Ny leverantör</button>
+    <button className="border rounded-xl px-3 py-2" onClick={createOffer}>+ Ny offert</button>
+    <button className="border rounded-xl px-3 py-2" onClick={createProject}>+ Nytt projekt</button>
+    <button className="border rounded-xl px-3 py-2" onClick={createActivity}>+ Ny aktivitet</button>
+    <button className="border rounded-xl px-3 py-2" onClick={openSettings}>⚙️ Inställningar</button>
+  </div>
+</header>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <aside className="bg-white rounded-2xl shadow p-3 space-y-2 h-max">
