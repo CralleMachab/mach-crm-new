@@ -1,7 +1,8 @@
 // src/App.jsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { initAuth, ensureLoginPopup, loadCloud, saveCloud, getAuthStatus, logout } from "./lib/cloud";
 
-/* ============== ERROR BOUNDARY ============== */
+/* ============== ERROR BOUNDARY (så vi ser fel istället för vit sida) ============== */
 class ErrorBoundary extends React.Component {
   constructor(props){ super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error){ return { error }; }
@@ -25,6 +26,8 @@ class ErrorBoundary extends React.Component {
 }
 
 /* ===================== KONFIG ===================== */
+// Entra Application (client) ID används i OneDrive File Picker popupen.
+// (File Picker läser från index.html global OneDrive SDK; här använder vi den bara via helper-funktion.)
 const ONEDRIVE_CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
 
 /* ===================== OneDrive helper ===================== */
@@ -78,10 +81,34 @@ function uuid(){ if (typeof crypto!=="undefined" && crypto.randomUUID) return cr
 function loadState(){ try { return JSON.parse(localStorage.getItem("machcrm") || "{}"); } catch { return {}; } }
 function saveState(s){ localStorage.setItem("machcrm", JSON.stringify(s)); }
 
-/* Entities */
+/* Datamodeller */
+const CUSTOMER_TYPES = [
+  { value: "Stålhall",          badge: "bg-gray-100 text-gray-800 border border-gray-200" },
+  { value: "Totalentreprenad",  badge: "bg-orange-100 text-orange-800 border border-orange-200" },
+  { value: "Turbovex",          badge: "bg-blue-100 text-blue-800 border border-blue-200" },
+];
+
+const SUPPLIER_TYPES = [
+  { value: "Stålhalls leverantör", badge: "bg-gray-100 text-gray-800 border border-gray-200" },
+  { value: "Mark företag",         badge: "bg-amber-100 text-amber-800 border border-amber-200" },
+  { value: "EL leverantör",        badge: "bg-rose-100 text-rose-800 border border-rose-200" },
+  { value: "VVS Leverantör",       badge: "bg-violet-100 text-violet-800 border border-violet-200" },
+  { value: "Vent Leverantör",      badge: "bg-sky-100 text-sky-800 border border-sky-200" },
+];
+
 function newEntity(type){
-  return { id: uuid(), type, companyName:"", orgNo:"", phone:"", email:"", address:"", notes:"",
-    contacts:[], activeContactId:null, reminders:[], createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
+  return {
+    id: uuid(), type,
+    companyName:"", orgNo:"", phone:"", email:"",
+    address:"", postalCode:"", city:"",
+    isOrderingCustomer: false,
+    customerType: "",
+    supplierType: "",
+    notes:"",
+    contacts:[], activeContactId:null,
+    reminders:[],
+    createdAt:new Date().toISOString(), updatedAt:new Date().toISOString()
+  };
 }
 function upsertEntity(state, entity){
   if(!state.entities) state.entities = [];
@@ -102,7 +129,6 @@ function setActiveContact(state, entityId, contactId){
   return state;
 }
 
-/* Offerter */
 function newOffer(customerId=null, offerNo=31500){
   return { id: uuid(), offerNo, customerId, title:`Offert #${offerNo}`, status:"Utkast", amount:"", notes:"",
     files:[], suppliers:[], sendDueDate:"", createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
@@ -114,7 +140,6 @@ function upsertOffer(state, offer){
   state.updatedAt = new Date().toISOString();
 }
 
-/* Projekt */
 function newProject(customerId){
   return { id: uuid(), name:"", customerId:customerId||null, status:"", description:"",
     startDate:"", dueDate:"", files:[], reminders:[], createdAt:new Date().toISOString(), updatedAt:new Date().toISOString() };
@@ -126,19 +151,18 @@ function upsertProject(state, proj){
   state.updatedAt = new Date().toISOString();
 }
 
-/* Aktiviteter */
 const ACT_TYPES = ["Telefon","Mail","Lunch","Möte","Uppgift"];
 const ACT_ASSIGNEES = ["Cralle","Mattias","Övrig"];
 function newActivity(){
   return {
     id: uuid(),
     createdAt: new Date().toISOString(),
-    types: [], // subset av ACT_TYPES
-    priority: "Low", // High | Medium | Low
-    dueAt: "", // ISO med tid, ex "2025-10-30T14:30"
+    types: [],
+    priority: "Low",
+    dueAt: "",
     assignee: "Cralle",
     notes: "",
-    entityId: null, // kund eller leverantör id
+    entityId: null,
     files: [],
     done: false,
     updatedAt: new Date().toISOString(),
@@ -171,6 +195,12 @@ const PRIORITY_BADGE = {
   Low:    "bg-sky-100 text-sky-800 border border-sky-200",
 };
 const TYPE_ICON = { Telefon:"📞", Mail:"✉️", Lunch:"🍽️", Möte:"📅", Uppgift:"✅" };
+const OFFER_STATUS_BADGE = {
+  "Utkast":     "bg-gray-100 text-gray-800 border border-gray-200",
+  "Skickad":    "bg-orange-100 text-orange-800 border border-orange-200",
+  "Accepterad": "bg-green-100 text-green-800 border border-green-200",
+  "Avslagen":   "bg-rose-100 text-rose-800 border border-rose-200",
+};
 
 /* ===================== useStore ===================== */
 function useStore(){
@@ -181,7 +211,6 @@ function useStore(){
       if (!initial.activities) initial.activities = [];
       return initial;
     }
-    // seed
     const s = { entities: [], projects: [], offers: [], activities: [], nextOfferNo: 31501 };
     const c = newEntity("customer"); c.companyName="Exempel AB";
     c.contacts=[{id:uuid(),name:"Anna Andersson",role:"Inköp",phone:"",email:""}];
@@ -209,15 +238,20 @@ export default function App(){
 function AppInner(){
   const [state,setState]=useStore();
 
-  // vänster meny
-  const [view,setView] = useState("activities"); // activities | customers | suppliers | offers | projects
-  const [search,setSearch]=useState("");
-  const [modal,setModal]=useState(null); // {kind:'entity'|'project'|'offer'|'activity', id, edit?:true}
-  const [weekOnly,setWeekOnly]=useState(true); // Aktiviteter: 7-dagarsvy
+  // Cloud (manuell) – initera MSAL så knappen i Inställningar funkar direkt
+  useEffect(()=>{ initAuth(); },[]);
 
-  // listor
-  const customers=useMemo(()=> (state.entities||[]).filter(e=>e.type==="customer").sort((a,b)=>a.companyName.localeCompare(b.companyName,"sv")), [state.entities]);
-  const suppliers=useMemo(()=> (state.entities||[]).filter(e=>e.type==="supplier").sort((a,b)=>a.companyName.localeCompare(b.companyName,"sv")), [state.entities]);
+  const [view,setView] = useState("activities");
+  const [search,setSearch]=useState("");
+  const [modal,setModal]=useState(null);
+  const [weekOnly,setWeekOnly]=useState(true);
+
+  const customers=useMemo(()=> (state.entities||[])
+    .filter(e=>e.type==="customer")
+    .sort((a,b)=>a.companyName.localeCompare(b.companyName,"sv")), [state.entities]);
+  const suppliers=useMemo(()=> (state.entities||[])
+    .filter(e=>e.type==="supplier")
+    .sort((a,b)=>a.companyName.localeCompare(b.companyName,"sv")), [state.entities]);
   const offers=useMemo(()=> (state.offers||[]).slice().sort((a,b)=> (b.updatedAt||"").localeCompare(a.updatedAt||"")), [state.offers]);
   const projects=useMemo(()=> (state.projects||[]).slice().sort((a,b)=> a.name.localeCompare(b.name,"sv")), [state.projects]);
 
@@ -235,7 +269,6 @@ function AppInner(){
     });
   };
 
-  // Aktiviteter → nästa 7 dagar (eller alla) i datumordning (närmast först)
   const activitiesAll = state.activities || [];
   const activitiesWeek = useMemo(()=>{
     if (!weekOnly) return activitiesAll.slice().sort((a,b)=> new Date(a.dueAt||0) - new Date(b.dueAt||0));
@@ -250,9 +283,9 @@ function AppInner(){
   function openProject(id, edit=false){ setModal({kind:"project",id,edit}); }
   function openOffer(id, edit=false){ setModal({kind:"offer",id,edit}); }
   function openActivity(id, edit=false){ setModal({kind:"activity",id,edit}); }
+  function openSettings(){ setModal({kind:"settings"}); }
   function closeModal(){ setModal(null); }
 
-  // Skapa nytt
   function createEntity(type){
     const e=newEntity(type);
     setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;});
@@ -293,18 +326,21 @@ function AppInner(){
   return (
     <div className="mx-auto max-w-7xl p-4">
       <header className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">Mach CRM</h1>
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="Mach" className="h-8 w-auto" onError={(e)=>{e.currentTarget.style.display="none";}} />
+          <h1 className="text-xl font-semibold">Mach CRM</h1>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button className="border rounded-xl px-3 py-2" onClick={()=>createEntity("customer")}>+ Ny kund</button>
           <button className="border rounded-xl px-3 py-2" onClick={()=>createEntity("supplier")}>+ Ny leverantör</button>
           <button className="border rounded-xl px-3 py-2" onClick={createOffer}>+ Ny offert</button>
           <button className="border rounded-xl px-3 py-2" onClick={createProject}>+ Nytt projekt</button>
           <button className="border rounded-xl px-3 py-2" onClick={createActivity}>+ Ny aktivitet</button>
+          <button className="border rounded-xl px-3 py-2" onClick={openSettings}>⚙️ Inställningar</button>
         </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {/* Meny vänster */}
         <aside className="bg-white rounded-2xl shadow p-3 space-y-2 h-max">
           <MenuButton id="activities"   label="Aktiviteter" />
           <MenuButton id="customers"    label="Kunder" />
@@ -313,7 +349,6 @@ function AppInner(){
           <MenuButton id="projects"     label="Projekt" />
         </aside>
 
-        {/* Stora rutan */}
         <main className="lg:col-span-3 space-y-4">
           {view!=="activities" && (
             <input
@@ -331,8 +366,8 @@ function AppInner(){
 
           {view==="activities" && (
             <ActivitiesPanel
-              items={activitiesWeek}
-              all={activitiesAll}
+              items={useWeek(weekOnly, state.activities)}
+              all={state.activities||[]}
               weekOnly={weekOnly}
               setWeekOnly={setWeekOnly}
               onOpen={(id)=>openActivity(id)}
@@ -352,10 +387,39 @@ function AppInner(){
           {modal.kind==="offer"    && <OfferCard     state={state} setState={setState} id={modal.id} forceEdit={!!modal.edit}/> }
           {modal.kind==="project"  && <ProjectCard   state={state} setState={setState} id={modal.id} forceEdit={!!modal.edit}/> }
           {modal.kind==="activity" && <ActivityCard  state={state} setState={setState} id={modal.id} forceEdit={!!modal.edit}/> }
+          {modal.kind==="settings" && <SettingsCard  state={state} setState={setState} onCloudLoad={async ()=>{
+            try{
+              const cloud = await loadCloud();
+              if (cloud) { saveState(cloud); setState(cloud); alert("✅ Läste in data från molnet."); }
+              else { alert("ℹ️ Ingen molnfil hittades ännu. Spara först så skapas den."); }
+            }catch(e){ alert("❌ Kunde inte läsa från molnet. Kolla inloggning/behörigheter."); }
+          }} onCloudSave={async ()=>{
+            try{
+              const ok = await saveCloud(loadState());
+              alert(ok ? "✅ Synk klar (uppladdad till molnet)." : "❌ Synk misslyckades.");
+            }catch(e){ alert("❌ Synk-fel. Kolla inloggning/behörigheter."); }
+          }} onCloudLogin={async ()=>{
+            try{ await ensureLoginPopup(); alert("✅ Inloggad."); }catch(e){ alert("❌ Inloggning misslyckades."); }
+          }} onCloudLogout={()=>{
+            logout(); alert("Utloggad från Microsoft-kontot i denna flik.");
+          }}/>}
         </Modal>
       )}
     </div>
   );
+}
+
+/* Hjälp: filtrera vecka */
+function useWeek(weekOnly, activities){
+  return useMemo(()=>{
+    const all = activities || [];
+    if (!weekOnly) return all.slice().sort((a,b)=> new Date(a.dueAt||0) - new Date(b.dueAt||0));
+    const now = new Date();
+    const max = new Date(now.getTime() + 7*24*60*60*1000);
+    return all
+      .filter(a => a.dueAt && new Date(a.dueAt) >= now && new Date(a.dueAt) <= max)
+      .sort((a,b)=> new Date(a.dueAt) - new Date(b.dueAt));
+  }, [activities, weekOnly]);
 }
 
 /* ===================== GEMENSAM UI ===================== */
@@ -419,26 +483,34 @@ function Modal({children,onClose}){
 }
 
 /* ===================== AKTIVITETER ===================== */
-function ActivitiesPanel({ items, all, weekOnly, setWeekOnly, onOpen }){
+function ActivitiesPanel({ items, all, weekOnly, setWeekOnly, onOpen }) {
   return (
     <div className="bg-white rounded-2xl shadow p-4">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold">Aktiviteter {weekOnly? "– kommande 7 dagar" : "– alla"}</h2>
+        <h2 className="font-semibold">Aktiviteter {weekOnly ? "– kommande 7 dagar" : "– alla"}</h2>
         <label className="text-sm flex items-center gap-2">
           <input type="checkbox" checked={weekOnly} onChange={(e)=>setWeekOnly(e.target.checked)} />
           Visa bara kommande 7 dagar
         </label>
       </div>
       <ul className="divide-y">
-        {items.length ? items.map(a=>(
+        {items?.length ? items.map(a=>(
           <li key={a.id} className="py-3 cursor-pointer hover:bg-gray-50 px-2 rounded-xl" onClick={()=>onOpen(a.id)}>
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <PriorityBadge value={a.priority}/>
-                <div className="text-sm font-medium">{formatDateTime(a.dueAt)}</div>
+                <div className="text-sm font-medium truncate">{formatDateTime(a.dueAt)}</div>
                 <TypeChips types={a.types}/>
+                {a.entityId && (
+                  <span className="text-xs text-gray-500 truncate max-w-[240px]">
+                    • {(() => {
+                      const ent = (loadState().entities||[]).find(e=>e.id===a.entityId);
+                      return ent ? `${ent.companyName} (${ent.type==="customer"?"kund":"leverantör"})` : "—";
+                    })()}
+                  </span>
+                )}
               </div>
-              <div className="text-xs text-gray-500">{a.assignee}</div>
+              <div className="text-sm font-semibold">{a.assignee}</div>
             </div>
             {a.notes ? <div className="text-xs text-gray-600 mt-1">{a.notes}</div> : null}
           </li>
@@ -446,13 +518,6 @@ function ActivitiesPanel({ items, all, weekOnly, setWeekOnly, onOpen }){
           <li className="py-6 text-sm text-gray-500 text-center">Inga aktiviteter i vald vy.</li>
         )}
       </ul>
-
-      {/* En liten notis om historik finns kvar */}
-      {!weekOnly && (
-        <div className="text-xs text-gray-500 mt-3">
-          Tips: Använd sök i kund/leverantör för att se deras aktivitets-historik via popup (under “Historik”).
-        </div>
-      )}
     </div>
   );
 }
@@ -524,7 +589,6 @@ function ActivityCard({state,setState,id,forceEdit=false}){
         </div>
       </div>
 
-      {/* 1: Skapat / 4: Datum+tid / 5: Ansvarig */}
       <div className="bg-white rounded-2xl shadow p-4 grid grid-cols-2 gap-3">
         <Field label="Skapad" value={formatDateTime(local.createdAt)} disabled />
         <div>
@@ -559,7 +623,6 @@ function ActivityCard({state,setState,id,forceEdit=false}){
         </div>
       </div>
 
-      {/* 2: Vad som ska göras (ikoner/checkbox) */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="text-xs font-medium text-gray-600 mb-2">Vad ska göras?</div>
         <div className="flex flex-wrap gap-2">
@@ -575,7 +638,6 @@ function ActivityCard({state,setState,id,forceEdit=false}){
         </div>
       </div>
 
-      {/* 7: Koppla till kund/leverantör */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="text-xs font-medium text-gray-600 mb-1">Kund eller leverantör</div>
         <select className="w-full border rounded-xl px-2 py-2"
@@ -591,12 +653,10 @@ function ActivityCard({state,setState,id,forceEdit=false}){
         </select>
       </div>
 
-      {/* 6: Anteckningar */}
       <div className="bg-white rounded-2xl shadow p-4">
         <TextArea label="Anteckningar" value={local.notes || ""} disabled={!isEdit} onChange={(v)=>update("notes",v)}/>
       </div>
 
-      {/* 8: Filer via OneDrive */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-semibold">Filer (OneDrive)</h4>
@@ -618,14 +678,12 @@ function ActivityCard({state,setState,id,forceEdit=false}){
   );
 }
 
-/* ===================== ENTITY CARD ===================== */
+/* ===================== ENTITY CARD (kund/leverantör) ===================== */
 function EntityCard({state,setState,id,forceEdit=false}){
   const e=state.entities.find(x=>x.id===id);
   const [local,setLocal]=useState(e);
   const [isEdit,setIsEdit]=useState(forceEdit);
   const [activeId,setActiveId]=useState(e?.activeContactId || e?.contacts?.[0]?.id || null);
-
-  // Historik (aktiviteter för denna entitet)
   const history = useMemo(()=> (state.activities||[]).filter(a=>a.entityId===id).sort((a,b)=> new Date(b.dueAt||b.createdAt) - new Date(a.dueAt||a.createdAt)), [state.activities, id]);
 
   useEffect(()=>{ setLocal(e); setActiveId(e?.activeContactId || e?.contacts?.[0]?.id || null); },[e]);
@@ -643,6 +701,12 @@ function EntityCard({state,setState,id,forceEdit=false}){
     const c={id:uuid(),name:"",role:"",phone:"",email:""};
     const copy={...local, contacts:[...(local.contacts||[]), c]};
     if(!copy.activeContactId) copy.activeContactId=c.id;
+    setLocal(copy);
+    setIsEdit(true);
+  }
+  function onDeleteContact(id){
+    const list=(local.contacts||[]).filter(c=>c.id!==id);
+    const copy={...local, contacts:list, activeContactId: list.find(c=>c.id===local.activeContactId) ? local.activeContactId : (list[0]?.id || null)};
     setLocal(copy);
     setIsEdit(true);
   }
@@ -669,11 +733,67 @@ function EntityCard({state,setState,id,forceEdit=false}){
           <Field label="Organisationsnummer" value={local.orgNo} disabled={!isEdit} onChange={v=>update("orgNo",v)}/>
           <Field label="Telefon" value={local.phone} disabled={!isEdit} onChange={v=>update("phone",v)}/>
           <Field label="E-post" value={local.email} disabled={!isEdit} onChange={v=>update("email",v)}/>
-          <Field label="Adress" value={local.address} disabled={!isEdit} onChange={v=>update("address",v)} colSpan={2}/>
+          <Field label="Adress" value={local.address} disabled={!isEdit} onChange={v=>update("address",v)} />
+          <Field label="Postnummer" value={local.postalCode} disabled={!isEdit} onChange={v=>update("postalCode",v)} />
+          <Field label="Ort" value={local.city} disabled={!isEdit} onChange={v=>update("city",v)} />
+          <div className="col-span-2 flex items-center justify-between">
+            {e.type==="customer" && (
+              <button
+                type="button"
+                disabled={!isEdit}
+                onClick={()=>update("isOrderingCustomer", !local.isOrderingCustomer)}
+                className={`px-3 py-2 rounded-xl border ${local.isOrderingCustomer ? "bg-green-600 text-white border-green-600" : "bg-white"}`}
+              >
+                {local.isOrderingCustomer ? "Beställande kund ✓" : "Markera som beställande kund"}
+              </button>
+            )}
+            <div className="flex items-center gap-2">
+              {e.type==="customer" && (
+                <>
+                  <label className="text-xs text-gray-600">Kundtyp</label>
+                  <select
+                    className="border rounded-xl px-2 py-2"
+                    value={local.customerType || ""}
+                    disabled={!isEdit}
+                    onChange={(ev)=>update("customerType", ev.target.value)}
+                  >
+                    <option value="">—</option>
+                    {CUSTOMER_TYPES.map(t => <option key={t.value} value={t.value}>{t.value}</option>)}
+                  </select>
+                  {!!local.customerType && (
+                    <span className={`text-[11px] px-2 py-1 rounded ${CUSTOMER_TYPES.find(t=>t.value===local.customerType)?.badge}`}>
+                      {local.customerType}
+                    </span>
+                  )}
+                </>
+              )}
+              {e.type==="supplier" && (
+                <>
+                  <label className="text-xs text-gray-600">Leverantörstyp</label>
+                  <select
+                    className="border rounded-xl px-2 py-2"
+                    value={local.supplierType || ""}
+                    disabled={!isEdit}
+                    onChange={(ev)=>update("supplierType", ev.target.value)}
+                  >
+                    <option value="">—</option>
+                    {SUPPLIER_TYPES.map(t => <option key={t.value} value={t.value}>{t.value}</option>)}
+                  </select>
+                  {!!local.supplierType && (
+                    <span className={`text-[11px] px-2 py-1 rounded ${SUPPLIER_TYPES.find(t=>t.value===local.supplierType)?.badge}`}>
+                      {local.supplierType}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
           <TextArea label="Anteckningar" value={local.notes} disabled={!isEdit} onChange={v=>update("notes",v)}/>
         </div>
       </div>
 
+      {/* Kontakter */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-semibold">Kontaktpersoner</h4>
@@ -689,9 +809,18 @@ function EntityCard({state,setState,id,forceEdit=false}){
             <Field label="Namn" value={active.name} disabled={!isEdit} onChange={v=>updateContact(active.id,"name",v)}/>
             <Field label="Roll" value={active.role} disabled={!isEdit} onChange={v=>updateContact(active.id,"role",v)}/>
             <Field label="Telefon" value={active.phone} disabled={!isEdit} onChange={v=>updateContact(active.id,"phone",v)}/>
-            <Field label="E-post" value={active.email} disabled={!isEdit} onChange={v=>updateContact(active.id,"email",v)}/>
+            <div className="flex items-end gap-2">
+              <Field label="E-post" value={active.email} disabled={!isEdit} onChange={v=>updateContact(active.id,"email",v)}/>
+              {isEdit && (
+                <button className="text-red-600 text-sm border rounded px-2 py-1 h-10" onClick={()=>onDeleteContact(active.id)}>
+                  Ta bort
+                </button>
+              )}
+            </div>
           </div>
-        ) : <div className="text-sm text-gray-500">Ingen kontakt vald. Lägg till en kontaktperson.</div>}
+        ) : (
+          <div className="text-sm text-gray-500">Ingen kontakt vald. Lägg till en kontaktperson.</div>
+        )}
       </div>
 
       {/* Historik */}
@@ -716,10 +845,7 @@ function EntityCard({state,setState,id,forceEdit=false}){
   );
 }
 
-/* ===================== REMINDERS (behålls ej i listvy, används inte) ===================== */
-// (Vi använder ActivitiesPanel som huvudvy för aktiviteter)
-
-/* ===================== OFFERTER (oförändrat förutom #31500-serie & leverantörer) ===================== */
+/* ===================== OFFERTER ===================== */
 function OffersPanel({offers, entities, onOpen, onCreate}){
   const getCust = (id)=> entities?.find(e=>e.id===id);
   const active = offers.filter(o=>o.status!=="Avslagen");
@@ -730,11 +856,13 @@ function OffersPanel({offers, entities, onOpen, onCreate}){
     return (
       <li className="py-3 cursor-pointer hover:bg-gray-50 px-2 rounded-xl" onClick={()=>onOpen(o.id)}>
         <div className="flex items-center justify-between">
-          <div>
-            <div className="font-medium">#{o.offerNo} – {o.title}</div>
-            <div className="text-xs text-gray-500">{cust ? cust.companyName : "—"} • {o.status}</div>
+          <div className="min-w-0">
+            <div className="font-medium truncate">{cust ? cust.companyName : "—"}</div>
+            <div className="text-xs text-gray-500 truncate">#{o.offerNo} • {o.title}</div>
           </div>
-          <div className="text-xs text-gray-500">{(o.files||[]).length} filer</div>
+          <span className={`text-[11px] px-2 py-1 rounded ${OFFER_STATUS_BADGE[o.status] || OFFER_STATUS_BADGE["Utkast"]}`}>
+            {o.status}
+          </span>
         </div>
       </li>
     );
@@ -769,17 +897,38 @@ function OfferCard({state,setState,id,forceEdit=false}){
   const [local,setLocal]=useState(o);
   const [isEdit,setIsEdit]=useState(forceEdit);
   const customers=(state.entities||[]).filter(e=>e.type==="customer");
-  const suppliers=(state.entities||[]).filter(e=>e.type==="supplier");
 
   useEffect(()=>{ setLocal(o); },[o]);
   if(!o) return null;
 
   function update(k,v){ setLocal(x=>({...x,[k]:v})); }
+
   function onSave(){
     const toSave={...local,updatedAt:new Date().toISOString()};
-    setState(s=>{const nxt={...s}; upsertOffer(nxt,toSave); return nxt;});
+    setState(s=>{
+      const nxt={...s};
+      upsertOffer(nxt,toSave);
+
+      // Skapa/uppdatera aktivitet kopplad till “Skicka offert”
+      if (toSave.sendDueDate) {
+        const title = `Skicka offert #${toSave.offerNo}`;
+        const existing = (nxt.activities||[]).find(a => a.notes===title && a.entityId===toSave.customerId);
+        const act = existing || newActivity();
+        act.types = ["Uppgift","Mail"];
+        act.priority = existing?.priority || "Medium";
+        act.dueAt = new Date(toSave.sendDueDate).toISOString();
+        act.assignee = existing?.assignee || "Cralle";
+        act.notes = title;
+        act.entityId = toSave.customerId || null;
+        act.done = false;
+        act.updatedAt = new Date().toISOString();
+        upsertActivity(nxt, act);
+      }
+      return nxt;
+    });
     setIsEdit(false);
   }
+
   function markLost(){ setLocal(x=>({...x,status:"Avslagen"})); }
   function markWon(){ setLocal(x=>({...x,status:"Accepterad"})); }
 
@@ -797,22 +946,6 @@ function OfferCard({state,setState,id,forceEdit=false}){
     const copy = { ...local, files: (local.files || []).filter(x=>x.id!==fileId), updatedAt: new Date().toISOString() };
     setLocal(copy);
     setState(s=>{ const nxt={...s}; upsertOffer(nxt,copy); return nxt; });
-  }
-
-  function addSupplier(id){
-    if (!id) return;
-    const exists = (local.suppliers||[]).some(s=>s.supplierId===id);
-    if (exists) return;
-    const copy = { ...local, suppliers:[...(local.suppliers||[]), {supplierId:id, received:false}] };
-    setLocal(copy);
-  }
-  function toggleSupplierReceived(id){
-    const copy = { ...local, suppliers:(local.suppliers||[]).map(s=> s.supplierId===id ? {...s, received:!s.received} : s ) };
-    setLocal(copy);
-  }
-  function removeSupplier(id){
-    const copy = { ...local, suppliers:(local.suppliers||[]).filter(s=>s.supplierId!==id) };
-    setLocal(copy);
   }
 
   const won = local.status==="Accepterad";
@@ -844,18 +977,22 @@ function OfferCard({state,setState,id,forceEdit=false}){
         </div>
       </div>
 
-      {/* Grunddata */}
+      {/* Grunddata – kund överst, offertnr låst, titel under */}
       <div className="bg-white rounded-2xl shadow p-4 grid grid-cols-2 gap-3">
-        <div>
-          <div className="text-xs font-medium text-gray-600 mb-1">Titel</div>
-          <input className="w-full border rounded-xl px-3 py-2" value={local.title || ""} disabled={!isEdit} onChange={e=>update("title",e.target.value)}/>
-        </div>
         <div>
           <div className="text-xs font-medium text-gray-600 mb-1">Kund</div>
           <select className="w-full border rounded-xl px-2 py-2" value={local.customerId || ""} disabled={!isEdit} onChange={e=>update("customerId",e.target.value)}>
             <option value="">—</option>
             {customers.map(c=><option key={c.id} value={c.id}>{c.companyName}</option>)}
           </select>
+        </div>
+        <div>
+          <div className="text-xs font-medium text-gray-600 mb-1">Offertnr</div>
+          <input className="w-full border rounded-xl px-3 py-2 bg-gray-50" value={"#"+(local.offerNo ?? "")} disabled />
+        </div>
+        <div className="col-span-2">
+          <div className="text-xs font-medium text-gray-600 mb-1">Titel</div>
+          <input className="w-full border rounded-xl px-3 py-2" value={local.title || ""} disabled={!isEdit} onChange={e=>update("title",e.target.value)}/>
         </div>
 
         <div>
@@ -874,49 +1011,12 @@ function OfferCard({state,setState,id,forceEdit=false}){
         </div>
       </div>
 
-      {/* Leverantörer */}
-      <div className="bg-white rounded-2xl shadow p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="font-semibold">Leverantörer</h4>
-          <div className="flex items-center gap-2">
-            <select className="border rounded-xl px-2 py-2" disabled={!isEdit}
-                    onChange={(e)=>{ addSupplier(e.target.value); e.target.value=""; }}>
-              <option value="">+ Lägg till leverantör…</option>
-              {suppliers.map(s=><option key={s.id} value={s.id}>{s.companyName}</option>)}
-            </select>
-          </div>
-        </div>
-        <ul className="space-y-2">
-          {(local.suppliers||[]).length ? local.suppliers.map(s=>{
-            const sup = suppliers.find(x=>x.id===s.supplierId);
-            const ok = !!s.received;
-            return (
-              <li key={s.supplierId} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`inline-block w-3 h-3 rounded-full ${ok?"bg-green-600":"bg-red-500"}`}/>
-                  <span>{sup ? sup.companyName : "(raderad leverantör)"}</span>
-                  <span className="text-xs text-gray-500">{ok? "Offert mottagen" : "Ej mottagen"}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button className="border rounded px-2 py-1 text-sm"
-                          disabled={!isEdit}
-                          onClick={()=>toggleSupplierReceived(s.supplierId)}>
-                    {ok? "Markera ej mottagen" : "Markera mottagen"}
-                  </button>
-                  <button className="text-red-600 text-sm" disabled={!isEdit} onClick={()=>removeSupplier(s.supplierId)}>Ta bort</button>
-                </div>
-              </li>
-            );
-          }) : <li className="text-sm text-gray-500">Inga leverantörer tillagda.</li>}
-        </ul>
-      </div>
-
-      {/* Påminnelsedatum för att skicka offert */}
+      {/* Påminnelsedatum */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="flex items-center justify-between">
           <div>
             <h4 className="font-semibold">Skicka till kund – påminnelsedatum</h4>
-            <div className="text-xs text-gray-500">Visas i Aktiviteter på valt datum</div>
+            <div className="text-xs text-gray-500">Skapar aktivitet som syns i Aktiviteter.</div>
           </div>
           <input type="date" className="border rounded-xl px-3 py-2"
                  value={local.sendDueDate || ""} disabled={!isEdit}
@@ -991,7 +1091,6 @@ function ProjectCard({state,setState,id,forceEdit=false}){
     setIsEdit(false);
   }
 
-  // Importera vunna offerter
   const wonOffers = (state.offers||[]).filter(o=>o.status==="Accepterad" && (o.customerId ? o.customerId===p.customerId : true));
   function importFromOffer(offerId){
     const o = (state.offers||[]).find(x=>x.id===offerId);
@@ -1037,7 +1136,6 @@ function ProjectCard({state,setState,id,forceEdit=false}){
         </div>
       </div>
 
-      {/* Grunddata */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Projektnamn" value={local.name} disabled={!isEdit} onChange={v=>update("name",v)}/>
@@ -1053,8 +1151,6 @@ function ProjectCard({state,setState,id,forceEdit=false}){
           </div>
           <TextArea label="Beskrivning" value={local.description || ""} disabled={!isEdit} onChange={v=>update("description",v)}/>
         </div>
-
-        {/* Förloppsstapel */}
         <div className="mt-4">
           <div className="text-xs text-gray-600 mb-1">Projektförlopp {prog}%</div>
           <div className="w-full h-3 bg-gray-200 rounded-xl overflow-hidden">
@@ -1063,7 +1159,6 @@ function ProjectCard({state,setState,id,forceEdit=false}){
         </div>
       </div>
 
-      {/* Importera vunnen offert */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="flex items-center gap-2">
           <span className="font-semibold">Importera vunnen offert</span>
@@ -1076,7 +1171,6 @@ function ProjectCard({state,setState,id,forceEdit=false}){
         <div className="text-xs text-gray-500 mt-1">Import kopierar titel→namn (om tomt), anteckningar→beskrivning (om tomt) och alla filer.</div>
       </div>
 
-      {/* Projektfiler */}
       <div className="bg-white rounded-2xl shadow p-4">
         <div className="flex items-center justify-between mb-2">
           <h4 className="font-semibold">Projektfiler</h4>
@@ -1093,6 +1187,81 @@ function ProjectCard({state,setState,id,forceEdit=false}){
             </li>
           )) : <li className="text-sm text-gray-500">Inga filer ännu.</li>}
         </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== INSTÄLLNINGAR – Export/Import + Moln ===================== */
+function SettingsCard({state,setState, onCloudLoad, onCloudSave, onCloudLogin, onCloudLogout}){
+  const fileRef = useRef(null);
+  const status = getAuthStatus();
+
+  function exportAll(){
+    const data = JSON.stringify(state, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `machcrm-backup-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function importAll(e){
+    const file = e.target.files?.[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const obj = JSON.parse(reader.result);
+        if (typeof obj !== "object") throw new Error("Ogiltig fil.");
+        saveState(obj);
+        setState(obj);
+        alert("✅ Import klar!");
+      } catch (err) {
+        console.error(err);
+        alert("❌ Kunde inte läsa filen. Är det en giltig JSON-export?");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  return (
+    <div className="space-y-6">
+      <h3 className="text-base font-semibold">Inställningar</h3>
+
+      <div className="bg-white rounded-2xl shadow p-4">
+        <h4 className="font-semibold mb-2">Backup & återställning</h4>
+        <div className="flex flex-wrap gap-2">
+          <button className="border rounded-xl px-3 py-2" onClick={exportAll}>⬇️ Exportera data (JSON)</button>
+          <button className="border rounded-xl px-3 py-2" onClick={()=>fileRef.current?.click()}>⬆️ Importera data (JSON)</button>
+          <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={importAll}/>
+        </div>
+        <p className="text-xs text-gray-500 mt-2">
+          Tips: Spara exportfilen i en delad OneDrive-mapp för manuell backup.
+        </p>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow p-4 space-y-3">
+        <h4 className="font-semibold">Moln-synk (OneDrive/SharePoint)</h4>
+        <div className="text-sm">
+          <div>Status: {status.signedIn ? `Inloggad som ${status.account?.name || status.account?.username}` : "Inte inloggad"}</div>
+          <div>Molnfil: <code>{status.cloudPath}</code></div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {!status.signedIn
+            ? <button className="border rounded-xl px-3 py-2" onClick={onCloudLogin}>Logga in mot Microsoft</button>
+            : <button className="border rounded-xl px-3 py-2" onClick={onCloudLogout}>Logga ut</button>}
+          <button className="border rounded-xl px-3 py-2" onClick={onCloudLoad}>Hämta från molnet</button>
+          <button className="border rounded-xl px-3 py-2" onClick={onCloudSave}>Synka nu (ladda upp)</button>
+        </div>
+        <p className="text-xs text-gray-500">
+          För flera användare: Skapa mappen <code>MachCRM</code> i OneDrive hos en av er, dela den med redigeringsrätt och be de andra klicka “Add to my OneDrive”.
+          Då ligger filen på samma stig hos alla. Vill ni istället använda en SharePoint-site direkt, säg till så byter jag mål i koden.
+        </p>
       </div>
     </div>
   );
