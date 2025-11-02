@@ -28,7 +28,6 @@ class ErrorBoundary extends React.Component {
 }
 
 /* ===================== KONFIG ===================== */
-// Entra "Application (client) ID" – MED citattecken:
 const ONEDRIVE_CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
 
 /* ===================== OneDrive helper ===================== */
@@ -156,7 +155,7 @@ export default function App(){
 function AppInner(){
   const [state,setState]=useStore();
   const [search,setSearch]=useState("");
-  const [modal,setModal]=useState(null); // {kind:'entity'|'project'|'offer', id}
+  const [modal,setModal]=useState(null); // {kind:'entity'|'project'|'offer', id, edit?:true}
   const [remFilter,setRemFilter]=useState("all");
 
   const customers=useMemo(()=> (state.entities||[]).filter(e=>e.type==="customer").sort((a,b)=>a.companyName.localeCompare(b.companyName,"sv")), [state.entities]);
@@ -181,16 +180,32 @@ function AppInner(){
     .filter(r=> remFilter==="all"?true: remFilter==="done"?r.done: reminderStatus(r)===remFilter)
     .sort((a,b)=> new Date(a.dueDate||0)-new Date(b.dueDate||0)), [allReminders,remFilter]);
 
-  function openEntity(id){ setModal({kind:"entity",id}); }
-  function openProject(id){ setModal({kind:"project",id}); }
-  function openOffer(id){ setModal({kind:"offer",id}); }
+  function openEntity(id, edit=false){ setModal({kind:"entity",id,edit}); }
+  function openProject(id, edit=false){ setModal({kind:"project",id,edit}); }
+  function openOffer(id, edit=false){ setModal({kind:"offer",id,edit}); }
   function closeModal(){ setModal(null); }
 
-  function createEntity(type){ const e=newEntity(type); setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;}); setTimeout(()=>openEntity(e.id),0); }
-  function createProject(){ const firstCust=(state.entities||[]).find(e=>e.type==="customer"); const p=newProject(firstCust?.id);
-    setState(s=>{const nxt={...s}; upsertProject(nxt,p); return nxt;}); setTimeout(()=>openProject(p.id),0); }
-  function createOffer(){ const firstCust=(state.entities||[]).find(e=>e.type==="customer"); const o=newOffer(firstCust?.id || null);
-    setState(s=>{const nxt={...s}; upsertOffer(nxt,o); return nxt;}); setTimeout(()=>openOffer(o.id),0); }
+  // ⬇️ Auto-redigera på nyskapande + rensa sök så nya syns direkt
+  function createEntity(type){
+    const e=newEntity(type);
+    setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;});
+    setSearch("");
+    setTimeout(()=>openEntity(e.id, true),0);
+  }
+  function createProject(){
+    const firstCust=(state.entities||[]).find(e=>e.type==="customer");
+    const p=newProject(firstCust?.id || null);
+    setState(s=>{const nxt={...s}; upsertProject(nxt,p); return nxt;});
+    setSearch("");
+    setTimeout(()=>openProject(p.id, true),0);
+  }
+  function createOffer(){
+    const firstCust=(state.entities||[]).find(e=>e.type==="customer");
+    const o=newOffer(firstCust?.id || null);
+    setState(s=>{const nxt={...s}; upsertOffer(nxt,o); return nxt;});
+    setSearch("");
+    setTimeout(()=>openOffer(o.id, true),0);
+  }
 
   return (
     <div className="mx-auto max-w-7xl p-4">
@@ -207,22 +222,22 @@ function AppInner(){
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <section className="space-y-4">
           <input className="w-full border rounded-xl px-3 py-2" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Sök: företagsnamn eller kontaktperson…"/>
-          <ListCard title="Kunder" count={customers.length} items={filterBy(customers)} onOpen={openEntity}/>
-          <ListCard title="Leverantörer" count={suppliers.length} items={filterBy(suppliers)} onOpen={openEntity}/>
+          <ListCard title="Kunder" count={customers.length} items={filterBy(customers)} onOpen={(id)=>openEntity(id)}/>
+          <ListCard title="Leverantörer" count={suppliers.length} items={filterBy(suppliers)} onOpen={(id)=>openEntity(id)}/>
         </section>
 
         <section className="lg:col-span-2 space-y-4">
           <RemindersPanel items={pickedRem} onOpen={r=> r.refKind==="entity"?openEntity(r.refId):openProject(r.refId)} setFilter={setRemFilter}/>
-          <OffersPanel offers={offers} entities={state.entities} onOpen={openOffer} onCreate={createOffer}/>
-          <ProjectsPanel projects={state.projects} entities={state.entities} onOpen={openProject} onCreate={createProject}/>
+          <OffersPanel offers={offers} entities={state.entities} onOpen={(id)=>openOffer(id)} onCreate={createOffer}/>
+          <ProjectsPanel projects={state.projects} entities={state.entities} onOpen={(id)=>openProject(id)} onCreate={createProject}/>
         </section>
       </div>
 
       {modal && (
         <Modal onClose={closeModal}>
-          {modal.kind==="entity" && <EntityCard state={state} setState={setState} id={modal.id}/> }
-          {modal.kind==="offer"  && <OfferCard state={state} setState={setState} id={modal.id}/> }
-          {modal.kind==="project"&& <ProjectCard state={state} setState={setState} id={modal.id}/> }
+          {modal.kind==="entity" && <EntityCard state={state} setState={setState} id={modal.id} forceEdit={!!modal.edit}/> }
+          {modal.kind==="offer"  && <OfferCard  state={state} setState={setState} id={modal.id} forceEdit={!!modal.edit}/> }
+          {modal.kind==="project"&& <ProjectCard state={state} setState={setState} id={modal.id} forceEdit={!!modal.edit}/> }
         </Modal>
       )}
     </div>
@@ -288,31 +303,36 @@ function Modal({children,onClose}){
 }
 
 /* ===================== ENTITY CARD ===================== */
-function EntityCard({state,setState,id}){
+function EntityCard({state,setState,id,forceEdit=false}){
   const e=state.entities.find(x=>x.id===id);
   const [local,setLocal]=useState(e);
-  const [isEdit,setIsEdit]=useState(false);
+  const [isEdit,setIsEdit]=useState(forceEdit);
   const [activeId,setActiveId]=useState(e?.activeContactId || e?.contacts?.[0]?.id || null);
 
-  useEffect(()=>{ setLocal(e); setActiveId(e?.activeContactId || e?.contacts?.[0]?.id || null); },[e?.id]);
+  useEffect(()=>{ setLocal(e); setActiveId(e?.activeContactId || e?.contacts?.[0]?.id || null); },[e]); // 🔁 lyssna på hela e
   if(!e) return null;
   const active=(local.contacts||[]).find(c=>c.id===activeId) || null;
 
   function update(k,v){ setLocal(x=>({...x,[k]:v})); }
   function updateContact(id,k,v){ setLocal(x=>({...x,contacts:(x.contacts||[]).map(c=>c.id===id?{...c,[k]:v}:c)})); }
-  function onSave(){ const toSave={...local,activeContactId:activeId,updatedAt:new Date().toISOString()};
-    setState(s=>{const nxt={...s}; upsertEntity(nxt,toSave); return nxt;}); setIsEdit(false); }
-  function onAddContact(){ setState(s=>{const nxt={...s}; const entity=nxt.entities.find(x=>x.id===e.id);
-      if(!entity.contacts) entity.contacts=[]; const c={id:uuid(),name:"",role:"",phone:"",email:""};
-      entity.contacts=[...entity.contacts,c]; if(!entity.activeContactId) entity.activeContactId=c.id; entity.updatedAt=new Date().toISOString();
-      upsertEntity(nxt,entity); return nxt;});
-    setTimeout(()=>{ const fresh=loadState().entities.find(x=>x.id===e.id); setLocal(fresh); setActiveId(fresh.activeContactId || fresh.contacts?.[0]?.id || null); setIsEdit(true); },0); }
+  function onSave(){
+    const toSave={...local,activeContactId:activeId,updatedAt:new Date().toISOString()};
+    setState(s=>{const nxt={...s}; upsertEntity(nxt,toSave); return nxt;});
+    setIsEdit(false);
+  }
+  function onAddContact(){
+    const c={id:uuid(),name:"",role:"",phone:"",email:""};
+    const copy={...local, contacts:[...(local.contacts||[]), c]};
+    if(!copy.activeContactId) copy.activeContactId=c.id;
+    setLocal(copy);
+    setIsEdit(true);
+  }
   function onSetActive(id){ setActiveId(id); setState(s=>({...setActiveContact({...s},e.id,id)})); }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold">{entityLabel(e.type)}: {e.companyName || "(namnlös)"}</h3>
+        <h3 className="text-base font-semibold">{entityLabel(e.type)}: {local.companyName || "(namnlös)"}</h3>
         <div className="flex gap-2">
           {!isEdit ? <button className="border rounded-xl px-3 py-2" onClick={()=>setIsEdit(true)}>Redigera</button>
                    : <button className="bg-black text-white rounded-xl px-3 py-2" onClick={onSave}>Spara</button>}
@@ -353,7 +373,7 @@ function EntityCard({state,setState,id}){
   );
 }
 
-/* ===================== REMINDERS PANEL (saknades) ===================== */
+/* ===================== REMINDERS PANEL ===================== */
 function RemindersPanel({ items, onOpen, setFilter }) {
   return (
     <div className="bg-white rounded-2xl shadow p-4">
@@ -416,37 +436,42 @@ function OffersPanel({offers, entities, onOpen, onCreate}){
     </div>
   );
 }
-function OfferCard({state,setState,id}){
+function OfferCard({state,setState,id,forceEdit=false}){
   const o = (state.offers||[]).find(x=>x.id===id);
   const [local,setLocal]=useState(o);
-  const [isEdit,setIsEdit]=useState(false);
+  const [isEdit,setIsEdit]=useState(forceEdit);
   const customers=(state.entities||[]).filter(e=>e.type==="customer");
 
-  useEffect(()=>{ setLocal(o); },[o?.id]);
+  useEffect(()=>{ setLocal(o); },[o]); // 🔁 uppdatera när offerten ändras
   if(!o) return null;
 
   function update(k,v){ setLocal(x=>({...x,[k]:v})); }
-  function onSave(){ const toSave={...local,updatedAt:new Date().toISOString()};
-    setState(s=>{const nxt={...s}; upsertOffer(nxt,toSave); return nxt;}); setIsEdit(false); }
+  function onSave(){
+    const toSave={...local,updatedAt:new Date().toISOString()};
+    setState(s=>{const nxt={...s}; upsertOffer(nxt,toSave); return nxt;});
+    setIsEdit(false);
+  }
 
   function addFiles(){
     pickOneDriveFiles({
       clientId: ONEDRIVE_CLIENT_ID,
       onSuccess: (files)=>{
         const copy = { ...o, files: (o.files || []).concat(files), updatedAt: new Date().toISOString() };
+        setLocal(copy); // 👈 visa direkt
         setState(s=>{ const nxt={...s}; upsertOffer(nxt,copy); return nxt; });
       }
     });
   }
   function removeFile(fileId){
     const copy = { ...o, files: (o.files || []).filter(x=>x.id!==fileId), updatedAt: new Date().toISOString() };
+    setLocal(copy); // 👈 visa direkt
     setState(s=>{ const nxt={...s}; upsertOffer(nxt,copy); return nxt; });
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold">Offert: {o.title}</h3>
+        <h3 className="text-base font-semibold">Offert: {local.title}</h3>
         <div className="flex gap-2">
           {!isEdit ? <button className="border rounded-xl px-3 py-2" onClick={()=>setIsEdit(true)}>Redigera</button>
                    : <button className="bg-black text-white rounded-xl px-3 py-2" onClick={onSave}>Spara</button>}
@@ -530,37 +555,42 @@ function ProjectsPanel({projects,entities,onOpen,onCreate}){
     </div>
   );
 }
-function ProjectCard({state,setState,id}){
+function ProjectCard({state,setState,id,forceEdit=false}){
   const p=state.projects.find(x=>x.id===id);
   const [local,setLocal]=useState(p);
-  const [isEdit,setIsEdit]=useState(false);
+  const [isEdit,setIsEdit]=useState(forceEdit);
   const cust=state.entities.find(e=>e.id===p?.customerId);
 
-  useEffect(()=>{ setLocal(p); },[p?.id]);
+  useEffect(()=>{ setLocal(p); },[p]); // 🔁 uppdatera när projektet ändras
   if(!p) return null;
 
   function update(k,v){ setLocal(x=>({...x,[k]:v})); }
-  function onSave(){ const toSave={...local,updatedAt:new Date().toISOString()};
-    setState(s=>{const nxt={...s}; upsertProject(nxt,toSave); return nxt;}); setIsEdit(false); }
+  function onSave(){
+    const toSave={...local,updatedAt:new Date().toISOString()};
+    setState(s=>{const nxt={...s}; upsertProject(nxt,toSave); return nxt;});
+    setIsEdit(false);
+  }
 
   function addProjectFiles(){
     pickOneDriveFiles({
       clientId: ONEDRIVE_CLIENT_ID,
       onSuccess: (files)=>{
         const copy = { ...p, files: (p.files || []).concat(files), updatedAt: new Date().toISOString() };
+        setLocal(copy); // 👈 visa direkt
         setState(s=>{ const nxt={...s}; upsertProject(nxt,copy); return nxt; });
       }
     });
   }
   function removeProjectFile(fileId){
     const copy = { ...p, files: (p.files || []).filter(x=>x.id!==fileId), updatedAt: new Date().toISOString() };
+    setLocal(copy); // 👈 visa direkt
     setState(s=>{ const nxt={...s}; upsertProject(nxt,copy); return nxt; });
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold">Projekt: {p.name}</h3>
+        <h3 className="text-base font-semibold">Projekt: {local.name}</h3>
         <div className="flex gap-2">
           {!isEdit ? <button className="border rounded-xl px-3 py-2" onClick={()=>setIsEdit(true)}>Redigera</button>
                    : <button className="bg-black text-white rounded-xl px-3 py-2" onClick={onSave}>Spara</button>}
