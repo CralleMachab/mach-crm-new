@@ -3,8 +3,8 @@
 // Läs/skriv EN (1) JSON-fil: MachCRM/mach-crm.json i OneDrive (eller SharePoint senare).
 
 /* ======== 1) KONFIG – FYLL I ENTRA-ID:N ======== */
-export const TENANT_ID = "DIN-TENANT-ID-HÄR";            // <— Directory (tenant) ID (GUID)
-export const CLIENT_ID = "DITT-APPLICATION-ID-HÄR";      // <— Application (client) ID (GUID)
+export const TENANT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";            // <— Directory (tenant) ID (GUID)
+export const CLIENT_ID = "c3485a3b-b394-47ee-a4c1-e2d1dd98bdfb";      // <— Application (client) ID (GUID)
 
 // Valfritt: byt filens sökväg (behåll gärna denna)
 const CLOUD_FILE_PATH = "/MachCRM/mach-crm.json"; // hamnar i (eller läses från) "My files/MachCRM/mach-crm.json"
