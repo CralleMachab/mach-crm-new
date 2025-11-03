@@ -1,48 +1,39 @@
-
 // src/components/onedrive.js
-// Gemensam OneDrive-picker (små bokstäver i filnamn, NAMN-export pickOneDriveFiles)
+// Gemensam OneDrive-picker
 
 export function pickOneDriveFiles({ clientId, onSuccess, onError }) {
   if (typeof window === "undefined" || !window.OneDrive) {
-    const err = new Error("OneDrive SDK ej laddad. Kontrollera index.html-skriptet.");
-    console.error(err);
-    onError?.(err);
+    onError?.(new Error("OneDrive SDK ej laddad. Kontrollera index.html-skriptet."));
     alert("OneDrive SDK ej laddad. Kontrollera index.html.");
     return;
   }
   if (!clientId) {
-    const err = new Error("Saknar Application (client) ID för OneDrive.");
-    console.error(err);
-    onError?.(err);
     alert("Saknar Application (client) ID för OneDrive.");
     return;
   }
 
-  const opts = {
+  window.OneDrive.open({
     clientId,
     action: "share",
     multiSelect: true,
     openInNewWindow: true,
     advanced: { redirectUri: window.location.origin },
     success: (files) => {
-      const normalized = (files?.value || []).map((f) => ({
+      const out = (files?.value || []).map(f => ({
         id: f.id,
         name: f.name,
         link: f.links?.sharingLink?.webUrl || f.webUrl,
         webUrl: f.webUrl,
         size: f.size,
-        isFolder: !!f.folder
+        isFolder: !!f.folder,
       }));
-      onSuccess?.(normalized);
+      onSuccess?.(out);
     },
     cancel: () => {},
     error: (e) => {
       console.error("OneDrive Picker error", e);
-      onError?.(e);
       alert("Kunde inte hämta från OneDrive. Kontrollera behörigheter eller försök igen.");
-    }
-  };
-
-  window.OneDrive.open(opts);
+      onError?.(e);
+    },
+  });
 }
-
