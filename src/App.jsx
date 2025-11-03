@@ -1,7 +1,4 @@
-// src/App.jsx — Vänstermeny kvar, toppmeny bort, "+ Ny"-knappar i headern.
-// Aktiviteter: ikoner + kryss, prioritetfärger, skapad-datum, datum+tid, ansvarig, anteckningar, koppling (kund/leverantör/övrigt).
-// Offerter: "Projekt"-namn, sökbar lev-rullista (multi), per lev: Skickad + Mottaget, status alltid ändringsbar.
-// Projekt: visar Vunna offerter + skapa projekt; lista & redigering av projekt.
+// src/App.jsx — Komplett fil (vänstermeny + header-knappar + aktiviteter/offerter/projekt/kunder/leverantörer)
 
 import React, { useEffect, useMemo, useState } from "react";
 
@@ -62,6 +59,7 @@ function newEntity(type) {
     address: "", zip: "", city: "", notes: "",
     customerCategory: null,
     supplierCategory: null,
+    customerIsOrdering: false, // grön knapp “beställt”
     contacts: [], activeContactId: null,
     createdAt: new Date().toISOString(),
   };
@@ -114,6 +112,23 @@ function withinNext7Days(a) {
   const due = new Date(`${a.dueDate}T${a.dueTime || "00:00"}`);
   return due >= start && due <= end;
 }
+// historik: markera befintlig som klar & skapa uppföljning
+function addFollowUpActivity(state, baseId, nextDueDate, nextDueTime){
+  const src = (state.activities||[]).find(a=>a.id===baseId);
+  if (!src) return state;
+  src.done = true;
+  src.updatedAt = new Date().toISOString();
+  const next = {
+    ...src,
+    id: crypto?.randomUUID?.() || String(Date.now() + Math.random()),
+    done: false,
+    createdAt: new Date().toISOString(),
+    dueDate: nextDueDate,
+    dueTime: nextDueTime,
+  };
+  state.activities = [...(state.activities||[]), next];
+  return state;
+}
 
 /* ========== Offers ========== */
 const OFFER_STATUS_META = {
@@ -139,6 +154,8 @@ function newOffer(state) {
     reminderDate: "",
     reminderTime: "",
     notes: "",
+    files: [],            // om ni senare vill lägga OneDrive-länkar
+    items: [],            // rader/artiklar om ni vill
     createdAt: new Date().toISOString(),
     updatedAt: null,
     activityId: null,
@@ -149,19 +166,30 @@ function upsertOffer(state, o) {
   if (i === -1) state.offers.push(o); else state.offers[i] = o;
 }
 
-/* ========== Projects (enkel MVP) ========== */
-function newProjectFromOffer(offer, customer) {
+/* ========== Projects ========== */
+function newProjectFromOffer(offer) {
   const id = crypto?.randomUUID?.() || String(Date.now() + Math.random());
+  if (!offer) {
+    return {
+      id, name: "", customerId: null, status: "Planering",
+      startDate: "", endDate: "", progress: 0, description: "",
+      files: [], items: [], supplierIds: [],
+      createdFromOfferId: null,
+      createdAt: new Date().toISOString(), updatedAt: null
+    };
+  }
   return {
     id,
-    name: offer?.title || `Projekt #${offer?.number || ""}`,
-    customerId: offer?.customerId || null,
-    offerId: offer?.id || null,
+    name: offer.title || `Projekt #${offer.number || ""}`,
+    customerId: offer.customerId || null,
+    createdFromOfferId: offer.id,
     status: "Planering",
-    startDate: "",
-    endDate: "",
-    progress: 0, // %
-    description: "",
+    startDate: "", endDate: "", progress: 0,
+    description: offer.notes || "",
+    // kopiera allt relevant
+    files: (offer.files||[]).map(f=>({...f})),
+    items: (offer.items||[]).map(it=>({...it})),
+    supplierIds: (offer.supplierItems||[]).map(si=>si.supplierId),
     createdAt: new Date().toISOString(),
     updatedAt: null,
   };
@@ -197,8 +225,8 @@ export default function App() {
   function createCustomer(){ const e=newEntity("customer"); setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;}); setModal({kind:"entity", id:e.id}); }
   function createSupplier(){ const e=newEntity("supplier"); setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;}); setModal({kind:"entity", id:e.id}); }
   function createProjectEmpty(){
-    const p = newProjectFromOffer(null,null);
-    setState(s=>{const nxt={...s, projects:[...(s.projects||[]), p]}; return nxt;});
+    const p = newProjectFromOffer(null);
+    setState(s=>{const nxt={...s}; upsertProject(nxt,p); return nxt;});
     setModal({kind:"project", id:p.id});
   }
 
@@ -209,7 +237,7 @@ export default function App() {
   const wonOffers = useMemo(()=> (state.offers||[]).filter(o=>o.status==="won").slice().sort((a,b)=>new Date(b.updatedAt||b.createdAt)-new Date(a.updatedAt||a.createdAt)), [state.offers]);
   const projects = useMemo(()=> (state.projects||[]).slice().sort((a,b)=>(a.name||"").localeCompare(b.name||"","sv")), [state.projects]);
 
-  // Sök filter för listor (kunder/leverantörer)
+  // Sök filter för entiteter
   const filteredEntities = (arr) => {
     const q = search.trim().toLowerCase();
     if (!q) return arr;
@@ -222,16 +250,6 @@ export default function App() {
       );
     });
   };
-
-  // Aktiviteter kommande 7 dagar
-  const upcoming7 = useMemo(() => {
-    const list = (state.activities || []).filter(withinNext7Days);
-    return list.sort((a, b) => {
-      const da = new Date(`${a.dueDate}T${a.dueTime || "00:00"}`).getTime();
-      const db = new Date(`${b.dueDate}T${b.dueTime || "00:00"}`).getTime();
-      return da - db;
-    });
-  }, [state.activities]);
 
   // Öppnare
   function openEntity(id){ setModal({kind:"entity", id}); }
@@ -246,7 +264,7 @@ export default function App() {
       return <ActivitiesPanel activities={state.activities || []} entities={state.entities} onOpen={openActivity} />;
     }
     if (activeTab === "offers") {
-      return <OffersPanel offers={offers} entities={state.entities} onOpen={openOffer} />;
+      return <OffersPanel offers={offers} entities={state.entities} onOpen={openOffer} setState={setState} />;
     }
     if (activeTab === "projects") {
       return (
@@ -256,9 +274,13 @@ export default function App() {
           entities={state.entities}
           onOpen={openProject}
           onCreateFromOffer={(offer) => {
-            const p = newProjectFromOffer(offer, null);
-            setState(s=>{const nxt={...s}; upsertProject(nxt,p); return nxt;});
-            setModal({kind:"project", id:p.id});
+            setState(s=>{
+              const nxt = { ...s };
+              const p = newProjectFromOffer(offer);
+              upsertProject(nxt, p);
+              return nxt;
+            });
+            alert("Projekt skapat från VUNNEN offert. Offerten ligger kvar i historiken.");
           }}
         />
       );
@@ -276,7 +298,7 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-7xl p-4">
-      {/* HEADER: logo + "Skapa nytt"-knappar (flyttade hit) */}
+      {/* HEADER: logo + "Skapa nytt"-knappar */}
       <header className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <img src="/logo.png" alt="Mach" className="h-8 w-auto" onError={(e)=>{e.currentTarget.style.display="none";}} />
@@ -292,7 +314,7 @@ export default function App() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Vänster: meny + sök (toppmenyn är borta) */}
+        {/* Vänster: meny + sök */}
         <aside className="space-y-3">
           <nav className="bg-white rounded-2xl shadow p-3">
             <div className="text-xs font-semibold text-gray-500 mb-2">Meny</div>
@@ -327,7 +349,7 @@ export default function App() {
           </div>
         </aside>
 
-        {/* Mitten: 2 kolumner */}
+        {/* Mitten */}
         <section className="lg:col-span-2 space-y-4">
           {renderMain()}
         </section>
@@ -362,6 +384,9 @@ function ListCard({ title, count, items, onOpen }) {
               </div>
               <div className="flex items-center gap-2">
                 {getCategoryBadge(e)}
+                {e.type==="customer" && e.customerIsOrdering && (
+                  <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-800">Beställt</span>
+                )}
                 <span className="text-xs text-gray-500 shrink-0">{e.type === "customer" ? "Kund" : "Lev."}</span>
               </div>
             </div>
@@ -373,11 +398,9 @@ function ListCard({ title, count, items, onOpen }) {
 }
 
 function ActivitiesPanel({ activities, entities, onOpen }) {
-  // UI-tillstånd
-  const [range, setRange] = useState("7d");      // "7d" | "all"
-  const [view, setView]   = useState("list");    // "list" | "calendar"
+  const [range, setRange] = useState("7d");  // "7d" | "all"
+  const [view, setView]   = useState("list"); // "list" | "calendar"
 
-  // Hjälpare
   const sortByDue = (arr) => arr.slice().sort((a,b)=>{
     const da = new Date(`${a.dueDate||"2100-01-01"}T${a.dueTime||"00:00"}`).getTime();
     const db = new Date(`${b.dueDate||"2100-01-01"}T${b.dueTime||"00:00"}`).getTime();
@@ -385,16 +408,15 @@ function ActivitiesPanel({ activities, entities, onOpen }) {
   });
   const isWithin7 = (a) => withinNext7Days(a);
 
-  // Filtrering beroende på range
   const visible = useMemo(()=>{
     const src = Array.isArray(activities) ? activities : [];
     if (range === "7d") return sortByDue(src.filter(isWithin7));
     return sortByDue(src);
   }, [activities, range]);
 
-  // Grupp för kalenderöversikt (räkna antal per dag & typ)
+  // Grupp för kalenderöversikt
   const grouped = useMemo(()=>{
-    const map = new Map(); // key = YYYY-MM-DD | "okänd"
+    const map = new Map();
     const inc = (k, field) => {
       const obj = map.get(k) || { dateKey: k, total:0, telefon:0, mail:0, lunch:0, möte:0, uppgift:0 };
       obj.total += 1;
@@ -405,7 +427,6 @@ function ActivitiesPanel({ activities, entities, onOpen }) {
       const key = a.dueDate || "okänd";
       inc(key, a.types || []);
     });
-    // sortera: datum först, "okänd" sist
     const arr = Array.from(map.values());
     arr.sort((a,b)=>{
       if (a.dateKey === "okänd") return 1;
@@ -415,10 +436,7 @@ function ActivitiesPanel({ activities, entities, onOpen }) {
     return arr;
   }, [visible]);
 
-  const typeIcon = (t) => {
-    const m = ACTIVITY_TYPES.find(x=>x.key===t);
-    return m?.icon || "📝";
-  };
+  const typeIcon = (t) => (ACTIVITY_TYPES.find(x=>x.key===t)?.icon || "📝");
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
@@ -426,36 +444,15 @@ function ActivitiesPanel({ activities, entities, onOpen }) {
         <h2 className="font-semibold">Aktiviteter</h2>
 
         <div className="flex items-center gap-2">
-          {/* Range: 7 dagar / alla */}
+          {/* Range: 7d / all */}
           <div className="flex rounded-xl overflow-hidden border">
-            <button
-              className={`px-3 py-2 ${range==="7d" ? "bg-black text-white" : "hover:bg-gray-50"}`}
-              onClick={()=>setRange("7d")}
-            >
-              7 dagar
-            </button>
-            <button
-              className={`px-3 py-2 ${range==="all" ? "bg-black text-white" : "hover:bg-gray-50"}`}
-              onClick={()=>setRange("all")}
-            >
-              Alla
-            </button>
+            <button className={`px-3 py-2 ${range==="7d" ? "bg-black text-white" : "hover:bg-gray-50"}`} onClick={()=>setRange("7d")}>7 dagar</button>
+            <button className={`px-3 py-2 ${range==="all" ? "bg-black text-white" : "hover:bg-gray-50"}`} onClick={()=>setRange("all")}>Alla</button>
           </div>
-
-          {/* Vy: Lista / Kalender */}
+          {/* Vy */}
           <div className="flex rounded-xl overflow-hidden border">
-            <button
-              className={`px-3 py-2 ${view==="list" ? "bg-black text-white" : "hover:bg-gray-50"}`}
-              onClick={()=>setView("list")}
-            >
-              Lista
-            </button>
-            <button
-              className={`px-3 py-2 ${view==="calendar" ? "bg-black text-white" : "hover:bg-gray-50"}`}
-              onClick={()=>setView("calendar")}
-            >
-              Kalender
-            </button>
+            <button className={`px-3 py-2 ${view==="list" ? "bg-black text-white" : "hover:bg-gray-50"}`} onClick={()=>setView("list")}>Lista</button>
+            <button className={`px-3 py-2 ${view==="calendar" ? "bg-black text-white" : "hover:bg-gray-50"}`} onClick={()=>setView("calendar")}>Kalender</button>
           </div>
         </div>
       </div>
@@ -471,19 +468,21 @@ function ActivitiesPanel({ activities, entities, onOpen }) {
             {visible.map((a) => {
               const ent = entities?.find((e) => e.id === a.linkId) || null;
               const pr = PRIORITIES.find((p) => p.key === a.priority) || PRIORITIES[1];
+              const contactName = ent
+                ? (ent.contacts || []).find(c => c.id === (ent.activeContactId || ""))?.name || ""
+                : "";
               return (
                 <li key={a.id} className="py-3 cursor-pointer" onClick={() => onOpen(a.id)}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <div className="flex gap-1 text-lg">
-                        {(a.types || []).map(t => (
-                          <span key={t} title={t}>{typeIcon(t)}</span>
-                        ))}
+                        {(a.types || []).map(t => <span key={t} title={t}>{typeIcon(t)}</span>)}
                         {(a.types || []).length===0 && <span className="text-gray-400">—</span>}
                       </div>
                       <div>
                         <div className="text-sm font-medium">
                           {ent ? `${ent.companyName} (${entityLabel(ent.type)})` : "Övrigt"}
+                          {contactName ? ` • Kontakt: ${contactName}` : ""}
                         </div>
                         <div className="text-xs text-gray-500">
                           {formatDT(a.dueDate, a.dueTime)} • Skapad {formatDT(a.createdAt?.slice(0,10), a.createdAt?.slice(11,16))}
@@ -521,7 +520,7 @@ function ActivitiesPanel({ activities, entities, onOpen }) {
                 <div className="mt-2 flex flex-wrap gap-2 text-sm">
                   {["telefon","mail","lunch","möte","uppgift"].map(k=> g[k] ? (
                     <span key={k} className="px-2 py-1 rounded bg-gray-100">
-                      {typeIcon(k)} {k} • {g[k]}
+                      {ACTIVITY_TYPES.find(t=>t.key===k)?.icon || "📝"} {k} • {g[k]}
                     </span>
                   ) : null)}
                 </div>
@@ -534,9 +533,26 @@ function ActivitiesPanel({ activities, entities, onOpen }) {
   );
 }
 
-
-function OffersPanel({ offers, entities, onOpen }) {
+function OffersPanel({ offers, entities, onOpen, setState }) {
   const getCustomer = (id) => (entities || []).find((e) => e.id === id);
+
+  // när status sätts till "won" → kopiera till projekt (offert ligger kvar)
+  function markOfferWon(offerId) {
+    setState(s=>{
+      const nxt = { ...s };
+      const offer = (nxt.offers||[]).find(o => o.id === offerId);
+      if (!offer) return nxt;
+
+      offer.status = "won";
+      offer.updatedAt = new Date().toISOString();
+
+      const proj = newProjectFromOffer(offer);
+      upsertProject(nxt, proj);
+      return nxt;
+    });
+    alert("Offerten markerad som VUNNEN och ett projekt har skapats. Offerten ligger kvar i historiken.");
+  }
+
   return (
     <div className="bg-white rounded-2xl shadow p-4">
       <div className="flex items-center justify-between mb-3">
@@ -550,15 +566,22 @@ function OffersPanel({ offers, entities, onOpen }) {
             const cust = getCustomer(o.customerId);
             const meta = OFFER_STATUS_META[o.status || "draft"] || OFFER_STATUS_META.draft;
             return (
-              <li key={o.id} className="py-3 px-2 hover:bg-gray-50 rounded-xl cursor-pointer" onClick={() => onOpen(o.id)}>
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
+              <li key={o.id} className="py-3 px-2 hover:bg-gray-50 rounded-xl">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 cursor-pointer" onClick={() => onOpen(o.id)}>
                     <div className="font-medium truncate">#{o.number} — {o.title || "(Projekt saknas)"}</div>
                     <div className="text-xs text-gray-500 truncate">
                       {cust ? cust.companyName : "—"} • {new Date(o.createdAt).toLocaleDateString("sv-SE")}
                     </div>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded ${meta.className}`}>{meta.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-2 py-1 rounded ${meta.className}`}>{meta.label}</span>
+                    {o.status!=="won" && (
+                      <button className="border rounded-xl px-3 py-1 text-sm" onClick={()=>markOfferWon(o.id)}>
+                        Markera Vunnen
+                      </button>
+                    )}
+                  </div>
                 </div>
               </li>
             );
@@ -675,6 +698,13 @@ function EntityCard({ state, setState, id }) {
     if(!activeId) setActiveId(id);
     setIsEdit(true);
   }
+  function onDeleteContact(cid){
+    setLocal(x=>{
+      const left = (x.contacts||[]).filter(c=>c.id!==cid);
+      const nextActive = left.find(c=>c.id===x.activeContactId)?.id || (left[0]?.id || null);
+      return { ...x, contacts:left, activeContactId: nextActive };
+    });
+  }
   function onDeleteEntity(){
     if(!confirm(`Ta bort ${entityLabel(entity.type).toLowerCase()} "${local.companyName || ""}"?`)) return;
     setState(s=>({
@@ -699,6 +729,14 @@ function EntityCard({ state, setState, id }) {
         <div className="flex gap-2">
           {!isEdit ? <button className="border rounded-xl px-3 py-2" onClick={()=>setIsEdit(true)}>Redigera</button>
                    : <button className="bg-black text-white rounded-xl px-3 py-2" onClick={onSave}>Spara</button>}
+          {entity.type==="customer" && (
+            <button
+              className={`rounded-xl px-3 py-2 border ${local.customerIsOrdering ? "bg-green-600 text-white" : ""}`}
+              onClick={()=>setLocal(x=>({...x, customerIsOrdering: !x.customerIsOrdering}))}
+            >
+              {local.customerIsOrdering ? "Beställt ✓" : "Markera som beställt"}
+            </button>
+          )}
           <button className="text-red-600 border rounded-xl px-3 py-2" onClick={onDeleteEntity}>Ta bort</button>
         </div>
       </div>
@@ -737,6 +775,11 @@ function EntityCard({ state, setState, id }) {
             <Field label="Roll"   value={active.role}  disabled={!isEdit} onChange={v=>updateContact(active.id,"role",v)} />
             <Field label="Telefon" value={active.phone} disabled={!isEdit} onChange={v=>updateContact(active.id,"phone",v)} />
             <Field label="E-post"  value={active.email} disabled={!isEdit} onChange={v=>updateContact(active.id,"email",v)} />
+            {isEdit && (
+              <div className="col-span-2">
+                <button className="text-rose-600 text-sm" onClick={()=>onDeleteContact(active.id)}>Ta bort kontakt</button>
+              </div>
+            )}
           </div>
         ) : <div className="text-sm text-gray-500">Ingen kontakt vald. Lägg till en kontaktperson.</div>}
       </div>
@@ -797,12 +840,12 @@ function ActivityCard({ state, setState, id, draft, onClose }) {
       </div>
 
       <div className="bg-white rounded-2xl shadow p-4 space-y-4">
-        {/* 1. Datum då aktiviteten skapades */}
+        {/* 1. Skapad */}
         <div className="text-xs text-gray-500">
           Skapad: {formatDT(local.createdAt?.slice(0,10), local.createdAt?.slice(11,16))}
         </div>
 
-        {/* 2. Vad som ska göras (ikoner med kryss) */}
+        {/* 2. Vad ska göras */}
         <div>
           <div className="text-xs font-medium text-gray-600 mb-1">Vad ska göras?</div>
           <div className="flex flex-wrap gap-2">
@@ -873,6 +916,25 @@ function ActivityCard({ state, setState, id, draft, onClose }) {
             <div className="text-sm text-gray-500 flex items-end">Ingen koppling vald.</div>
           )}
         </div>
+
+        {/* Uppföljning (exempelknapp): markera denna klar och skapa ny */}
+        <div className="pt-2">
+          <button
+            className="text-sm border rounded-xl px-3 py-2"
+            onClick={()=>{
+              const nextDate = local.dueDate; // du kan visa dialog här om du vill ändra
+              const nextTime = local.dueTime || "09:00";
+              setState(s=> {
+                const nxt = { ...s };
+                addFollowUpActivity(nxt, local.id, nextDate, nextTime);
+                return nxt;
+              });
+              alert("Uppföljning skapad (denna markerad klar, ny aktivitet skapad).");
+            }}
+          >
+            Skapa uppföljning
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -924,7 +986,7 @@ function OfferCard({ state, setState, id, draft, onClose }) {
         const ex = (s.activities||[]).find(a=>a.id===offer.activityId);
         if(!ex) return s;
         const upd = { ...ex,
-          title, type: "uppgift", priority:"medium",
+          title, types:["uppgift"], priority:"medium",
           dueDate: offer.reminderDate, dueTime: offer.reminderTime||"09:00",
           linkKind:"customer", linkId: offer.customerId||null,
           updatedAt: new Date().toISOString(),
@@ -1006,7 +1068,7 @@ function OfferCard({ state, setState, id, draft, onClose }) {
           </div>
         </div>
 
-        {/* Rad 2: Leverantörer — sökbar rullista, fler kan läggas till; per lev: Skickad + Mottaget */}
+        {/* Rad 2: Leverantörer — sökbar multi + flaggor */}
         <div className="space-y-2">
           <div className="text-sm font-semibold">Leverantörer</div>
           <div className="flex gap-2 items-center">
@@ -1076,7 +1138,7 @@ function OfferCard({ state, setState, id, draft, onClose }) {
   );
 }
 
-/* ========== Project card (enkel) ========== */
+/* ========== Project card ========== */
 function ProjectCard({ state, setState, id, onClose }) {
   const p = (state.projects||[]).find(x=>x.id===id);
   const [local, setLocal] = useState(p || null);
