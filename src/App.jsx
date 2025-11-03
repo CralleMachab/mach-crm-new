@@ -243,7 +243,7 @@ export default function App() {
   // Mittpanel
   const renderMain = () => {
     if (activeTab === "activities") {
-      return <ActivitiesPanel activities={upcoming7} entities={state.entities} onOpen={openActivity} />;
+      return <ActivitiesPanel activities={state.activities || []} entities={state.entities} onOpen={openActivity} />;
     }
     if (activeTab === "offers") {
       return <OffersPanel offers={offers} entities={state.entities} onOpen={openOffer} />;
