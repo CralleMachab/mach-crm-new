@@ -235,6 +235,12 @@ function useStore(){
 
 /* ===================== APP ===================== */
 export default function App(){
+  // --- Tillfälliga stubbar så knappar/JSX inte kraschar om funktioner saknas ---
+function createOffer()   { console.log("TEMP: createOffer klickad"); }
+function createProject() { console.log("TEMP: createProject klickad"); }
+function createActivity(){ console.log("TEMP: createActivity klickad"); }
+function openSettings()  { console.log("TEMP: openSettings klickad"); }
+// -------------------------------------------------------------------------------
   return (
     <ErrorBoundary>
       <AppInner/>
