@@ -1,4 +1,6 @@
-// src/App.jsx — Vänstermeny + Aktiviteter + Kunder/Leverantörer + Delete + Kategorier (stabil)
+// src/App.jsx — Meny + Aktiviteter + Kunder/Leverantörer + OFFERTER (#31500, statusfärger, leverantörer, påminnelse)
+// Flyttat: "Skapa nytt"-knappar till en verktygsrad ovanför stora rutan (inte i vänsterkolumnen)
+
 import React, { useEffect, useMemo, useState } from "react";
 
 /* ========= Lagring (localStorage) ========= */
@@ -6,9 +8,9 @@ const LS_KEY = "mach_crm_state_v1";
 function loadState() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : { entities: [], activities: [] };
+    return raw ? JSON.parse(raw) : { entities: [], activities: [], offers: [], projects: [] };
   } catch {
-    return { entities: [], activities: [] };
+    return { entities: [], activities: [], offers: [], projects: [] };
   }
 }
 function saveState(s) {
@@ -59,7 +61,7 @@ function newActivity() {
     id,
     createdAt: new Date().toISOString(),
     title: "",
-    type: "telefon",
+    type: "uppgift",
     priority: "medium",
     dueDate: isoDate,
     dueTime: time,
@@ -73,25 +75,6 @@ function upsertActivity(state, activity) {
   const i = state.activities.findIndex((a) => a.id === activity.id);
   if (i === -1) state.activities.push(activity);
   else state.activities[i] = activity;
-}
-
-/* ========= Hjälpare ========= */
-function useStore() {
-  const [state, setState] = useState(() => loadState());
-  useEffect(() => { saveState(state); }, [state]);
-  return [state, setState];
-}
-function formatDT(dateStr, timeStr) {
-  if (!dateStr) return "";
-  const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
-  return d.toLocaleString("sv-SE", { dateStyle: "medium", timeStyle: timeStr ? "short" : undefined });
-}
-function withinNext7Days(a) {
-  if (!a.dueDate) return false;
-  const start = new Date(); start.setHours(0,0,0,0);
-  const end = new Date(start); end.setDate(end.getDate() + 7);
-  const due = new Date(`${a.dueDate}T${a.dueTime || "00:00"}`);
-  return due >= start && due <= end;
 }
 
 /* ========= Kategori metadata ========= */
@@ -118,14 +101,75 @@ function getCategoryBadge(entity) {
   }
 }
 
+/* ========= Offerter ========= */
+const OFFER_STATUS_META = {
+  draft:   { label: "Utkast",   className: "bg-gray-100 text-gray-800" },
+  sent:    { label: "Skickad",  className: "bg-orange-100 text-orange-800" },
+  won:     { label: "Vunnen",   className: "bg-green-100 text-green-800" },
+  lost:    { label: "Förlorad", className: "bg-rose-100 text-rose-800" },
+};
+
+function nextOfferNumber(state) {
+  const base = 31500;
+  const nums = (state.offers || [])
+    .map(o => o.number || 0)
+    .filter(n => typeof n === "number" && n >= base);
+  if (nums.length === 0) return base;
+  return Math.max(...nums) + 1;
+}
+function newOffer(state) {
+  const id = (crypto?.randomUUID?.() || String(Date.now() + Math.random()));
+  return {
+    id,
+    number: nextOfferNumber(state), // 31500++
+    title: "",
+    customerId: null,
+    supplierItems: [], // [{supplierId, received:boolean}]
+    status: "draft",   // draft|sent|won|lost
+    reminderDate: "",  // YYYY-MM-DD
+    reminderTime: "",  // HH:mm
+    notes: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: null,
+    activityId: null,  // kopplad aktivitet för påminnelse
+  };
+}
+function upsertOffer(state, offer) {
+  const i = state.offers.findIndex(o => o.id === offer.id);
+  if (i === -1) state.offers.push(offer);
+  else state.offers[i] = offer;
+}
+
+/* ========= (Stub) Projekt ========= */
+// Knappen visas men är avstängd tills projektflödet implementeras i nästa steg.
+
+/* ========= Hjälpare ========= */
+function useStore() {
+  const [state, setState] = useState(() => loadState());
+  useEffect(() => { saveState(state); }, [state]);
+  return [state, setState];
+}
+function formatDT(dateStr, timeStr) {
+  if (!dateStr) return "";
+  const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
+  return d.toLocaleString("sv-SE", { dateStyle: "medium", timeStyle: timeStr ? "short" : undefined });
+}
+function withinNext7Days(a) {
+  if (!a.dueDate) return false;
+  const start = new Date(); start.setHours(0,0,0,0);
+  const end = new Date(start); end.setDate(end.getDate() + 7);
+  const due = new Date(`${a.dueDate}T${a.dueTime || "00:00"}`);
+  return due >= start && due <= end;
+}
+
 /* ========= App ========= */
 export default function App() {
   const [state, setState] = useStore();
   const [search, setSearch] = useState("");
-  const [modal, setModal] = useState(null); // { kind:'entity'|'activity', id, draft? }
+  const [modal, setModal] = useState(null); // { kind:'entity'|'activity'|'offer', id, draft? }
   const [activeTab, setActiveTab] = useState("activities"); // activities|offers|projects|customers|suppliers
 
-  // Skapa entiteter
+  // Skapa
   function createEntitySafe(type) {
     const e = newEntity(type);
     setState((s) => {
@@ -136,15 +180,20 @@ export default function App() {
     setActiveTab(type === "customer" ? "customers" : "suppliers");
     setModal({ kind: "entity", id: e.id });
   }
-
-  // Skapa aktivitet
   function createActivitySafe() {
     const a = newActivity();
-    setState((s) => ({ ...s }));
+    setState((s) => ({ ...s })); // draft i modal
     setActiveTab("activities");
     setModal({ kind: "activity", id: a.id, draft: a });
   }
+  function createOfferSafe() {
+    const o = newOffer(state);
+    setState((s) => ({ ...s })); // draft i modal
+    setActiveTab("offers");
+    setModal({ kind: "offer", id: o.id, draft: o });
+  }
 
+  // Listor
   const customers = useMemo(
     () => (state.entities || []).filter((e) => e.type === "customer")
       .slice().sort((a,b)=>(a.companyName||"").localeCompare(b.companyName||"", "sv")),
@@ -155,8 +204,13 @@ export default function App() {
       .slice().sort((a,b)=>(a.companyName||"").localeCompare(b.companyName||"", "sv")),
     [state.entities]
   );
+  const offers = useMemo(
+    () => (state.offers || []).slice().sort((a,b)=>
+      new Date(b.createdAt || 0) - new Date(a.createdAt || 0)
+    ), [state.offers]
+  );
 
-  const filtered = (arr) => {
+  const filteredEntities = (arr) => {
     const q = search.trim().toLowerCase();
     if (!q) return arr;
     return arr.filter((e) => {
@@ -181,11 +235,13 @@ export default function App() {
     });
   }, [state.activities]);
 
+  // Öppna/close
   function openEntity(id) { setModal({ kind: "entity", id }); }
   function openActivity(id) { setModal({ kind: "activity", id }); }
+  function openOffer(id) { setModal({ kind: "offer", id }); }
   function closeModal() { setModal(null); }
 
-  /* ====== Mittinnehåll växlar på activeTab ====== */
+  // Mittkolumn
   const renderMain = () => {
     if (activeTab === "activities") {
       return (
@@ -193,32 +249,31 @@ export default function App() {
           activities={upcoming7}
           entities={state.entities}
           onOpen={openActivity}
-          onCreate={createActivitySafe}
+        />
+      );
+    }
+    if (activeTab === "offers") {
+      return (
+        <OffersPanel
+          offers={offers}
+          entities={state.entities}
+          onOpen={openOffer}
         />
       );
     }
     if (activeTab === "customers") {
-      const items = filtered(customers);
+      const items = filteredEntities(customers);
       return <ListCard title="Kunder" count={items.length} items={items} onOpen={openEntity} />;
     }
     if (activeTab === "suppliers") {
-      const items = filtered(suppliers);
+      const items = filteredEntities(suppliers);
       return <ListCard title="Leverantörer" count={items.length} items={items} onOpen={openEntity} />;
-    }
-    // Placeholder-paneler för att kunna växla redan nu
-    if (activeTab === "offers") {
-      return (
-        <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-600">
-          <div className="text-lg font-semibold mb-2">Offerter</div>
-          <div>Denna sektion kopplas på i nästa steg (med #31500-serie och statusfärger).</div>
-        </div>
-      );
     }
     if (activeTab === "projects") {
       return (
         <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-600">
           <div className="text-lg font-semibold mb-2">Projekt</div>
-          <div>Denna sektion kopplas på efter Offerter (med koppling till vunnen offert).</div>
+          <div>Kommer efter Offerter (med koppling till <span className="font-medium">Vunnen offert</span>).</div>
         </div>
       );
     }
@@ -227,8 +282,8 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-7xl p-4">
-      {/* HEADER */}
-      <header className="flex items-center justify-between mb-4">
+      {/* HEADER med meny */}
+      <header className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <img
             src="/logo.png"
@@ -247,8 +302,23 @@ export default function App() {
         </div>
       </header>
 
+      {/* NY: Verktygsrad med "Skapa nytt" ovanför stora rutan */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button className="border rounded-xl px-3 py-2" onClick={() => createActivitySafe()}>+ Ny aktivitet</button>
+        <button className="border rounded-xl px-3 py-2" onClick={() => createOfferSafe()}>+ Ny offert</button>
+        <button
+          className="border rounded-xl px-3 py-2 opacity-60 cursor-not-allowed"
+          title="Kommer i nästa steg"
+          disabled
+        >
+          + Nytt projekt
+        </button>
+        <button className="border rounded-xl px-3 py-2" onClick={() => createEntitySafe("customer")}>+ Ny kund</button>
+        <button className="border rounded-xl px-3 py-2" onClick={() => createEntitySafe("supplier")}>+ Ny leverantör</button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Vänsterkolumn = din meny (alltid synlig) */}
+        {/* Vänsterkolumn = meny/sök (OBS: ingen "Skapa nytt" här längre) */}
         <aside className="space-y-3">
           <nav className="bg-white rounded-2xl shadow p-3">
             <div className="text-xs font-semibold text-gray-500 mb-2">Meny</div>
@@ -274,17 +344,6 @@ export default function App() {
             </ul>
           </nav>
 
-          {/* Snabbknappar */}
-          <div className="bg-white rounded-2xl shadow p-3">
-            <div className="text-xs font-semibold text-gray-500 mb-2">Skapa nytt</div>
-            <div className="grid grid-cols-1 gap-2">
-              <button className="border rounded-xl px-3 py-2" onClick={() => createActivitySafe()}>+ Ny aktivitet</button>
-              <button className="border rounded-xl px-3 py-2" onClick={() => createEntitySafe("customer")}>+ Ny kund</button>
-              <button className="border rounded-xl px-3 py-2" onClick={() => createEntitySafe("supplier")}>+ Ny leverantör</button>
-            </div>
-          </div>
-
-          {/* Sökfält (påverkar Kunder/Leverantörer) */}
           <div className="bg-white rounded-2xl shadow p-3">
             <div className="text-xs font-semibold text-gray-500 mb-2">Sök</div>
             <input
@@ -302,21 +361,19 @@ export default function App() {
         </section>
       </div>
 
-      {modal && modal.kind === "entity" && (
-        <Modal onClose={closeModal}>
+      {modal?.kind === "entity" && (
+        <Modal onClose={() => setModal(null)}>
           <EntityCard state={state} setState={setState} id={modal.id} />
         </Modal>
       )}
-
-      {modal && modal.kind === "activity" && (
-        <Modal onClose={closeModal}>
-          <ActivityCard
-            state={state}
-            setState={setState}
-            id={modal.id}
-            draft={modal.draft || null}
-            onClose={closeModal}
-          />
+      {modal?.kind === "activity" && (
+        <Modal onClose={() => setModal(null)}>
+          <ActivityCard state={state} setState={setState} id={modal.id} draft={modal.draft || null} onClose={() => setModal(null)} />
+        </Modal>
+      )}
+      {modal?.kind === "offer" && (
+        <Modal onClose={() => setModal(null)}>
+          <OfferCard state={state} setState={setState} id={modal.id} draft={modal.draft || null} onClose={() => setModal(null)} />
         </Modal>
       )}
     </div>
@@ -360,12 +417,11 @@ function ListCard({ title, count, items, onOpen }) {
   );
 }
 
-function ActivitiesPanel({ activities, entities, onOpen, onCreate }) {
+function ActivitiesPanel({ activities, entities, onOpen }) {
   return (
     <div className="bg-white rounded-2xl shadow p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold">Aktiviteter (nästa 7 dagar)</h2>
-        <button className="border rounded-xl px-3 py-2" onClick={onCreate}>+ Ny aktivitet</button>
       </div>
       {activities.length === 0 ? (
         <div className="text-sm text-gray-500">Inga aktiviteter kommande vecka.</div>
@@ -403,6 +459,290 @@ function ActivitiesPanel({ activities, entities, onOpen, onCreate }) {
   );
 }
 
+/* ========= Offert-panel & kort ========= */
+
+function OffersPanel({ offers, entities, onOpen }) {
+  const getCustomer = (id) => (entities || []).find((e) => e.id === id);
+  return (
+    <div className="bg-white rounded-2xl shadow p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold">Offerter</h2>
+      </div>
+      {offers.length === 0 ? (
+        <div className="text-sm text-gray-500">Inga offerter ännu.</div>
+      ) : (
+        <ul className="divide-y">
+          {offers.map((o) => {
+            const cust = getCustomer(o.customerId);
+            const meta = OFFER_STATUS_META[o.status || "draft"] || OFFER_STATUS_META.draft;
+            return (
+              <li key={o.id} className="py-3 px-2 hover:bg-gray-50 rounded-xl cursor-pointer" onClick={() => onOpen(o.id)}>
+                <div className="flex items-center justify-between">
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">#{o.number} — {o.title || "(utan titel)"}</div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {cust ? cust.companyName : "—"} • {new Date(o.createdAt).toLocaleDateString("sv-SE")}
+                    </div>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded ${meta.className}`}>{meta.label}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function OfferCard({ state, setState, id, draft, onClose }) {
+  const fromState = (state.offers || []).find((x) => x.id === id) || null;
+  const [local, setLocal] = useState(fromState || draft || newOffer(state));
+  const [isEdit, setIsEdit] = useState(true);
+
+  const customers = (state.entities || []).filter(e => e.type === "customer")
+    .slice().sort((a,b)=>(a.companyName||"").localeCompare(b.companyName||"", "sv"));
+  const suppliers = (state.entities || []).filter(e => e.type === "supplier")
+    .slice().sort((a,b)=>(a.companyName||"").localeCompare(b.companyName||"", "sv"));
+
+  function update(k, v) { setLocal((x) => ({ ...x, [k]: v })); }
+
+  function toggleSupplier(supplierId, received) {
+    setLocal((x) => {
+      const exists = (x.supplierItems || []).find(si => si.supplierId === supplierId);
+      if (exists) {
+        return {
+          ...x,
+          supplierItems: x.supplierItems.map(si =>
+            si.supplierId === supplierId ? { ...si, received } : si
+          ),
+        };
+      }
+      return {
+        ...x,
+        supplierItems: [...(x.supplierItems || []), { supplierId, received }],
+      };
+    });
+  }
+  function removeSupplier(supplierId) {
+    setLocal(x => ({ ...x, supplierItems: (x.supplierItems || []).filter(si => si.supplierId !== supplierId) }));
+  }
+
+  function persistOffer(next) {
+    setState((s) => {
+      const nxt = { ...s, offers: [...(s.offers || [])] };
+      upsertOffer(nxt, next);
+      return nxt;
+    });
+  }
+  function upsertReminderActivity(offer) {
+    if (!offer.reminderDate) {
+      if (offer.activityId) {
+        setState((s) => ({
+          ...s,
+          activities: (s.activities || []).filter(a => a.id !== offer.activityId),
+        }));
+        persistOffer({ ...offer, activityId: null });
+      }
+      return;
+    }
+    const title = `Skicka offert #${offer.number} — ${offer.title || ""}`.trim();
+    if (offer.activityId) {
+      setState((s) => {
+        const ex = (s.activities || []).find(a => a.id === offer.activityId);
+        if (!ex) return s;
+        const upd = {
+          ...ex,
+          title,
+          type: "uppgift",
+          priority: "medium",
+          dueDate: offer.reminderDate,
+          dueTime: offer.reminderTime || "09:00",
+          responsible: ex.responsible || "Cralle",
+          linkKind: "customer",
+          linkId: offer.customerId || null,
+          updatedAt: new Date().toISOString(),
+        };
+        const list = (s.activities || []).map(a => a.id === upd.id ? upd : a);
+        return { ...s, activities: list };
+      });
+    } else {
+      const a = newActivity();
+      const ins = {
+        ...a,
+        title,
+        dueDate: offer.reminderDate,
+        dueTime: offer.reminderTime || "09:00",
+        linkKind: "customer",
+        linkId: offer.customerId || null,
+      };
+      setState((s) => {
+        const nxt = { ...s, activities: [...(s.activities || []), ins] };
+        const off = { ...offer, activityId: ins.id };
+        upsertOffer(nxt, off);
+        return nxt;
+      });
+    }
+  }
+
+  function onSave() {
+    const toSave = { ...local, updatedAt: new Date().toISOString() };
+    if (!toSave.number) toSave.number = nextOfferNumber(state);
+    persistOffer(toSave);
+    upsertReminderActivity(toSave);
+    setIsEdit(false);
+  }
+
+  function setStatus(newStatus) {
+    const upd = { ...local, status: newStatus, updatedAt: new Date().toISOString() };
+    setLocal(upd);
+    persistOffer(upd);
+  }
+
+  function onDelete() {
+    if (!confirm(`Ta bort offert #${local.number}?`)) return;
+    setState((s) => ({
+      ...s,
+      offers: (s.offers || []).filter(o => o.id !== local.id),
+      activities: local.activityId
+        ? (s.activities || []).filter(a => a.id !== local.activityId)
+        : (s.activities || []),
+    }));
+    onClose?.();
+  }
+
+  const statusMeta = OFFER_STATUS_META[local.status || "draft"] || OFFER_STATUS_META.draft;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold">Offert #{local.number || "—"}</h3>
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-1 rounded ${statusMeta.className}`}>{statusMeta.label}</span>
+          {!isEdit ? (
+            <button className="border rounded-xl px-3 py-2" onClick={() => setIsEdit(true)}>Redigera</button>
+          ) : (
+            <button className="bg-black text-white rounded-xl px-3 py-2" onClick={onSave}>Spara</button>
+          )}
+          <button className="text-red-600 border rounded-xl px-3 py-2" onClick={onDelete}>Ta bort</button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow p-4 space-y-6">
+        {/* Rad 1: Titel + Kund + Statusknappar */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Titel" value={local.title} disabled={!isEdit} onChange={(v)=>update("title", v)} />
+          <div>
+            <div className="text-xs font-medium text-gray-600 mb-1">Kund</div>
+            <select
+              className="border rounded-xl px-3 py-2 w-full"
+              value={local.customerId || ""}
+              disabled={!isEdit}
+              onChange={(e) => update("customerId", e.target.value || null)}
+            >
+              <option value="">—</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.companyName || "(namn saknas)"}</option>)}
+            </select>
+          </div>
+          <div className="col-span-2 flex flex-wrap gap-2">
+            <button
+              className={`px-3 py-2 rounded-xl border ${local.status==="sent" ? "bg-orange-500 text-white" : ""}`}
+              disabled={!isEdit}
+              onClick={()=>setStatus("sent")}
+            >Skickad</button>
+            <button
+              className={`px-3 py-2 rounded-xl border ${local.status==="won" ? "bg-green-600 text-white" : ""}`}
+              disabled={!isEdit}
+              onClick={()=>setStatus("won")}
+            >Vunnen</button>
+            <button
+              className={`px-3 py-2 rounded-xl border ${local.status==="lost" ? "bg-rose-600 text-white" : ""}`}
+              disabled={!isEdit}
+              onClick={()=>setStatus("lost")}
+            >Förlorad</button>
+            <button
+              className="px-3 py-2 rounded-xl border ml-auto opacity-60 cursor-not-allowed"
+              title="Kommer i nästa steg"
+              disabled
+            >
+              Skapa projekt av denna offert
+            </button>
+          </div>
+        </div>
+
+        {/* Rad 2: Leverantörer (välja & markera mottagen) */}
+        <div>
+          <div className="text-sm font-semibold mb-2">Leverantörer</div>
+          <div className="grid md:grid-cols-2 gap-2">
+            {suppliers.map(sup => {
+              const cur = (local.supplierItems || []).find(si => si.supplierId === sup.id);
+              const checked = !!cur;
+              const received = cur?.received || false;
+              return (
+                <div key={sup.id} className="flex items-center justify-between gap-3 border rounded-xl px-3 py-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      disabled={!isEdit}
+                      checked={checked}
+                      onChange={(e) => {
+                        if (e.target.checked) toggleSupplier(sup.id, false);
+                        else removeSupplier(sup.id);
+                      }}
+                    />
+                    <span>{sup.companyName || "(namn saknas)"}</span>
+                  </label>
+                  {checked && (
+                    <label className="flex items-center gap-1 text-xs">
+                      <input
+                        type="checkbox"
+                        disabled={!isEdit}
+                        checked={received}
+                        onChange={(e)=>toggleSupplier(sup.id, e.target.checked)}
+                      />
+                      <span className={received ? "text-green-700" : "text-rose-700"}>
+                        {received ? "Offert mottagen" : "Ej mottagen"}
+                      </span>
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Rad 3: Påminnelse + Anteckningar */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="text-xs font-medium text-gray-600 mb-1">Påminnelse (datum)</div>
+              <input
+                type="date"
+                className="border rounded-xl px-3 py-2 w-full"
+                value={local.reminderDate || ""}
+                disabled={!isEdit}
+                onChange={(e)=>update("reminderDate", e.target.value)}
+              />
+            </div>
+            <div>
+              <div className="text-xs font-medium text-gray-600 mb-1">Tid</div>
+              <input
+                type="time"
+                className="border rounded-xl px-3 py-2 w-full"
+                value={local.reminderTime || ""}
+                disabled={!isEdit}
+                onChange={(e)=>update("reminderTime", e.target.value)}
+              />
+            </div>
+          </div>
+          <TextArea label="Anteckningar" value={local.notes} disabled={!isEdit} onChange={(v)=>update("notes", v)} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ========= Modal ========= */
 function Modal({ children, onClose }) {
   return (
     <div className="fixed inset-0 z-50">
@@ -419,7 +759,7 @@ function Modal({ children, onClose }) {
   );
 }
 
-/* ========= Kort för Entitet ========= */
+/* ========= Entity-kort ========= */
 function EntityCard({ state, setState, id }) {
   const entity = (state.entities || []).find((x) => x.id === id);
   const [local, setLocal] = useState(entity || null);
@@ -432,7 +772,6 @@ function EntityCard({ state, setState, id }) {
   }, [id]);
 
   if (!entity || !local) return null;
-
   const active = (local.contacts || []).find((c) => c.id === activeId) || null;
 
   function update(k, v) { setLocal((x) => ({ ...x, [k]: v })); }
@@ -454,23 +793,27 @@ function EntityCard({ state, setState, id }) {
   function onAddContact() {
     const id = (crypto?.randomUUID?.() || String(Date.now() + Math.random()));
     const newContact = { id, name: "", role: "", phone: "", email: "" };
-    setLocal((x) => {
-      const contacts = [...(x.contacts || []), newContact];
-      return { ...x, contacts };
-    });
+    setLocal((x) => ({ ...x, contacts: [...(x.contacts || []), newContact] }));
     if (!activeId) setActiveId(id);
     setIsEdit(true);
   }
   function onDeleteEntity() {
-    if (!confirm(`Ta bort ${entityLabel(entity.type).toLowerCase()} "${local.companyName || ""}"? Detta tar även bort kopplade aktiviteter.`)) return;
+    if (!confirm(`Ta bort ${entityLabel(entity.type).toLowerCase()} "${local.companyName || ""}"? Detta tar även bort kopplade aktiviteter och kopplingar i offerter.`)) return;
     setState((s) => ({
       ...s,
       entities: (s.entities || []).filter((e) => e.id !== entity.id),
       activities: (s.activities || []).filter((a) => a.linkId !== entity.id),
+      offers: (s.offers || []).map(o => {
+        const upd = { ...o };
+        if (o.customerId === entity.id) upd.customerId = null;
+        if ((o.supplierItems||[]).some(si => si.supplierId === entity.id)) {
+          upd.supplierItems = (o.supplierItems||[]).filter(si => si.supplierId !== entity.id);
+        }
+        return upd;
+      }),
     }));
   }
 
-  // kund/leverantör kategori
   const customerCatSel = (
     <div>
       <div className="text-xs font-medium text-gray-600 mb-1">Kategori (kund)</div>
@@ -556,7 +899,7 @@ function EntityCard({ state, setState, id }) {
   );
 }
 
-/* ========= Kort för Aktivitet ========= */
+/* ========= Aktivitet-kort ========= */
 function ActivityCard({ state, setState, id, draft, onClose }) {
   const fromState = (state.activities || []).find((a) => a.id === id) || null;
   const [local, setLocal] = useState(fromState || draft || newActivity());
@@ -602,26 +945,6 @@ function ActivityCard({ state, setState, id, draft, onClose }) {
         <div className="grid grid-cols-2 gap-3">
           <Field label="Titel" value={local.title} disabled={!isEdit} onChange={(v) => update("title", v)} />
 
-          {/* Typ */}
-          <div>
-            <div className="text-xs font-medium text-gray-600 mb-1">Typ</div>
-            <div className="flex flex-wrap gap-2">
-              {ACTIVITY_TYPES.map((t) => (
-                <label key={t.key} className={`px-2 py-1 rounded border cursor-pointer ${local.type === t.key ? "bg-slate-800 text-white" : ""}`}>
-                  <input
-                    type="radio"
-                    className="hidden"
-                    checked={local.type === t.key}
-                    disabled={!isEdit}
-                    onChange={() => update("type", t.key)}
-                  />
-                  <span className="mr-1">{t.icon}</span>{t.label}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Prioritet */}
           <div>
             <div className="text-xs font-medium text-gray-600 mb-1">Prioritet</div>
             <select
@@ -634,7 +957,6 @@ function ActivityCard({ state, setState, id, draft, onClose }) {
             </select>
           </div>
 
-          {/* Datum + tid */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1">Datum</div>
@@ -658,7 +980,6 @@ function ActivityCard({ state, setState, id, draft, onClose }) {
             </div>
           </div>
 
-          {/* Ansvarig */}
           <div>
             <div className="text-xs font-medium text-gray-600 mb-1">Ansvarig</div>
             <select
@@ -671,7 +992,6 @@ function ActivityCard({ state, setState, id, draft, onClose }) {
             </select>
           </div>
 
-          {/* Koppling: Kund/Leverantör */}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <div className="text-xs font-medium text-gray-600 mb-1">Typ (koppling)</div>
@@ -702,20 +1022,21 @@ function ActivityCard({ state, setState, id, draft, onClose }) {
             </div>
           </div>
 
-          {/* Anteckningar */}
           <TextArea label="Anteckningar" value={local.notes} disabled={!isEdit} onChange={(v) => update("notes", v)} />
         </div>
 
-        {/* Info-rad */}
         <div className="text-xs text-gray-500">
           Skapad: {formatDT(local.createdAt?.slice(0,10), local.createdAt?.slice(11,16))} •
-          {linkedEntity ? ` Kopplad till: ${linkedEntity.companyName} (${entityLabel(linkedEntity.type)})` : " Ej kopplad"}
+          { (state.entities || []).find((e)=>e.id===local.linkId)
+            ? ` Kopplad till: ${(state.entities||[]).find((e)=>e.id===local.linkId).companyName} (${entityLabel((state.entities||[]).find((e)=>e.id===local.linkId).type)})`
+            : " Ej kopplad" }
         </div>
       </div>
     </div>
   );
 }
 
+/* ========= Små inputs ========= */
 function Field({ label, value, onChange, disabled, colSpan }) {
   return (
     <div className={colSpan === 2 ? "col-span-2" : ""}>
