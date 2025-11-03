@@ -373,51 +373,167 @@ function ListCard({ title, count, items, onOpen }) {
 }
 
 function ActivitiesPanel({ activities, entities, onOpen }) {
+  // UI-tillstånd
+  const [range, setRange] = useState("7d");      // "7d" | "all"
+  const [view, setView]   = useState("list");    // "list" | "calendar"
+
+  // Hjälpare
+  const sortByDue = (arr) => arr.slice().sort((a,b)=>{
+    const da = new Date(`${a.dueDate||"2100-01-01"}T${a.dueTime||"00:00"}`).getTime();
+    const db = new Date(`${b.dueDate||"2100-01-01"}T${b.dueTime||"00:00"}`).getTime();
+    return da - db;
+  });
+  const isWithin7 = (a) => withinNext7Days(a);
+
+  // Filtrering beroende på range
+  const visible = useMemo(()=>{
+    const src = Array.isArray(activities) ? activities : [];
+    if (range === "7d") return sortByDue(src.filter(isWithin7));
+    return sortByDue(src);
+  }, [activities, range]);
+
+  // Grupp för kalenderöversikt (räkna antal per dag & typ)
+  const grouped = useMemo(()=>{
+    const map = new Map(); // key = YYYY-MM-DD | "okänd"
+    const inc = (k, field) => {
+      const obj = map.get(k) || { dateKey: k, total:0, telefon:0, mail:0, lunch:0, möte:0, uppgift:0 };
+      obj.total += 1;
+      (field||[]).forEach(t=> { if (obj[t] != null) obj[t] += 1; });
+      map.set(k, obj);
+    };
+    visible.forEach(a=>{
+      const key = a.dueDate || "okänd";
+      inc(key, a.types || []);
+    });
+    // sortera: datum först, "okänd" sist
+    const arr = Array.from(map.values());
+    arr.sort((a,b)=>{
+      if (a.dateKey === "okänd") return 1;
+      if (b.dateKey === "okänd") return -1;
+      return a.dateKey.localeCompare(b.dateKey,"sv");
+    });
+    return arr;
+  }, [visible]);
+
+  const typeIcon = (t) => {
+    const m = ACTIVITY_TYPES.find(x=>x.key===t);
+    return m?.icon || "📝";
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold">Aktiviteter (nästa 7 dagar)</h2>
+      <div className="flex items-center justify-between mb-3 gap-3">
+        <h2 className="font-semibold">Aktiviteter</h2>
+
+        <div className="flex items-center gap-2">
+          {/* Range: 7 dagar / alla */}
+          <div className="flex rounded-xl overflow-hidden border">
+            <button
+              className={`px-3 py-2 ${range==="7d" ? "bg-black text-white" : "hover:bg-gray-50"}`}
+              onClick={()=>setRange("7d")}
+            >
+              7 dagar
+            </button>
+            <button
+              className={`px-3 py-2 ${range==="all" ? "bg-black text-white" : "hover:bg-gray-50"}`}
+              onClick={()=>setRange("all")}
+            >
+              Alla
+            </button>
+          </div>
+
+          {/* Vy: Lista / Kalender */}
+          <div className="flex rounded-xl overflow-hidden border">
+            <button
+              className={`px-3 py-2 ${view==="list" ? "bg-black text-white" : "hover:bg-gray-50"}`}
+              onClick={()=>setView("list")}
+            >
+              Lista
+            </button>
+            <button
+              className={`px-3 py-2 ${view==="calendar" ? "bg-black text-white" : "hover:bg-gray-50"}`}
+              onClick={()=>setView("calendar")}
+            >
+              Kalender
+            </button>
+          </div>
+        </div>
       </div>
-      {activities.length === 0 ? (
-        <div className="text-sm text-gray-500">Inga aktiviteter kommande vecka.</div>
-      ) : (
-        <ul className="divide-y">
-          {activities.map((a) => {
-            const ent = entities?.find((e) => e.id === a.linkId) || null;
-            const pr = PRIORITIES.find((p) => p.key === a.priority) || PRIORITIES[1];
-            return (
-              <li key={a.id} className="py-3 cursor-pointer" onClick={() => onOpen(a.id)}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex gap-1 text-lg">
-                      {(a.types || []).map(t => {
-                        const m = ACTIVITY_TYPES.find(x=>x.key===t);
-                        return <span key={t} title={m?.label || t}>{m?.icon || "📝"}</span>;
-                      })}
-                      {(a.types || []).length===0 && <span className="text-gray-400">—</span>}
+
+      {/* LIST-VY */}
+      {view === "list" && (
+        visible.length === 0 ? (
+          <div className="text-sm text-gray-500">
+            {range==="7d" ? "Inga aktiviteter kommande vecka." : "Inga aktiviteter."}
+          </div>
+        ) : (
+          <ul className="divide-y">
+            {visible.map((a) => {
+              const ent = entities?.find((e) => e.id === a.linkId) || null;
+              const pr = PRIORITIES.find((p) => p.key === a.priority) || PRIORITIES[1];
+              return (
+                <li key={a.id} className="py-3 cursor-pointer" onClick={() => onOpen(a.id)}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex gap-1 text-lg">
+                        {(a.types || []).map(t => (
+                          <span key={t} title={t}>{typeIcon(t)}</span>
+                        ))}
+                        {(a.types || []).length===0 && <span className="text-gray-400">—</span>}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium">
+                          {ent ? `${ent.companyName} (${entityLabel(ent.type)})` : "Övrigt"}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {formatDT(a.dueDate, a.dueTime)} • Skapad {formatDT(a.createdAt?.slice(0,10), a.createdAt?.slice(11,16))}
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <div className="text-sm font-medium">
-                        {ent ? `${ent.companyName} (${entityLabel(ent.type)})` : "Övrigt"}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {formatDT(a.dueDate, a.dueTime)} • Skapad {formatDT(a.createdAt?.slice(0,10), a.createdAt?.slice(11,16))}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs px-2 py-1 rounded ${pr.className}`}>{pr.label}</span>
+                      <span className="text-xs font-semibold text-gray-700">{a.responsible}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs px-2 py-1 rounded ${pr.className}`}>{pr.label}</span>
-                    <span className="text-xs font-semibold text-gray-700">{a.responsible}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )
+      )}
+
+      {/* KALENDERVY */}
+      {view === "calendar" && (
+        grouped.length === 0 ? (
+          <div className="text-sm text-gray-500">
+            {range==="7d" ? "Inga aktiviteter kommande vecka." : "Inga aktiviteter."}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {grouped.map(g=>(
+              <div key={g.dateKey} className="border rounded-2xl p-3">
+                <div className="flex items-center justify-between">
+                  <div className="font-medium">
+                    {g.dateKey === "okänd" ? "Datum saknas" : new Date(g.dateKey+"T00:00").toLocaleDateString("sv-SE", { weekday:"short", year:"numeric", month:"short", day:"numeric" })}
                   </div>
+                  <div className="text-xs text-gray-600">{g.total} st</div>
                 </div>
-              </li>
-            );
-          })}
-        </ul>
+                <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                  {["telefon","mail","lunch","möte","uppgift"].map(k=> g[k] ? (
+                    <span key={k} className="px-2 py-1 rounded bg-gray-100">
+                      {typeIcon(k)} {k} • {g[k]}
+                    </span>
+                  ) : null)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
     </div>
   );
 }
+
 
 function OffersPanel({ offers, entities, onOpen }) {
   const getCustomer = (id) => (entities || []).find((e) => e.id === id);
