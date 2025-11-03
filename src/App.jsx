@@ -1,4 +1,4 @@
-// src/App.jsx — Bas + Aktiviteter (stabil)
+// src/App.jsx — Vänstermeny + Aktiviteter + Kunder/Leverantörer + Delete + Kategorier (stabil)
 import React, { useEffect, useMemo, useState } from "react";
 
 /* ========= Lagring (localStorage) ========= */
@@ -19,9 +19,13 @@ function saveState(s) {
 function newEntity(type) {
   const id = (crypto?.randomUUID?.() || String(Date.now() + Math.random()));
   return {
-    id, type, companyName: "", orgNo: "", phone: "", email: "",
+    id, type,
+    companyName: "", orgNo: "", phone: "", email: "",
     address: "", zip: "", city: "", notes: "",
-    contacts: [], activeContactId: null, createdAt: new Date().toISOString(),
+    customerCategory: null,  // 'stalhall' | 'totalentreprenad' | 'turbovex'
+    supplierCategory: null,  // 'stalhallslev' | 'mark' | 'el' | 'vvs' | 'vent'
+    contacts: [], activeContactId: null,
+    createdAt: new Date().toISOString(),
   };
 }
 function upsertEntity(state, entity) {
@@ -61,9 +65,8 @@ function newActivity() {
     dueTime: time,
     responsible: "Cralle",
     notes: "",
-    // koppling
-    linkKind: "customer", // "customer" | "supplier"
-    linkId: null,         // entity.id
+    linkKind: "customer",
+    linkId: null,
   };
 }
 function upsertActivity(state, activity) {
@@ -91,13 +94,38 @@ function withinNext7Days(a) {
   return due >= start && due <= end;
 }
 
+/* ========= Kategori metadata ========= */
+const CUSTOMER_CATS = [
+  { key: "stalhall",        label: "Stålhall",        className: "bg-gray-100 text-gray-800" },
+  { key: "totalentreprenad",label: "Totalentreprenad",className: "bg-orange-100 text-orange-800" },
+  { key: "turbovex",        label: "Turbovex",        className: "bg-blue-100 text-blue-800" },
+];
+const SUPPLIER_CATS = [
+  { key: "stalhallslev", label: "Stålhalls leverantör", className: "bg-gray-100 text-gray-800" },
+  { key: "mark",         label: "Mark företag",         className: "bg-amber-100 text-amber-800" },
+  { key: "el",           label: "EL leverantör",        className: "bg-rose-100 text-rose-800" },
+  { key: "vvs",          label: "VVS Leverantör",       className: "bg-violet-100 text-violet-800" },
+  { key: "vent",         label: "Vent Leverantör",      className: "bg-sky-100 text-sky-800" },
+];
+
+function getCategoryBadge(entity) {
+  if (entity.type === "customer") {
+    const meta = CUSTOMER_CATS.find(c => c.key === entity.customerCategory);
+    return meta ? (<span className={`text-xs px-2 py-1 rounded ${meta.className}`}>{meta.label}</span>) : null;
+  } else {
+    const meta = SUPPLIER_CATS.find(c => c.key === entity.supplierCategory);
+    return meta ? (<span className={`text-xs px-2 py-1 rounded ${meta.className}`}>{meta.label}</span>) : null;
+  }
+}
+
 /* ========= App ========= */
 export default function App() {
   const [state, setState] = useStore();
   const [search, setSearch] = useState("");
-  const [modal, setModal] = useState(null); // { kind:'entity'|'activity', id }
+  const [modal, setModal] = useState(null); // { kind:'entity'|'activity', id, draft? }
+  const [activeTab, setActiveTab] = useState("activities"); // activities|offers|projects|customers|suppliers
 
-  // Skapa entiteter (säkra)
+  // Skapa entiteter
   function createEntitySafe(type) {
     const e = newEntity(type);
     setState((s) => {
@@ -105,30 +133,33 @@ export default function App() {
       upsertEntity(nxt, e);
       return nxt;
     });
+    setActiveTab(type === "customer" ? "customers" : "suppliers");
     setModal({ kind: "entity", id: e.id });
   }
 
   // Skapa aktivitet
   function createActivitySafe() {
     const a = newActivity();
-    setState((s) => ({ ...s })); // inget att spara ännu
-    setModal({ kind: "activity", id: a.id, draft: a }); // draft hålls i modal tills "Spara"
+    setState((s) => ({ ...s }));
+    setActiveTab("activities");
+    setModal({ kind: "activity", id: a.id, draft: a });
   }
 
   const customers = useMemo(
-    () => (state.entities || []).filter((e) => e.type === "customer"),
+    () => (state.entities || []).filter((e) => e.type === "customer")
+      .slice().sort((a,b)=>(a.companyName||"").localeCompare(b.companyName||"", "sv")),
     [state.entities]
   );
   const suppliers = useMemo(
-    () => (state.entities || []).filter((e) => e.type === "supplier"),
+    () => (state.entities || []).filter((e) => e.type === "supplier")
+      .slice().sort((a,b)=>(a.companyName||"").localeCompare(b.companyName||"", "sv")),
     [state.entities]
   );
 
   const filtered = (arr) => {
     const q = search.trim().toLowerCase();
-    const base = arr.slice().sort((a, b) => (a.companyName || "").localeCompare(b.companyName || "", "sv"));
-    if (!q) return base;
-    return base.filter((e) => {
+    if (!q) return arr;
+    return arr.filter((e) => {
       const inContacts = (e.contacts || []).some((c) =>
         `${c.name ?? ""} ${c.email ?? ""} ${c.phone ?? ""}`.toLowerCase().includes(q)
       );
@@ -140,7 +171,7 @@ export default function App() {
     });
   };
 
-  // Aktiviteter: kommande 7 dagar, sorterade
+  // Aktiviteter kommande 7 dagar
   const upcoming7 = useMemo(() => {
     const list = (state.activities || []).filter(withinNext7Days);
     return list.sort((a, b) => {
@@ -154,9 +185,49 @@ export default function App() {
   function openActivity(id) { setModal({ kind: "activity", id }); }
   function closeModal() { setModal(null); }
 
+  /* ====== Mittinnehåll växlar på activeTab ====== */
+  const renderMain = () => {
+    if (activeTab === "activities") {
+      return (
+        <ActivitiesPanel
+          activities={upcoming7}
+          entities={state.entities}
+          onOpen={openActivity}
+          onCreate={createActivitySafe}
+        />
+      );
+    }
+    if (activeTab === "customers") {
+      const items = filtered(customers);
+      return <ListCard title="Kunder" count={items.length} items={items} onOpen={openEntity} />;
+    }
+    if (activeTab === "suppliers") {
+      const items = filtered(suppliers);
+      return <ListCard title="Leverantörer" count={items.length} items={items} onOpen={openEntity} />;
+    }
+    // Placeholder-paneler för att kunna växla redan nu
+    if (activeTab === "offers") {
+      return (
+        <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-600">
+          <div className="text-lg font-semibold mb-2">Offerter</div>
+          <div>Denna sektion kopplas på i nästa steg (med #31500-serie och statusfärger).</div>
+        </div>
+      );
+    }
+    if (activeTab === "projects") {
+      return (
+        <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-600">
+          <div className="text-lg font-semibold mb-2">Projekt</div>
+          <div>Denna sektion kopplas på efter Offerter (med koppling till vunnen offert).</div>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="mx-auto max-w-7xl p-4">
-      {/* HEADER — säkra knappar */}
+      {/* HEADER */}
       <header className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <img
@@ -168,34 +239,66 @@ export default function App() {
           <h1 className="text-xl font-semibold">Mach CRM</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="border rounded-xl px-3 py-2" onClick={() => createActivitySafe()}>+ Ny aktivitet</button>
-          <button className="border rounded-xl px-3 py-2" onClick={() => createEntitySafe("customer")}>+ Ny kund</button>
-          <button className="border rounded-xl px-3 py-2" onClick={() => createEntitySafe("supplier")}>+ Ny leverantör</button>
+          <button className="border rounded-xl px-3 py-2" onClick={() => setActiveTab("activities")}>Aktiviteter</button>
+          <button className="border rounded-xl px-3 py-2" onClick={() => setActiveTab("offers")}>Offerter</button>
+          <button className="border rounded-xl px-3 py-2" onClick={() => setActiveTab("projects")}>Projekt</button>
+          <button className="border rounded-xl px-3 py-2" onClick={() => setActiveTab("customers")}>Kunder</button>
+          <button className="border rounded-xl px-3 py-2" onClick={() => setActiveTab("suppliers")}>Leverantörer</button>
         </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Vänster: Sök + listor */}
-        <section className="space-y-4">
-          <input
-            className="w-full border rounded-xl px-3 py-2"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Sök: företagsnamn eller kontaktperson…"
-          />
+        {/* Vänsterkolumn = din meny (alltid synlig) */}
+        <aside className="space-y-3">
+          <nav className="bg-white rounded-2xl shadow p-3">
+            <div className="text-xs font-semibold text-gray-500 mb-2">Meny</div>
+            <ul className="space-y-1">
+              {[
+                { key:"activities", label:"Aktiviteter" },
+                { key:"offers",     label:"Offerter" },
+                { key:"projects",   label:"Projekt" },
+                { key:"customers",  label:"Kunder" },
+                { key:"suppliers",  label:"Leverantörer" },
+              ].map(item => (
+                <li key={item.key}>
+                  <button
+                    onClick={() => setActiveTab(item.key)}
+                    className={`w-full text-left px-3 py-2 rounded-xl border ${
+                      activeTab === item.key ? "bg-black text-white" : "hover:bg-gray-50"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
 
-          <ListCard title="Kunder" count={customers.length} items={filtered(customers)} onOpen={openEntity} />
-          <ListCard title="Leverantörer" count={suppliers.length} items={filtered(suppliers)} onOpen={openEntity} />
-        </section>
+          {/* Snabbknappar */}
+          <div className="bg-white rounded-2xl shadow p-3">
+            <div className="text-xs font-semibold text-gray-500 mb-2">Skapa nytt</div>
+            <div className="grid grid-cols-1 gap-2">
+              <button className="border rounded-xl px-3 py-2" onClick={() => createActivitySafe()}>+ Ny aktivitet</button>
+              <button className="border rounded-xl px-3 py-2" onClick={() => createEntitySafe("customer")}>+ Ny kund</button>
+              <button className="border rounded-xl px-3 py-2" onClick={() => createEntitySafe("supplier")}>+ Ny leverantör</button>
+            </div>
+          </div>
 
-        {/* Höger: Aktiviteter (kommande 7 dagar) */}
+          {/* Sökfält (påverkar Kunder/Leverantörer) */}
+          <div className="bg-white rounded-2xl shadow p-3">
+            <div className="text-xs font-semibold text-gray-500 mb-2">Sök</div>
+            <input
+              className="w-full border rounded-xl px-3 py-2"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Företagsnamn eller kontaktperson…"
+            />
+          </div>
+        </aside>
+
+        {/* Mittkolumn (2 spalter) växlar beroende på menyval */}
         <section className="lg:col-span-2 space-y-4">
-          <ActivitiesPanel
-            activities={upcoming7}
-            entities={state.entities}
-            onOpen={openActivity}
-            onCreate={createActivitySafe}
-          />
+          {renderMain()}
         </section>
       </div>
 
@@ -236,14 +339,19 @@ function ListCard({ title, count, items, onOpen }) {
             className="py-3 cursor-pointer hover:bg-gray-50 px-2 rounded-xl"
             onClick={() => onOpen(e.id)}
           >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">{e.companyName || "(namn saknas)"}</div>
-                <div className="text-xs text-gray-500">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium truncate">{e.companyName || "(namn saknas)"}</div>
+                <div className="text-xs text-gray-500 truncate">
                   {[e.orgNo, e.email || e.phone].filter(Boolean).join(" • ")}
                 </div>
               </div>
-              <div className="text-xs text-gray-500">{e.type === "customer" ? "Kund" : "Lev."}</div>
+              <div className="flex items-center gap-2">
+                {getCategoryBadge(e)}
+                <span className="text-xs text-gray-500 shrink-0">
+                  {e.type === "customer" ? "Kund" : "Lev."}
+                </span>
+              </div>
             </div>
           </li>
         ))}
@@ -353,6 +461,44 @@ function EntityCard({ state, setState, id }) {
     if (!activeId) setActiveId(id);
     setIsEdit(true);
   }
+  function onDeleteEntity() {
+    if (!confirm(`Ta bort ${entityLabel(entity.type).toLowerCase()} "${local.companyName || ""}"? Detta tar även bort kopplade aktiviteter.`)) return;
+    setState((s) => ({
+      ...s,
+      entities: (s.entities || []).filter((e) => e.id !== entity.id),
+      activities: (s.activities || []).filter((a) => a.linkId !== entity.id),
+    }));
+  }
+
+  // kund/leverantör kategori
+  const customerCatSel = (
+    <div>
+      <div className="text-xs font-medium text-gray-600 mb-1">Kategori (kund)</div>
+      <select
+        className="border rounded-xl px-3 py-2 w-full"
+        value={local.customerCategory || ""}
+        disabled={!isEdit}
+        onChange={(e) => update("customerCategory", e.target.value || null)}
+      >
+        <option value="">—</option>
+        {CUSTOMER_CATS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+      </select>
+    </div>
+  );
+  const supplierCatSel = (
+    <div>
+      <div className="text-xs font-medium text-gray-600 mb-1">Kategori (leverantör)</div>
+      <select
+        className="border rounded-xl px-3 py-2 w-full"
+        value={local.supplierCategory || ""}
+        disabled={!isEdit}
+        onChange={(e) => update("supplierCategory", e.target.value || null)}
+      >
+        <option value="">—</option>
+        {SUPPLIER_CATS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+      </select>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -366,6 +512,7 @@ function EntityCard({ state, setState, id }) {
           ) : (
             <button className="bg-black text-white rounded-xl px-3 py-2" onClick={onSave}>Spara</button>
           )}
+          <button className="text-red-600 border rounded-xl px-3 py-2" onClick={onDeleteEntity}>Ta bort</button>
         </div>
       </div>
 
@@ -378,6 +525,7 @@ function EntityCard({ state, setState, id }) {
           <Field label="Adress" value={local.address} disabled={!isEdit} onChange={(v) => update("address", v)} colSpan={2} />
           <Field label="Postnummer" value={local.zip} disabled={!isEdit} onChange={(v) => update("zip", v)} />
           <Field label="Ort" value={local.city} disabled={!isEdit} onChange={(v) => update("city", v)} />
+          {entity.type === "customer" ? customerCatSel : supplierCatSel}
           <TextArea label="Anteckningar" value={local.notes} disabled={!isEdit} onChange={(v) => update("notes", v)} />
         </div>
       </div>
@@ -410,10 +558,9 @@ function EntityCard({ state, setState, id }) {
 
 /* ========= Kort för Aktivitet ========= */
 function ActivityCard({ state, setState, id, draft, onClose }) {
-  // draft används när man skapar ny – annars finns i state.activities
   const fromState = (state.activities || []).find((a) => a.id === id) || null;
   const [local, setLocal] = useState(fromState || draft || newActivity());
-  const [isEdit, setIsEdit] = useState(true); // skapa/redigera direkt
+  const [isEdit, setIsEdit] = useState(true);
 
   function update(k, v) { setLocal((x) => ({ ...x, [k]: v })); }
   function onSave() {
@@ -455,7 +602,7 @@ function ActivityCard({ state, setState, id, draft, onClose }) {
         <div className="grid grid-cols-2 gap-3">
           <Field label="Titel" value={local.title} disabled={!isEdit} onChange={(v) => update("title", v)} />
 
-          {/* Typ (ikoner) */}
+          {/* Typ */}
           <div>
             <div className="text-xs font-medium text-gray-600 mb-1">Typ</div>
             <div className="flex flex-wrap gap-2">
