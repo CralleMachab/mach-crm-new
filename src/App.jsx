@@ -8,7 +8,7 @@
 // - Kunder/Leverantörer: radera, kategorier, kontakthantering, sortering
 
 import React, { useEffect, useMemo, useState } from "react";
-import { pickOneDriveFiles } from "./components/onedrive";
+import { pickonedriveFiles } from "./components/onedrive";
 
 /* ===== OneDrive-konfig ===== */
 const ONEDRIVE_CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
