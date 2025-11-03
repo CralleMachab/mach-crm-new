@@ -1,12 +1,18 @@
 // src/components/onedrive.js
-// Gemensam OneDrive-picker (samma som i Offerter)
+// Gemensam OneDrive-picker (små bokstäver i filnamn, NAMN-export pickOneDriveFiles)
 
 export function pickOneDriveFiles({ clientId, onSuccess, onError }) {
-  if (!window.OneDrive) {
-    alert("OneDrive SDK ej laddad (kontrollera <script src='https://js.live.net/v7.2/OneDrive.js'> i index.html).");
+  if (typeof window === "undefined" || !window.OneDrive) {
+    const err = new Error("OneDrive SDK ej laddad. Kontrollera index.html-skriptet.");
+    console.error(err);
+    onError?.(err);
+    alert("OneDrive SDK ej laddad. Kontrollera index.html.");
     return;
   }
   if (!clientId) {
+    const err = new Error("Saknar Application (client) ID för OneDrive.");
+    console.error(err);
+    onError?.(err);
     alert("Saknar Application (client) ID för OneDrive.");
     return;
   }
