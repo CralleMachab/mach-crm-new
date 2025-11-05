@@ -175,35 +175,38 @@ function upsertProject(state, p) {
 }
 
 /* ========== Store hook ========== */
+// === BEGIN useStore (PUNKT 2: autospar + realtid mellan flikar) ===
 function useStore() {
   const [state, setState] = useState(() => loadState());
-  useEffect(() => { saveStatefunction useStore() {
-  const [state, setState] = useState(() => loadState());
 
-  // Spara automatiskt till localStorage varje gång state ändras
-  useEffect(() => { saveState(state); }, [state]);
+  // Spara till localStorage när state ändras (samma som original)
+  useEffect(() => {
+    saveState(state);
+  }, [state]);
 
-  // 🆕 Uppdatera automatiskt om annan flik eller fönster ändrar CRM-data
+  // Uppdatera automatiskt om en annan flik/fönster ändrar CRM-datan
+  // OBS: Nyckeln måste matcha STORAGE_KEY i src/lib/storage.js (hos dig: "machcrm_data_v3")
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === 'machcrm_data_v3' && e.newValue) {
+      if (e.key === "machcrm_data_v3" && e.newValue) {
         try {
           const next = JSON.parse(e.newValue);
-          if (next && typeof next === 'object') {
+          if (next && typeof next === "object") {
             setState(next);
           }
-        } catch {}
+        } catch {
+          // ignorera parse-fel
+        }
       }
     };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
 
   return [state, setState];
 }
+// === END useStore (PUNKT 2) ===
 
-  return [state, setState];
-}
 
 /* ========== Export/Import (JSON/CSV) ========== */
 function downloadText(filename, text) {
