@@ -175,38 +175,100 @@ function upsertProject(state, p) {
 }
 
 /* ========== Store hook ========== */
-// === BEGIN useStore (PUNKT 2: autospar + realtid mellan flikar) ===
+// === BEGIN useStore (autospar + realtid mellan flikar via BroadcastChannel + storage + fallback) ===
 function useStore() {
+  // Viktigt: matchar nyckeln i src/lib/storage.js
+  const STORAGE_KEY = "machcrm_data_v3";
+  const CHANNEL_NAME = "machcrm_sync";
+
   const [state, setState] = useState(() => loadState());
 
-  // Spara till localStorage när state ändras (samma som original)
+  // 1) Spara till localStorage när state ändras
   useEffect(() => {
-    saveState(state);
+    try {
+      // Använder din befintliga helper (saveState) OCH skriver direkt till rätt nyckel
+      saveState(state);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+      // 2) Skicka ut signal till andra flikar (samma origin) med BroadcastChannel
+      if (window.BroadcastChannel) {
+        const bc = new BroadcastChannel(CHANNEL_NAME);
+        bc.postMessage({ type: "state:update", payload: state });
+        bc.close();
+      }
+    } catch {}
   }, [state]);
 
-  // Uppdatera automatiskt om en annan flik/fönster ändrar CRM-datan
-  // OBS: Nyckeln måste matcha STORAGE_KEY i src/lib/storage.js (hos dig: "machcrm_data_v3")
+  // 3) Ta emot uppdateringar från andra flikar via BroadcastChannel
+  useEffect(() => {
+    let bc = null;
+    try {
+      if (window.BroadcastChannel) {
+        bc = new BroadcastChannel(CHANNEL_NAME);
+        bc.onmessage = (ev) => {
+          const msg = ev?.data;
+          if (msg?.type === "state:update" && msg.payload) {
+            setState((prev) => {
+              const incoming = msg.payload;
+              // Undvik onödiga re-renders om datan redan är identisk
+              try {
+                if (JSON.stringify(prev) === JSON.stringify(incoming)) return prev;
+              } catch {}
+              return incoming;
+            });
+          }
+        };
+      }
+    } catch {}
+    return () => {
+      try { bc && bc.close(); } catch {}
+    };
+  }, []);
+
+  // 4) Fallback: lyssna även på storage-event (triggas i andra flikar/fönster på samma origin)
   useEffect(() => {
     const onStorage = (e) => {
-      if (e.key === "machcrm_data_v3" && e.newValue) {
+      if (e.key === STORAGE_KEY && e.newValue && e.newValue !== e.oldValue) {
         try {
           const next = JSON.parse(e.newValue);
           if (next && typeof next === "object") {
-            setState(next);
+            setState((prev) => {
+              try {
+                if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+              } catch {}
+              return next;
+            });
           }
-        } catch {
-          // ignorera parse-fel
-        }
+        } catch {}
       }
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // 5) Extra trygghet: lätt polling var 5:e sekund (om BroadcastChannel inte stöds)
+  useEffect(() => {
+    const id = setInterval(() => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          setState((prev) => {
+            try {
+              if (JSON.stringify(prev) === JSON.stringify(parsed)) return prev;
+            } catch {}
+            return parsed;
+          });
+        }
+      } catch {}
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
+
   return [state, setState];
 }
-// === END useStore (PUNKT 2) ===
-
+// === END useStore ===
 
 /* ========== Export/Import (JSON/CSV) ========== */
 function downloadText(filename, text) {
