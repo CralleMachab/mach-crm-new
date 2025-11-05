@@ -177,7 +177,31 @@ function upsertProject(state, p) {
 /* ========== Store hook ========== */
 function useStore() {
   const [state, setState] = useState(() => loadState());
+  useEffect(() => { saveStatefunction useStore() {
+  const [state, setState] = useState(() => loadState());
+
+  // Spara automatiskt till localStorage varje gång state ändras
   useEffect(() => { saveState(state); }, [state]);
+
+  // 🆕 Uppdatera automatiskt om annan flik eller fönster ändrar CRM-data
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === 'machcrm_data_v3' && e.newValue) {
+        try {
+          const next = JSON.parse(e.newValue);
+          if (next && typeof next === 'object') {
+            setState(next);
+          }
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  return [state, setState];
+}
+
   return [state, setState];
 }
 
