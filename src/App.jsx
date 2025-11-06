@@ -7,7 +7,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { pickOneDriveFiles } from "./components/onedrive";
-import { fetchRemoteState, pushRemoteState } from "./lib/cloud"; // 🆕 lägg till denna rad
+import { fetchRemoteState, pushRemoteState } from "./lib/cloud";
 
 /* ========== Persistence (localStorage) ========== */
 const LS_KEY = "mach_crm_state_v2";
@@ -177,28 +177,65 @@ function upsertProject(state, p) {
 
 /* ========== Store hook ========== */
 // === BEGIN useStore (autospar + realtid mellan flikar via BroadcastChannel + storage + fallback) ===
+/* === useStore – SharePoint-synk (skriv direkt, läs via polling) === */
 function useStore() {
-  // Viktigt: matchar nyckeln i src/lib/storage.js
+  // Viktigt: måste matcha nyckeln i src/lib/storage.js
   const STORAGE_KEY = "machcrm_data_v3";
-  const CHANNEL_NAME = "machcrm_sync";
 
   const [state, setState] = useState(() => loadState());
 
-  // 1) Spara till localStorage när state ändras
+  // 1) Skriv lokalt direkt vid ändring (som tidigare)
   useEffect(() => {
+    saveState(state);
     try {
-      // Använder din befintliga helper (saveState) OCH skriver direkt till rätt nyckel
-      saveState(state);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-
-      // 2) Skicka ut signal till andra flikar (samma origin) med BroadcastChannel
-      if (window.BroadcastChannel) {
-        const bc = new BroadcastChannel(CHANNEL_NAME);
-        bc.postMessage({ type: "state:update", payload: state });
-        bc.close();
-      }
     } catch {}
   }, [state]);
+
+  // 2) Skriv till SharePoint efter liten debounce (0.8s) för att undvika spam
+  useEffect(() => {
+    let t = setTimeout(async () => {
+      try {
+        const withVersion = { ...state, _lastSavedAt: new Date().toISOString() };
+        await pushRemoteState(withVersion);
+      } catch (e) {
+        console.warn("Kunde inte spara till SharePoint:", e);
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [state]);
+
+  // 3) Läs från SharePoint var 5:e sekund och uppdatera om kollegan sparat nyare version
+  useEffect(() => {
+    let stopped = false;
+
+    const tick = async () => {
+      try {
+        const remote = await fetchRemoteState();
+        if (remote && typeof remote === "object") {
+          const lv = state?._lastSavedAt || "";
+          const rv = remote?._lastSavedAt || "";
+          // Enkel regel: senast sparad vinner
+          if (rv && rv !== lv) {
+            setState(remote);
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch {}
+          }
+        }
+      } catch {
+        // tyst fel – prova igen på nästa tick
+      } finally {
+        if (!stopped) setTimeout(tick, 5000);
+      }
+    };
+
+    tick();
+    return () => { stopped = true; };
+  }, []); // starta en gång
+
+  return [state, setState];
+}
+/* === slut useStore === */
+
 
   // 3) Ta emot uppdateringar från andra flikar via BroadcastChannel
   useEffect(() => {
