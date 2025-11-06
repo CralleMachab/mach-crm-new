@@ -6,7 +6,8 @@
 // - Övrigt oförändrat i funktion
 
 import React, { useEffect, useMemo, useState } from "react";
-import { pickOneDriveFiles } from "./components/onedrive"; // <— exakt denna path/casing
+import { pickOneDriveFiles } from "./components/onedrive";
+import { fetchRemoteState, pushRemoteState } from "./lib/cloud"; // 🆕 lägg till denna rad
 
 /* ========== Persistence (localStorage) ========== */
 const LS_KEY = "mach_crm_state_v2";
