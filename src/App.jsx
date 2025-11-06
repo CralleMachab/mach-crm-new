@@ -227,6 +227,56 @@ function useStore() {
         if (!stopped) setTimeout(tick, 5000);
       }
     };
+/* === useStore — SharePoint-synk (skriv direkt, läs via polling) === */
+function useStore() {
+  // Viktigt: måste matcha nyckeln i src/lib/storage.js
+  const STORAGE_KEY = "machcrm_data_v3";
+
+  const [state, setState] = useState(() => loadState());
+
+  // 1) Skriv lokalt direkt vid ändring (som tidigare)
+  useEffect(() => {
+    saveState(state);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch {}
+  }, [state]);
+
+  // 2) Skriv till SharePoint efter liten debounce (0.8s) för att undvika spam
+  useEffect(() => {
+    let t = setTimeout(async () => {
+      try {
+        const withVersion = { ...state, _lastSavedAt: new Date().toISOString() };
+        await pushRemoteState(withVersion);
+      } catch (e) {
+        console.warn("Kunde inte spara till SharePoint:", e);
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [state]);
+
+  // 3) Läs från SharePoint var 5:e sekund och uppdatera om kollegan sparat nyare version
+  useEffect(() => {
+    let stopped = false;
+
+    const tick = async () => {
+      try {
+        const remote = await fetchRemoteState();
+        if (remote && typeof remote === "object") {
+          const lv = state?._lastSavedAt || "";
+          const rv = remote?._lastSavedAt || "";
+          // Enkel regel: senast sparad vinner
+          if (rv && rv !== lv) {
+            setState(remote);
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch {}
+          }
+        }
+      } catch {
+        // tyst fel – prova igen på nästa tick
+      } finally {
+        if (!stopped) setTimeout(tick, 5000);
+      }
+    };
 
     tick();
     return () => { stopped = true; };
@@ -235,78 +285,6 @@ function useStore() {
   return [state, setState];
 }
 /* === slut useStore === */
-
-
-  // 3) Ta emot uppdateringar från andra flikar via BroadcastChannel
-  useEffect(() => {
-    let bc = null;
-    try {
-      if (window.BroadcastChannel) {
-        bc = new BroadcastChannel(CHANNEL_NAME);
-        bc.onmessage = (ev) => {
-          const msg = ev?.data;
-          if (msg?.type === "state:update" && msg.payload) {
-            setState((prev) => {
-              const incoming = msg.payload;
-              // Undvik onödiga re-renders om datan redan är identisk
-              try {
-                if (JSON.stringify(prev) === JSON.stringify(incoming)) return prev;
-              } catch {}
-              return incoming;
-            });
-          }
-        };
-      }
-    } catch {}
-    return () => {
-      try { bc && bc.close(); } catch {}
-    };
-  }, []);
-
-  // 4) Fallback: lyssna även på storage-event (triggas i andra flikar/fönster på samma origin)
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === STORAGE_KEY && e.newValue && e.newValue !== e.oldValue) {
-        try {
-          const next = JSON.parse(e.newValue);
-          if (next && typeof next === "object") {
-            setState((prev) => {
-              try {
-                if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
-              } catch {}
-              return next;
-            });
-          }
-        } catch {}
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  // 5) Extra trygghet: lätt polling var 5:e sekund (om BroadcastChannel inte stöds)
-  useEffect(() => {
-    const id = setInterval(() => {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return;
-        const parsed = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") {
-          setState((prev) => {
-            try {
-              if (JSON.stringify(prev) === JSON.stringify(parsed)) return prev;
-            } catch {}
-            return parsed;
-          });
-        }
-      } catch {}
-    }, 5000);
-    return () => clearInterval(id);
-  }, []);
-
-  return [state, setState];
-}
-// === END useStore ===
 
 /* ========== Export/Import (JSON/CSV) ========== */
 function downloadText(filename, text) {
