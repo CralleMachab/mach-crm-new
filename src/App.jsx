@@ -418,130 +418,145 @@ function ListCard({ title, count, items, onOpen }) {
   );
 }
 
-function ActivitiesPanel({ activities, entities, onOpen }) {
-  // Samma som din nuvarande vy (lista/kalender & 7d/alla), kvar i MITTEN,
-  // vi tog bara bort “7 dagar”-rutan i SIDAN.
-  const [range, setRange] = useState("7d");
-  const [view, setView]   = useState("list");
+/* === ActivitiesPanel — filter + statusknappar + ansvar-chip === */
+function ActivitiesPanel({ activities = [], entities = [], setState }) {
+  const [respFilter, setRespFilter] = useState("all");
 
-  const sortByDue = (arr) => arr.slice().sort((a,b)=>{
-    const da = new Date(`${a.dueDate||"2100-01-01"}T${a.dueTime||"00:00"}`).getTime();
-    const db = new Date(`${b.dueDate||"2100-01-01"}T${b.dueTime||"00:00"}`).getTime();
-    return da - db;
-  });
-  const isWithin7 = (a) => withinNext7Days(a);
+  // Enkel formatterare, så vi inte är beroende av externa helpers
+  const fmt = (dateStr, timeStr) => {
+    if (!dateStr) return "";
+    const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
+    try {
+      return d.toLocaleString("sv-SE", {
+        dateStyle: "medium",
+        timeStyle: timeStr ? "short" : undefined,
+      });
+    } catch {
+      return `${dateStr} ${timeStr || ""}`;
+    }
+  };
 
-  const visible = useMemo(()=>{
-    const src = Array.isArray(activities) ? activities : [];
-    if (range === "7d") return sortByDue(src.filter(isWithin7));
-    return sortByDue(src);
-  }, [activities, range]);
+  // Priority-badges (inkl. "klar")
+  const prBadge = (p) => {
+    const base = "text-xs px-2 py-1 rounded";
+    switch (p) {
+      case "klar":   return `${base} bg-green-200 text-green-800`;
+      case "high":   return `${base} bg-red-100 text-red-700`;
+      case "medium": return `${base} bg-yellow-100 text-yellow-700`;
+      default:       return `${base} bg-gray-100 text-gray-700`;
+    }
+  };
 
-  const grouped = useMemo(()=>{
-    const map = new Map();
-    const inc = (k, field) => {
-      const obj = map.get(k) || { dateKey: k, total:0, telefon:0, mail:0, lunch:0, möte:0, uppgift:0 };
-      obj.total += 1;
-      (field||[]).forEach(t=> { if (obj[t] != null) obj[t] += 1; });
-      map.set(k, obj);
-    };
-    visible.forEach(a=>{
-      const key = a.dueDate || "okänd";
-      inc(key, a.types || []);
-    });
-    const arr = Array.from(map.values());
-    arr.sort((a,b)=>{
-      if (a.dateKey === "okänd") return 1;
-      if (b.dateKey === "okänd") return -1;
-      return a.dateKey.localeCompare(b.dateKey,"sv");
+  // Färg för ansvarschip
+  const respChip = (who) => {
+    const base = "text-xs font-semibold px-2 py-1 rounded border";
+    if (who === "Mattias") return `${base} border-purple-400 text-purple-700`;
+    if (who === "Cralle")  return `${base} border-blue-400 text-blue-700`;
+    return `${base} border-gray-300 text-gray-700`;
+  };
+
+  // 1) filtrera bort mjukraderade, 2) filter på ansvarig, 3) sortera (valfritt)
+  const list = useMemo(() => {
+    let arr = Array.isArray(activities) ? activities.slice() : [];
+    arr = arr.filter(a => !a?.deletedAt);
+    if (respFilter !== "all") arr = arr.filter(a => a?.responsible === respFilter);
+    // sortera t.ex. efter dueDate/dueTime om de finns
+    arr.sort((a, b) => {
+      const ad = (a?.dueDate || "") + "T" + (a?.dueTime || "");
+      const bd = (b?.dueDate || "") + "T" + (b?.dueTime || "");
+      return ad.localeCompare(bd);
     });
     return arr;
-  }, [visible]);
+  }, [activities, respFilter]);
 
-  const typeIcon = (t) => (ACTIVITY_TYPES.find(x=>x.key===t)?.icon || "📝");
+  // Åtgärder
+  const markKlar = (a) => {
+    const upd = { ...a, priority: "klar", updatedAt: new Date().toISOString() };
+    setState(s => ({
+      ...s,
+      activities: (s.activities || []).map(x => x.id === a.id ? upd : x),
+    }));
+  };
+  const markAterkoppling = (a) => {
+    const upd = { ...a, status: "återkoppling", updatedAt: new Date().toISOString() };
+    setState(s => ({
+      ...s,
+      activities: (s.activities || []).map(x => x.id === a.id ? upd : x),
+    }));
+  };
+  const softDelete = (a) => {
+    const upd = { ...a, deletedAt: new Date().toISOString() };
+    setState(s => ({
+      ...s,
+      activities: (s.activities || []).map(x => x.id === a.id ? upd : x),
+    }));
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between mb-3 gap-3">
+      <div className="flex items-center justify-between gap-3 mb-3">
         <h2 className="font-semibold">Aktiviteter</h2>
-        <div className="flex items-center gap-2">
-          <div className="flex rounded-xl overflow-hidden border">
-            <button className={`px-3 py-2 ${range==="7d" ? "bg-black text-white" : "hover:bg-gray-50"}`} onClick={()=>setRange("7d")}>7 dagar</button>
-            <button className={`px-3 py-2 ${range==="all" ? "bg-black text-white" : "hover:bg-gray-50"}`} onClick={()=>setRange("all")}>Alla</button>
-          </div>
-          <div className="flex rounded-xl overflow-hidden border">
-            <button className={`px-3 py-2 ${view==="list" ? "bg-black text-white" : "hover:bg-gray-50"}`} onClick={()=>setView("list")}>Lista</button>
-            <button className={`px-3 py-2 ${view==="calendar" ? "bg-black text-white" : "hover:bg-gray-50"}`} onClick={()=>setView("calendar")}>Kalender</button>
-          </div>
+        <div className="flex rounded-xl overflow-hidden border">
+          {["all","Mattias","Cralle","Övrig"].map(r => (
+            <button
+              key={r}
+              className={`px-3 py-2 ${respFilter===r ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
+              onClick={()=>setRespFilter(r)}
+              title={r==="all" ? "Visa alla" : `Visa endast ${r}`}
+            >
+              {r==="all" ? "Alla" : r}
+            </button>
+          ))}
         </div>
       </div>
 
-      {view === "list" && (
-        visible.length === 0 ? (
-          <div className="text-sm text-gray-500">
-            {range==="7d" ? "Inga aktiviteter kommande vecka." : "Inga aktiviteter."}
-          </div>
-        ) : (
-          <ul className="divide-y">
-            {visible.map((a) => {
-              const ent = entities?.find((e) => e.id === a.linkId) || null;
-              const pr = PRIORITIES.find((p) => p.key === a.priority) || PRIORITIES[1];
-              return (
-                <li key={a.id} className="py-3 cursor-pointer" onClick={() => onOpen(a.id)}>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex gap-1 text-lg">
-                        {(a.types || []).map(t => <span key={t} title={t}>{ACTIVITY_TYPES.find(x=>x.key===t)?.icon}</span>)}
-                        {(a.types || []).length===0 && <span className="text-gray-400">—</span>}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium">
-                          {ent ? `${ent.companyName} (${entityLabel(ent.type)})` : "Övrigt"}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {formatDT(a.dueDate, a.dueTime)} • Skapad {formatDT(a.createdAt?.slice(0,10), a.createdAt?.slice(11,16))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-xs px-2 py-1 rounded ${pr.className}`}>{pr.label}</span>
-                      <span className="text-xs font-semibold text-gray-700">{a.responsible}</span>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )
-      )}
-
-      {view === "calendar" && (
-        grouped.length === 0 ? (
-          <div className="text-sm text-gray-500">
-            {range==="7d" ? "Inga aktiviteter kommande vecka." : "Inga aktiviteter."}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {grouped.map(g=>(
-              <div key={g.dateKey} className="border rounded-2xl p-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium">
-                    {g.dateKey === "okänd" ? "Datum saknas" : new Date(g.dateKey+"T00:00").toLocaleDateString("sv-SE", { weekday:"short", year:"numeric", month:"short", day:"numeric" })}
-                  </div>
-                  <div className="text-xs text-gray-600">{g.total} st</div>
+      <ul className="divide-y">
+        {list.map(a => (
+          <li key={a.id} className="py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium truncate">
+                  {a.title || "Aktivitet"}
                 </div>
-                <div className="mt-2 flex flex-wrap gap-2 text-sm">
-                  {["telefon","mail","lunch","möte","uppgift"].map(k=> g[k] ? (
-                    <span key={k} className="px-2 py-1 rounded bg-gray-100">
-                      {ACTIVITY_TYPES.find(x=>x.key===k)?.icon} {k} • {g[k]}
-                    </span>
-                  ) : null)}
+                <div className="text-xs text-gray-500">
+                  {fmt(a.dueDate, a.dueTime)}
                 </div>
               </div>
-            ))}
-          </div>
-        )
-      )}
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={prBadge(a.priority)}>{a.priority || "normal"}</span>
+                <span className={respChip(a.responsible)}>{a.responsible || "Övrig"}</span>
+
+                <button
+                  className="text-xs px-2 py-1 rounded bg-green-500 text-white"
+                  title="Markera som klar"
+                  onClick={()=>markKlar(a)}
+                >
+                  Klar
+                </button>
+                <button
+                  className="text-xs px-2 py-1 rounded bg-orange-400 text-white"
+                  title="Återkoppling"
+                  onClick={()=>markAterkoppling(a)}
+                >
+                  Återkoppling
+                </button>
+                <button
+                  className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                  title="Ta bort (sparas som historik)"
+                  onClick={()=>softDelete(a)}
+                >
+                  Ta bort
+                </button>
+              </div>
+            </div>
+          </li>
+        ))}
+
+        {list.length === 0 && (
+          <li className="py-6 text-sm text-gray-500">Inga aktiviteter att visa.</li>
+        )}
+      </ul>
     </div>
   );
 }
