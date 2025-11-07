@@ -178,6 +178,7 @@ function upsertProject(state, p) {
 /* ========== Store hook ========== */
 // === BEGIN useStore (autospar + realtid mellan flikar via BroadcastChannel + storage + fallback) ===
 /* === useStore – SharePoint-synk (skriv direkt, läs via polling) === */
+/* === useStore — SharePoint-synk (skriv direkt, läs via polling) === */
 function useStore() {
   // Viktigt: måste matcha nyckeln i src/lib/storage.js
   const STORAGE_KEY = "machcrm_data_v3";
@@ -227,7 +228,14 @@ function useStore() {
         if (!stopped) setTimeout(tick, 5000);
       }
     };
-/* === useStore — SharePoint-synk (skriv direkt, läs via polling) === */
+
+    tick();
+    return () => { stopped = true; };
+  }, []); // starta en gång
+
+  return [state, setState];
+}
+/* === slut useStore === */
 
 /* ========== App ========== */
 export default function App() {
