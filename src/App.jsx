@@ -228,6 +228,7 @@ function useStore() {
       }
     };
 /* === useStore — SharePoint-synk (skriv direkt, läs via polling) === */
+/* === useStore — SharePoint-synk (skriv direkt, läs via polling) === */
 function useStore() {
   // Viktigt: måste matcha nyckeln i src/lib/storage.js
   const STORAGE_KEY = "machcrm_data_v3";
@@ -286,34 +287,7 @@ function useStore() {
 }
 /* === slut useStore === */
 
-/* ========== Export/Import (JSON/CSV) ========== */
-function downloadText(filename, text) {
-  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename; a.click();
-  URL.revokeObjectURL(url);
-}
-
-function toCSV(rows, headers) {
-  const esc = (v)=> `"${String(v??"").replaceAll('"','""')}"`;
-  const head = headers.map(h=>esc(h.label)).join(",");
-  const body = rows.map(r=> headers.map(h=>esc(h.get(r))).join(",")).join("\n");
-  return head + "\n" + body;
-}
-
-function parseCSV(text) {
-  // Enkel CSV-parser (citat hanteras, ej avancerade radbrytningar i fält)
-  const lines = text.split(/\r?\n/).filter(Boolean);
-  if (!lines.length) return { headers: [], rows: [] };
-  const headers = lines[0].split(",").map(h=>h.replace(/^"+|"+$/g,"").trim());
-  const rows = lines.slice(1).map(line=>{
-    // väldigt enkel split – funkar för våra genererade CSV:er
-    const cols = line.match(/("([^"]|"")*"|[^,]+)/g) || [];
-    return cols.map(c=> c.replace(/^"+|"+$/g,"").replace(/""/g,'"'));
-  });
-  return { headers, rows };
-}
+/* (Inga fler useEffect eller return här. Nästa rad i filen ska vara export default ...) */
 
 /* ========== App ========== */
 export default function App() {
