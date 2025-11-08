@@ -418,14 +418,16 @@ function ListCard({ title, count, items, onOpen }) {
   );
 }
 
-/* === ActivitiesPanel — filter (ansvarig + tidsfönster), status, soft delete, detaljmodal === */
+/* === ActivitiesPanel — dagfilter, “visa klara” (endast klara), redigera befintliga, tydlig titel === */
 function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter] = useState("all");   // Alla / Mattias / Cralle / Övrig
-  const [timeFilter, setTimeFilter] = useState("7");     // "7" = kommande 7 dagar, "all" = alla
-  const [showDone, setShowDone] = useState(false);       // visa/dölj klara aktiviteter
-  const [openItem, setOpenItem] = useState(null);        // aktiviteten i detaljmodal
+  const [rangeFilter, setRangeFilter] = useState("7");   // "today" | "7" | "all" | "date"
+  const [dateFilter, setDateFilter] = useState("");      // YYYY-MM-DD när rangeFilter === "date"
+  const [showDoneOnly, setShowDoneOnly] = useState(false);
+  const [openItem, setOpenItem] = useState(null);        // aktiv aktivitet i redigeringsmodal
+  const [draft, setDraft] = useState(null);              // kopia för redigering
 
-  // Hjälp: format och datumgränser
+  // Hjälpare
   const fmt = (dateStr, timeStr) => {
     if (!dateStr) return "";
     const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
@@ -438,10 +440,20 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       return `${dateStr} ${timeStr || ""}`;
     }
   };
-  const now = new Date();
-  const end7 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+  const todayISO = () => {
+    const d = new Date(); const m = `${d.getMonth()+1}`.padStart(2,"0"); const day = `${d.getDate()}`.padStart(2,"0");
+    return `${d.getFullYear()}-${m}-${day}`;
+  };
+  const inNext7 = (dateStr, timeStr) => {
+    if (!dateStr) return true; // utan datum: visa
+    const now = new Date();
+    const end7 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
+    const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
+    return d >= now && d <= end7;
+  };
+  const isSameDay = (dateStr, ymd) => !!dateStr && dateStr.slice(0,10) === ymd;
 
-  // Färger
+  // Badgefärger
   const prBadge = (p) => {
     const base = "text-xs px-2 py-1 rounded";
     switch (p) {
@@ -458,35 +470,54 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     return `${base} border-gray-300 text-gray-700`;
   };
 
-  // Filtrera lista: ta bort soft-deleted, ev. göm klara, filter ansvarig, filter tid
+  // Filtrera lista
   const list = useMemo(() => {
     let arr = Array.isArray(activities) ? activities.slice() : [];
+    // mjuk-raderade ska inte visas
     arr = arr.filter(a => !a?.deletedAt);
 
-    if (!showDone) arr = arr.filter(a => (a?.priority || "") !== "klar");
-
-    if (respFilter !== "all") arr = arr.filter(a => (a?.responsible || "Övrig") === respFilter);
-
-    if (timeFilter === "7") {
-      arr = arr.filter(a => {
-        if (!a?.dueDate) return true; // utan datum: visa alltid
-        const d = new Date(`${a.dueDate}T${a.dueTime || "00:00"}`);
-        return d >= now && d <= end7;
-      });
+    // Visa endast klara om togglad
+    if (showDoneOnly) {
+      arr = arr.filter(a => (a?.priority || "") === "klar");
+    } else {
+      // annars: exkludera klara
+      arr = arr.filter(a => (a?.priority || "") !== "klar");
     }
 
-    // sortera på datum + tid
+    // Filter på ansvarig
+    if (respFilter !== "all") {
+      arr = arr.filter(a => (a?.responsible || "Övrig") === respFilter);
+    }
+
+    // Tidsfilter
+    if (rangeFilter === "today") {
+      const ymd = todayISO();
+      arr = arr.filter(a => isSameDay(a?.dueDate, ymd));
+    } else if (rangeFilter === "7") {
+      arr = arr.filter(a => inNext7(a?.dueDate, a?.dueTime));
+    } else if (rangeFilter === "date" && dateFilter) {
+      arr = arr.filter(a => isSameDay(a?.dueDate, dateFilter));
+    } // "all" = ingen extra filter
+
+    // Sortera på datum + tid
     arr.sort((a, b) => {
       const ad = (a?.dueDate || "") + "T" + (a?.dueTime || "");
       const bd = (b?.dueDate || "") + "T" + (b?.dueTime || "");
       return ad.localeCompare(bd);
     });
+
     return arr;
-  }, [activities, respFilter, timeFilter, showDone]);
+  }, [activities, respFilter, rangeFilter, dateFilter, showDoneOnly]);
 
   // Åtgärder
   const markKlar = (a) => {
-    const upd = { ...a, priority: "klar", completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const upd = {
+      ...a,
+      priority: "klar",
+      status: "klar",
+      completedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
     setState(s => ({
       ...s,
       activities: (s.activities || []).map(x => x.id === a.id ? upd : x),
@@ -508,34 +539,91 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     if (openItem?.id === a.id) setOpenItem(null);
   };
 
+  // Öppna/redigera befintlig aktivitet
+  const openEdit = (a) => {
+    setOpenItem(a);
+    setDraft({
+      id: a.id,
+      title: a.title || "",
+      responsible: a.responsible || "Övrig",
+      dueDate: a.dueDate || "",
+      dueTime: a.dueTime || "",
+      priority: a.priority || "medium",
+      status: a.status || "",
+      description: a.description || ""
+    });
+  };
+  const updateDraft = (field, val) => setDraft(d => ({ ...d, [field]: val }));
+  const saveDraft = () => {
+    if (!draft) return;
+    const upd = {
+      ...openItem,
+      title: draft.title || "",
+      responsible: draft.responsible || "Övrig",
+      dueDate: draft.dueDate || "",
+      dueTime: draft.dueTime || "",
+      priority: draft.priority || "medium",
+      status: draft.status || "",
+      description: draft.description || "",
+      updatedAt: new Date().toISOString()
+    };
+    setState(s => ({
+      ...s,
+      activities: (s.activities || []).map(x => x.id === upd.id ? upd : x),
+    }));
+    setOpenItem(null);
+    setDraft(null);
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow p-4">
       {/* Header + filter */}
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <h2 className="font-semibold">Aktiviteter</h2>
 
-        <div className="flex items-center gap-2">
-          {/* Tidsfilter: 7 dagar / Alla */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Snabbfilter: Idag / 7 dagar / Alla */}
           <div className="flex rounded-xl overflow-hidden border">
             {[
-              {k:"7", label:"Kommande 7 dagar"},
+              {k:"today", label:"Idag"},
+              {k:"7", label:"7 dagar"},
               {k:"all", label:"Alla"},
             ].map(o => (
               <button
                 key={o.k}
-                className={`px-3 py-2 ${timeFilter===o.k ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
-                onClick={()=>setTimeFilter(o.k)}
+                className={`px-3 py-2 ${rangeFilter===o.k ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
+                onClick={()=>{ setRangeFilter(o.k); if (o.k!=="date") setDateFilter(""); }}
                 title={o.label}
               >
-                {o.k==="7" ? "7 dagar" : "Alla"}
+                {o.label}
               </button>
             ))}
           </div>
 
-          {/* Visa klara on/off */}
+          {/* Exakt dag */}
+          <div className="flex items-center gap-2 border rounded-xl px-2 py-1">
+            <label className="text-sm">Dag:</label>
+            <input
+              type="date"
+              className="text-sm border rounded px-2 py-1"
+              value={dateFilter}
+              onChange={e=>{ setDateFilter(e.target.value); setRangeFilter("date"); }}
+            />
+            {dateFilter && (
+              <button className="text-xs underline" onClick={()=>{ setDateFilter(""); setRangeFilter("all"); }}>
+                Rensa datum
+              </button>
+            )}
+          </div>
+
+          {/* Visa endast klara */}
           <label className="inline-flex items-center gap-2 text-sm border rounded-xl px-3 py-2 cursor-pointer">
-            <input type="checkbox" checked={showDone} onChange={e=>setShowDone(e.target.checked)} />
-            Visa klara
+            <input
+              type="checkbox"
+              checked={showDoneOnly}
+              onChange={e=>setShowDoneOnly(e.target.checked)}
+            />
+            Visa endast klara
           </label>
 
           {/* Ansvarig-filter */}
@@ -559,10 +647,10 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
         {list.map(a => (
           <li key={a.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
-              {/* Klick öppnar detaljmodal */}
+              {/* Klick öppnar redigeringsvy */}
               <button
                 className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
-                onClick={()=>setOpenItem(a)}
+                onClick={()=>openEdit(a)}
                 title="Öppna aktiviteten"
               >
                 <div className="font-medium truncate">{a.title || "Aktivitet"}</div>
@@ -604,41 +692,103 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
         )}
       </ul>
 
-      {/* Detaljmodal */}
-      {openItem && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>setOpenItem(null)}>
-          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-lg" onClick={e=>e.stopPropagation()}>
+      {/* Redigeringsmodal (samma struktur som vid skapande, med TITEL högst upp) */}
+      {openItem && draft && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
-              <div className="font-semibold">Aktivitet</div>
-              <button className="text-sm" onClick={()=>setOpenItem(null)}>Stäng</button>
+              <div className="font-semibold">Redigera aktivitet</div>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
             </div>
-            <div className="space-y-2 text-sm">
-              <div><span className="font-medium">Titel:</span> {openItem.title || "Aktivitet"}</div>
-              <div><span className="font-medium">Ansvarig:</span> {openItem.responsible || "Övrig"}</div>
-              <div><span className="font-medium">När:</span> {fmt(openItem.dueDate, openItem.dueTime) || "–"}</div>
-              {openItem.description && (
-                <div><span className="font-medium">Beskrivning:</span> {openItem.description}</div>
-              )}
-              {openItem.priority && (
-                <div><span className="font-medium">Prioritet:</span> {openItem.priority}</div>
-              )}
-              {openItem.status && (
-                <div><span className="font-medium">Status:</span> {openItem.status}</div>
-              )}
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* TITEL överst (tydligt) */}
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Titel</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.title}
+                  onChange={e=>updateDraft("title", e.target.value)}
+                  placeholder="Vad handlar aktiviteten om?"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Ansvarig</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.responsible}
+                  onChange={e=>updateDraft("responsible", e.target.value)}
+                >
+                  <option>Mattias</option>
+                  <option>Cralle</option>
+                  <option>Övrig</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Datum</label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.dueDate}
+                  onChange={e=>updateDraft("dueDate", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Tid</label>
+                <input
+                  type="time"
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.dueTime}
+                  onChange={e=>updateDraft("dueTime", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Prioritet</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.priority}
+                  onChange={e=>updateDraft("priority", e.target.value)}
+                >
+                  <option value="low">Låg</option>
+                  <option value="medium">Normal</option>
+                  <option value="high">Hög</option>
+                  <option value="klar">Klar</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Status</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.status}
+                  onChange={e=>updateDraft("status", e.target.value)}
+                  placeholder="t.ex. 'återkoppling'"
+                />
+              </div>
+
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Beskrivning</label>
+                <textarea
+                  className="w-full border rounded px-3 py-2 min-h-[100px]"
+                  value={draft.description}
+                  onChange={e=>updateDraft("description", e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-500 text-white" onClick={()=>{ markKlar(openItem); setOpenItem(null); }}>
-                Markera som klar
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
+                Spara ändringar
               </button>
-              <button className="px-3 py-2 rounded bg-orange-400 text-white" onClick={()=>{ markAterkoppling(openItem); setOpenItem(null); }}>
-                Återkoppling
-              </button>
-              <button className="px-3 py-2 rounded bg-rose-500 text-white" onClick={()=>{ softDelete(openItem); }}>
+              <button className="px-3 py-2 rounded bg-rose-500 text-white" onClick={()=>softDelete(openItem)}>
                 Ta bort
               </button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>setOpenItem(null)}>
-                Stäng
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+                Avbryt
               </button>
             </div>
           </div>
@@ -647,7 +797,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     </div>
   );
 }
-
 
 function OffersPanel({ offers, entities, onOpen }) {
   const getCustomer = (id) => (entities || []).find((e) => e.id === id);
