@@ -418,11 +418,14 @@ function ListCard({ title, count, items, onOpen }) {
   );
 }
 
-/* === ActivitiesPanel — filter + statusknappar + ansvar-chip === */
+/* === ActivitiesPanel — filter (ansvarig + tidsfönster), status, soft delete, detaljmodal === */
 function ActivitiesPanel({ activities = [], entities = [], setState }) {
-  const [respFilter, setRespFilter] = useState("all");
+  const [respFilter, setRespFilter] = useState("all");   // Alla / Mattias / Cralle / Övrig
+  const [timeFilter, setTimeFilter] = useState("7");     // "7" = kommande 7 dagar, "all" = alla
+  const [showDone, setShowDone] = useState(false);       // visa/dölj klara aktiviteter
+  const [openItem, setOpenItem] = useState(null);        // aktiviteten i detaljmodal
 
-  // Enkel formatterare, så vi inte är beroende av externa helpers
+  // Hjälp: format och datumgränser
   const fmt = (dateStr, timeStr) => {
     if (!dateStr) return "";
     const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
@@ -435,8 +438,10 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       return `${dateStr} ${timeStr || ""}`;
     }
   };
+  const now = new Date();
+  const end7 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
 
-  // Priority-badges (inkl. "klar")
+  // Färger
   const prBadge = (p) => {
     const base = "text-xs px-2 py-1 rounded";
     switch (p) {
@@ -446,8 +451,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       default:       return `${base} bg-gray-100 text-gray-700`;
     }
   };
-
-  // Färg för ansvarschip
   const respChip = (who) => {
     const base = "text-xs font-semibold px-2 py-1 rounded border";
     if (who === "Mattias") return `${base} border-purple-400 text-purple-700`;
@@ -455,23 +458,35 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     return `${base} border-gray-300 text-gray-700`;
   };
 
-  // 1) filtrera bort mjukraderade, 2) filter på ansvarig, 3) sortera (valfritt)
+  // Filtrera lista: ta bort soft-deleted, ev. göm klara, filter ansvarig, filter tid
   const list = useMemo(() => {
     let arr = Array.isArray(activities) ? activities.slice() : [];
     arr = arr.filter(a => !a?.deletedAt);
-    if (respFilter !== "all") arr = arr.filter(a => a?.responsible === respFilter);
-    // sortera t.ex. efter dueDate/dueTime om de finns
+
+    if (!showDone) arr = arr.filter(a => (a?.priority || "") !== "klar");
+
+    if (respFilter !== "all") arr = arr.filter(a => (a?.responsible || "Övrig") === respFilter);
+
+    if (timeFilter === "7") {
+      arr = arr.filter(a => {
+        if (!a?.dueDate) return true; // utan datum: visa alltid
+        const d = new Date(`${a.dueDate}T${a.dueTime || "00:00"}`);
+        return d >= now && d <= end7;
+      });
+    }
+
+    // sortera på datum + tid
     arr.sort((a, b) => {
       const ad = (a?.dueDate || "") + "T" + (a?.dueTime || "");
       const bd = (b?.dueDate || "") + "T" + (b?.dueTime || "");
       return ad.localeCompare(bd);
     });
     return arr;
-  }, [activities, respFilter]);
+  }, [activities, respFilter, timeFilter, showDone]);
 
   // Åtgärder
   const markKlar = (a) => {
-    const upd = { ...a, priority: "klar", updatedAt: new Date().toISOString() };
+    const upd = { ...a, priority: "klar", completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     setState(s => ({
       ...s,
       activities: (s.activities || []).map(x => x.id === a.id ? upd : x),
@@ -490,38 +505,69 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       ...s,
       activities: (s.activities || []).map(x => x.id === a.id ? upd : x),
     }));
+    if (openItem?.id === a.id) setOpenItem(null);
   };
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between gap-3 mb-3">
+      {/* Header + filter */}
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <h2 className="font-semibold">Aktiviteter</h2>
-        <div className="flex rounded-xl overflow-hidden border">
-          {["all","Mattias","Cralle","Övrig"].map(r => (
-            <button
-              key={r}
-              className={`px-3 py-2 ${respFilter===r ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
-              onClick={()=>setRespFilter(r)}
-              title={r==="all" ? "Visa alla" : `Visa endast ${r}`}
-            >
-              {r==="all" ? "Alla" : r}
-            </button>
-          ))}
+
+        <div className="flex items-center gap-2">
+          {/* Tidsfilter: 7 dagar / Alla */}
+          <div className="flex rounded-xl overflow-hidden border">
+            {[
+              {k:"7", label:"Kommande 7 dagar"},
+              {k:"all", label:"Alla"},
+            ].map(o => (
+              <button
+                key={o.k}
+                className={`px-3 py-2 ${timeFilter===o.k ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
+                onClick={()=>setTimeFilter(o.k)}
+                title={o.label}
+              >
+                {o.k==="7" ? "7 dagar" : "Alla"}
+              </button>
+            ))}
+          </div>
+
+          {/* Visa klara on/off */}
+          <label className="inline-flex items-center gap-2 text-sm border rounded-xl px-3 py-2 cursor-pointer">
+            <input type="checkbox" checked={showDone} onChange={e=>setShowDone(e.target.checked)} />
+            Visa klara
+          </label>
+
+          {/* Ansvarig-filter */}
+          <div className="flex rounded-xl overflow-hidden border">
+            {["all","Mattias","Cralle","Övrig"].map(r => (
+              <button
+                key={r}
+                className={`px-3 py-2 ${respFilter===r ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
+                onClick={()=>setRespFilter(r)}
+                title={r==="all" ? "Visa alla" : `Visa endast ${r}`}
+              >
+                {r==="all" ? "Alla" : r}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
+      {/* Lista */}
       <ul className="divide-y">
         {list.map(a => (
           <li key={a.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-medium truncate">
-                  {a.title || "Aktivitet"}
-                </div>
-                <div className="text-xs text-gray-500">
-                  {fmt(a.dueDate, a.dueTime)}
-                </div>
-              </div>
+              {/* Klick öppnar detaljmodal */}
+              <button
+                className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
+                onClick={()=>setOpenItem(a)}
+                title="Öppna aktiviteten"
+              >
+                <div className="font-medium truncate">{a.title || "Aktivitet"}</div>
+                <div className="text-xs text-gray-500">{fmt(a.dueDate, a.dueTime)}</div>
+              </button>
 
               <div className="flex items-center gap-2 shrink-0">
                 <span className={prBadge(a.priority)}>{a.priority || "normal"}</span>
@@ -557,9 +603,51 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
           <li className="py-6 text-sm text-gray-500">Inga aktiviteter att visa.</li>
         )}
       </ul>
+
+      {/* Detaljmodal */}
+      {openItem && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>setOpenItem(null)}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-lg" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Aktivitet</div>
+              <button className="text-sm" onClick={()=>setOpenItem(null)}>Stäng</button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div><span className="font-medium">Titel:</span> {openItem.title || "Aktivitet"}</div>
+              <div><span className="font-medium">Ansvarig:</span> {openItem.responsible || "Övrig"}</div>
+              <div><span className="font-medium">När:</span> {fmt(openItem.dueDate, openItem.dueTime) || "–"}</div>
+              {openItem.description && (
+                <div><span className="font-medium">Beskrivning:</span> {openItem.description}</div>
+              )}
+              {openItem.priority && (
+                <div><span className="font-medium">Prioritet:</span> {openItem.priority}</div>
+              )}
+              {openItem.status && (
+                <div><span className="font-medium">Status:</span> {openItem.status}</div>
+              )}
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button className="px-3 py-2 rounded bg-green-500 text-white" onClick={()=>{ markKlar(openItem); setOpenItem(null); }}>
+                Markera som klar
+              </button>
+              <button className="px-3 py-2 rounded bg-orange-400 text-white" onClick={()=>{ markAterkoppling(openItem); setOpenItem(null); }}>
+                Återkoppling
+              </button>
+              <button className="px-3 py-2 rounded bg-rose-500 text-white" onClick={()=>{ softDelete(openItem); }}>
+                Ta bort
+              </button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>setOpenItem(null)}>
+                Stäng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
 
 function OffersPanel({ offers, entities, onOpen }) {
   const getCustomer = (id) => (entities || []).find((e) => e.id === id);
