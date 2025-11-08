@@ -179,13 +179,14 @@ function upsertProject(state, p) {
 // === BEGIN useStore (autospar + realtid mellan flikar via BroadcastChannel + storage + fallback) ===
 /* === useStore – SharePoint-synk (skriv direkt, läs via polling) === */
 /* === useStore — SharePoint-synk (skriv direkt, läs via polling) === */
+/* === useStore — SharePoint-synk (skriv direkt, läs utan att trampa lokala ändringar) === */
 function useStore() {
   // Viktigt: måste matcha nyckeln i src/lib/storage.js
   const STORAGE_KEY = "machcrm_data_v3";
 
   const [state, setState] = useState(() => loadState());
 
-  // 1) Skriv lokalt direkt vid ändring (som tidigare)
+  // 1) Skriv lokalt direkt vid ändring
   useEffect(() => {
     saveState(state);
     try {
@@ -193,9 +194,9 @@ function useStore() {
     } catch {}
   }, [state]);
 
-  // 2) Skriv till SharePoint efter liten debounce (0.8s) för att undvika spam
+  // 2) Skriv till SharePoint efter liten debounce (0.8s)
   useEffect(() => {
-    let t = setTimeout(async () => {
+    const t = setTimeout(async () => {
       try {
         const withVersion = { ...state, _lastSavedAt: new Date().toISOString() };
         await pushRemoteState(withVersion);
@@ -206,7 +207,7 @@ function useStore() {
     return () => clearTimeout(t);
   }, [state]);
 
-  // 3) Läs från SharePoint var 5:e sekund och uppdatera om kollegan sparat nyare version
+  // 3) Läs från SharePoint periodiskt och ersätt ENDAST om remote är nyare än lokalt
   useEffect(() => {
     let stopped = false;
 
@@ -214,28 +215,38 @@ function useStore() {
       try {
         const remote = await fetchRemoteState();
         if (remote && typeof remote === "object") {
-          const lv = state?._lastSavedAt || "";
-          const rv = remote?._lastSavedAt || "";
-          // Enkel regel: senast sparad vinner
-          if (rv && rv !== lv) {
-            setState(remote);
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch {}
-          }
+          setState((prev) => {
+            // jämför mot SENASTE lokala värdet (inte en gammal closure)
+            const lv = prev?._lastSavedAt || "";
+            const rv = remote?._lastSavedAt || "";
+
+            // Om remote saknar version → ersätt inte.
+            if (!rv) return prev;
+
+            // ISO-tidsstämplar kan jämföras lexikografiskt (“större” är nyare)
+            if (rv > lv) {
+              try { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); } catch {}
+              return remote; // remote är nyare → ersätt
+            }
+
+            return prev; // lokalt är nyare eller lika → behåll dina ändringar
+          });
         }
       } catch {
-        // tyst fel – prova igen på nästa tick
+        // tyst fel → försök igen på nästa tick
       } finally {
-        if (!stopped) setTimeout(tick, 5000);
+        if (!stopped) setTimeout(tick, 5000); // läs var 5:e sekund
       }
     };
 
     tick();
     return () => { stopped = true; };
-  }, []); // starta en gång
+  }, []);
 
   return [state, setState];
 }
 /* === slut useStore === */
+
 
 /* ========== App ========== */
 export default function App() {
