@@ -256,13 +256,32 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("activities");
 
   // Skapa-knappar
-  function createActivity()  { setModal({ kind: "activity",  id: crypto.randomUUID(), draft: newActivity() }); }
-  function createOffer()     { setModal({ kind: "offer",     id: crypto.randomUUID(), draft: newOffer(state) }); }
-  function createProjectEmpty(){
-    const p = newProjectFromOffer(null,null);
-    setState(s=>({ ...s, projects:[...(s.projects||[]), p]}));
-    setModal({kind:"project", id:p.id});
-  }
+ /* === createActivity — skapa och öppna direkt === */
+function createActivity() {
+  const id = crypto.randomUUID();
+  const a = {
+    id,
+    title: "",              // tom titel — fylls i i dialogen
+    ingress: "",            // ny kort ingress som syns i översikten
+    responsible: "Övrig",
+    priority: "medium",
+    status: "",
+    dueDate: "",
+    dueTime: "",
+    customerId: null,
+    supplierId: null,
+    description: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  setState(s => ({ ...s, activities: [...(s.activities || []), a] }));
+
+  // Be ActivitiesPanel att öppna dialog på den nya posten
+  try {
+    window.dispatchEvent(new CustomEvent("machcrm:open-activity", { detail: { id } }));
+  } catch {}
+}
+
   function createCustomer(){ const e=newEntity("customer"); setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;}); setModal({kind:"entity", id:e.id}); }
   function createSupplier(){ const e=newEntity("supplier"); setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;}); setModal({kind:"entity", id:e.id}); }
 
@@ -429,7 +448,7 @@ function ListCard({ title, count, items, onOpen }) {
   );
 }
 
-/* === ActivitiesPanel — dagfilter, “visa klara” (endast klara), redigera befintliga, tydlig titel === */
+/* === ActivitiesPanel — dagfilter, “visa endast klara”, redigera befintliga, titel/ingress i översikt === */
 function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter] = useState("all");   // Alla / Mattias / Cralle / Övrig
   const [rangeFilter, setRangeFilter] = useState("7");   // "today" | "7" | "all" | "date"
@@ -464,7 +483,12 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   };
   const isSameDay = (dateStr, ymd) => !!dateStr && dateStr.slice(0,10) === ymd;
 
-  // Badgefärger
+  // Entities helpers
+  const customers  = useMemo(() => (entities || []).filter(e => e?.type === "customer").sort((a,b)=> (a.companyName||"").localeCompare(b.companyName||"", "sv")), [entities]);
+  const suppliers  = useMemo(() => (entities || []).filter(e => e?.type === "supplier").sort((a,b)=> (a.companyName||"").localeCompare(b.companyName||"", "sv")), [entities]);
+  const findById   = (id) => (entities || []).find(e => e.id === id);
+
+  // Badges
   const prBadge = (p) => {
     const base = "text-xs px-2 py-1 rounded";
     switch (p) {
@@ -484,23 +508,14 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   // Filtrera lista
   const list = useMemo(() => {
     let arr = Array.isArray(activities) ? activities.slice() : [];
-    // mjuk-raderade ska inte visas
     arr = arr.filter(a => !a?.deletedAt);
 
-    // Visa endast klara om togglad
-    if (showDoneOnly) {
-      arr = arr.filter(a => (a?.priority || "") === "klar");
-    } else {
-      // annars: exkludera klara
-      arr = arr.filter(a => (a?.priority || "") !== "klar");
-    }
+    // Visa endast klara om togglad, annars visa endast ej klara
+    if (showDoneOnly) arr = arr.filter(a => (a?.priority || "") === "klar");
+    else              arr = arr.filter(a => (a?.priority || "") !== "klar");
 
-    // Filter på ansvarig
-    if (respFilter !== "all") {
-      arr = arr.filter(a => (a?.responsible || "Övrig") === respFilter);
-    }
+    if (respFilter !== "all") arr = arr.filter(a => (a?.responsible || "Övrig") === respFilter);
 
-    // Tidsfilter
     if (rangeFilter === "today") {
       const ymd = todayISO();
       arr = arr.filter(a => isSameDay(a?.dueDate, ymd));
@@ -508,19 +523,17 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       arr = arr.filter(a => inNext7(a?.dueDate, a?.dueTime));
     } else if (rangeFilter === "date" && dateFilter) {
       arr = arr.filter(a => isSameDay(a?.dueDate, dateFilter));
-    } // "all" = ingen extra filter
+    }
 
-    // Sortera på datum + tid
     arr.sort((a, b) => {
       const ad = (a?.dueDate || "") + "T" + (a?.dueTime || "");
       const bd = (b?.dueDate || "") + "T" + (b?.dueTime || "");
       return ad.localeCompare(bd);
     });
-
     return arr;
   }, [activities, respFilter, rangeFilter, dateFilter, showDoneOnly]);
 
-  // Åtgärder
+  // Åtgärder (endast i modal, ej i översikten)
   const markKlar = (a) => {
     const upd = {
       ...a,
@@ -547,7 +560,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       ...s,
       activities: (s.activities || []).map(x => x.id === a.id ? upd : x),
     }));
-    if (openItem?.id === a.id) setOpenItem(null);
+    if (openItem?.id === a.id) { setOpenItem(null); setDraft(null); }
   };
 
   // Öppna/redigera befintlig aktivitet
@@ -556,12 +569,15 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     setDraft({
       id: a.id,
       title: a.title || "",
+      ingress: a.ingress || "",
       responsible: a.responsible || "Övrig",
       dueDate: a.dueDate || "",
       dueTime: a.dueTime || "",
       priority: a.priority || "medium",
       status: a.status || "",
-      description: a.description || ""
+      description: a.description || "",
+      customerId: a.customerId || null,
+      supplierId: a.supplierId || null,
     });
   };
   const updateDraft = (field, val) => setDraft(d => ({ ...d, [field]: val }));
@@ -570,12 +586,15 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     const upd = {
       ...openItem,
       title: draft.title || "",
+      ingress: draft.ingress || "",
       responsible: draft.responsible || "Övrig",
       dueDate: draft.dueDate || "",
       dueTime: draft.dueTime || "",
       priority: draft.priority || "medium",
       status: draft.status || "",
       description: draft.description || "",
+      customerId: draft.customerId || null,
+      supplierId: draft.supplierId || null,
       updatedAt: new Date().toISOString()
     };
     setState(s => ({
@@ -585,6 +604,18 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     setOpenItem(null);
     setDraft(null);
   };
+
+  // Lyssna på create-”öppna nu”-event från App.jsx
+  useEffect(() => {
+    const h = (e) => {
+      const id = e?.detail?.id;
+      if (!id) return;
+      const a = (activities || []).find(x => x.id === id);
+      if (a) openEdit(a);
+    };
+    window.addEventListener("machcrm:open-activity", h);
+    return () => window.removeEventListener("machcrm:open-activity", h);
+  }, [activities]);
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
@@ -655,55 +686,42 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
       {/* Lista */}
       <ul className="divide-y">
-        {list.map(a => (
-          <li key={a.id} className="py-3">
-            <div className="flex items-center justify-between gap-3">
-              {/* Klick öppnar redigeringsvy */}
-              <button
-                className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
-                onClick={()=>openEdit(a)}
-                title="Öppna aktiviteten"
-              >
-                <div className="font-medium truncate">{a.title || "Aktivitet"}</div>
-                <div className="text-xs text-gray-500">{fmt(a.dueDate, a.dueTime)}</div>
-              </button>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={prBadge(a.priority)}>{a.priority || "normal"}</span>
-                <span className={respChip(a.responsible)}>{a.responsible || "Övrig"}</span>
-
+        {list.map(a => {
+          const cust = a.customerId ? findById(a.customerId) : null;
+          const supp = a.supplierId ? findById(a.supplierId) : null;
+          return (
+            <li key={a.id} className="py-3">
+              <div className="flex items-start justify-between gap-3">
+                {/* Klick öppnar redigeringsvy */}
                 <button
-                  className="text-xs px-2 py-1 rounded bg-green-500 text-white"
-                  title="Markera som klar"
-                  onClick={()=>markKlar(a)}
+                  className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
+                  onClick={()=>openEdit(a)}
+                  title="Öppna aktiviteten"
                 >
-                  Klar
-                </button>
-                <button
-                  className="text-xs px-2 py-1 rounded bg-orange-400 text-white"
-                  title="Återkoppling"
-                  onClick={()=>markAterkoppling(a)}
-                >
-                  Återkoppling
-                </button>
-                <button
-                  className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                  title="Ta bort (sparas som historik)"
-                  onClick={()=>softDelete(a)}
-                >
-                  Ta bort
+                  <div className="font-medium truncate">
+                    {a.title?.trim() ? a.title : "Aktivitet"}
+                    {a.ingress?.trim() ? <span className="text-gray-500"> — {a.ingress}</span> : null}
+                  </div>
+                  <div className="text-xs text-gray-500">{fmt(a.dueDate, a.dueTime)}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className={respChip(a.responsible)}>{a.responsible || "Övrig"}</span>
+                    <span className={prBadge(a.priority)}>{a.priority || "normal"}</span>
+                    {a.status?.trim() ? <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700">{a.status}</span> : null}
+                    {cust ? <span className="text-xs px-2 py-1 rounded border">{`Kund: ${cust.companyName}`}</span> : null}
+                    {supp ? <span className="text-xs px-2 py-1 rounded border">{`Leverantör: ${supp.companyName}`}</span> : null}
+                  </div>
                 </button>
               </div>
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
 
         {list.length === 0 && (
           <li className="py-6 text-sm text-gray-500">Inga aktiviteter att visa.</li>
         )}
       </ul>
 
-      {/* Redigeringsmodal (samma struktur som vid skapande, med TITEL högst upp) */}
+      {/* Redigeringsmodal */}
       {openItem && draft && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
@@ -713,7 +731,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              {/* TITEL överst (tydligt) */}
+              {/* TITEL överst */}
               <div className="col-span-2">
                 <label className="text-sm font-medium">Titel</label>
                 <input
@@ -721,6 +739,17 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   value={draft.title}
                   onChange={e=>updateDraft("title", e.target.value)}
                   placeholder="Vad handlar aktiviteten om?"
+                />
+              </div>
+
+              {/* INGRESS (kort text som syns i översikten) */}
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Ingress (kort text)</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.ingress}
+                  onChange={e=>updateDraft("ingress", e.target.value)}
+                  placeholder="Kort sammanfattning som visas i översikten"
                 />
               </div>
 
@@ -781,6 +810,30 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 />
               </div>
 
+              <div>
+                <label className="text-sm font-medium">Kund</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.customerId || ""}
+                  onChange={e=>updateDraft("customerId", e.target.value || null)}
+                >
+                  <option value="">— Ingen —</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Leverantör</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.supplierId || ""}
+                  onChange={e=>updateDraft("supplierId", e.target.value || null)}
+                >
+                  <option value="">— Ingen —</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.companyName}</option>)}
+                </select>
+              </div>
+
               <div className="col-span-2">
                 <label className="text-sm font-medium">Beskrivning</label>
                 <textarea
@@ -791,15 +844,39 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
               </div>
             </div>
 
-            <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                className="px-3 py-2 rounded bg-green-600 text-white"
+                onClick={(e)=>{ e.stopPropagation(); saveDraft(); }}
+              >
                 Spara ändringar
               </button>
-              <button className="px-3 py-2 rounded bg-rose-500 text-white" onClick={()=>softDelete(openItem)}>
+              <button
+                className="px-3 py-2 rounded bg-blue-600 text-white"
+                onClick={(e)=>{ e.stopPropagation(); markAterkoppling(openItem); }}
+                title="Sätt status Återkoppling"
+              >
+                Sätt återkoppling
+              </button>
+              <button
+                className="px-3 py-2 rounded bg-emerald-600 text-white"
+                onClick={(e)=>{ e.stopPropagation(); markKlar(openItem); setOpenItem(null); setDraft(null); }}
+                title="Markera som klar"
+              >
+                Markera som klar
+              </button>
+              <button
+                className="px-3 py-2 rounded bg-rose-500 text-white"
+                onClick={(e)=>{ e.stopPropagation(); softDelete(openItem); }}
+                title="Ta bort (sparas som historik)"
+              >
                 Ta bort
               </button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
-                Avbryt
+              <button
+                className="ml-auto px-3 py-2 rounded border"
+                onClick={(e)=>{ e.stopPropagation(); setOpenItem(null); setDraft(null); }}
+              >
+                Stäng
               </button>
             </div>
           </div>
@@ -808,6 +885,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     </div>
   );
 }
+
 
 function OffersPanel({ offers, entities, onOpen }) {
   const getCustomer = (id) => (entities || []).find((e) => e.id === id);
