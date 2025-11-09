@@ -8,20 +8,17 @@ import { fetchRemoteState, pushRemoteState } from "./lib/cloud";
 function useStore() {
   const STORAGE_KEY = "machcrm_data_v3";
 
-  // Starta med det som finns, annars ett tomt grundläge
   const [state, setState] = useState(() => {
     const s = loadState();
     if (s && typeof s === "object") return s;
-    return { activities: [], entities: [], offers: [], projects: [] };
+    return { activities: [], entities: [], offers: [], projects: [], _lastSavedAt: "" };
   });
 
-  // Spara lokalt direkt när state ändras
   useEffect(() => {
     saveState(state);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
   }, [state]);
 
-  // Skriv till SharePoint med liten debounce (0.8s)
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
@@ -34,7 +31,6 @@ function useStore() {
     return () => clearTimeout(t);
   }, [state]);
 
-  // Läs från SharePoint var 5:e sekund (senast sparad vinner)
   useEffect(() => {
     let stopped = false;
     const tick = async () => {
@@ -49,40 +45,29 @@ function useStore() {
           }
         }
       } catch {
-        // tyst fel – försök igen
       } finally {
         if (!stopped) setTimeout(tick, 5000);
       }
     };
     tick();
     return () => { stopped = true; };
-  }, []); // starta en gång
+  }, []);
 
   return [state, setState];
 }
 
 /* ==========================================================
-   ActivitiesPanelNew — ikoner (telefon/mail/lunch/möte),
-   status-chip endast om satt, "Ta bort" i listan,
-   statusknappar i popup.
+   ActivitiesPanelNew — ikoner, popup, filter, "Ta bort" i listan
    ========================================================== */
 function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
-  const [respFilter, setRespFilter]   = useState("all");     // Alla / Mattias / Cralle / Övrig
-  const [rangeFilter, setRangeFilter] = useState("7");       // today | 7 | all | date
-  const [dateFilter, setDateFilter]   = useState("");        // YYYY-MM-DD när rangeFilter === "date"
-
-  // statusFilter:
-  //  - all = visa allt
-  //  - done = endast klara (priority === "klar" eller status === "klar")
-  //  - followup = endast status "återkoppling"
-  //  - done_or_followup = klara + återkoppling
-  //  - all_except_done = alla utom klara
+  const [respFilter, setRespFilter]   = useState("all");
+  const [rangeFilter, setRangeFilter] = useState("7");
+  const [dateFilter, setDateFilter]   = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const [openItem, setOpenItem] = useState(null); // vald aktivitet i modal
-  const [draft, setDraft]       = useState(null); // redigeringskopia
+  const [openItem, setOpenItem] = useState(null);
+  const [draft, setDraft]       = useState(null);
 
-  // Kund/leverantörslistor från entities
   const customers = useMemo(() => (entities || []).filter(e => e?.type === "customer"), [entities]);
   const suppliers = useMemo(() => (entities || []).filter(e => e?.type === "supplier"), [entities]);
 
@@ -129,7 +114,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
     return `${base} bg-gray-100 text-gray-700`;
   };
 
-  // Auto-öppna ny aktivitet markerad med _shouldOpen
   useEffect(() => {
     const a = (activities || []).find(x => x?._shouldOpen);
     if (!a) return;
@@ -141,25 +125,22 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
       dueDate: a.dueDate || "",
       dueTime: a.dueTime || "",
       priority: a.priority || "medium",
-      status: a.status || "",             // visas bara i översikten om satt
+      status: a.status || "",
       description: a.description || "",
       customerId: a.customerId || "",
       supplierId: a.supplierId || "",
       contactName: a.contactName || "",
-      // nya booleans (ikoner/kryss)
       isPhone: !!a.isPhone,
       isEmail: !!a.isEmail,
       isLunch: !!a.isLunch,
       isMeeting: !!a.isMeeting,
     });
-    // plocka bort flaggan så det inte öppnas igen varje render
     setState(s => ({
       ...s,
       activities: (s.activities || []).map(x => x.id === a.id ? { ...x, _shouldOpen: undefined } : x),
     }));
   }, [activities, setState]);
 
-  // Filtrering
   const list = useMemo(() => {
     let arr = Array.isArray(activities) ? activities.slice() : [];
     arr = arr.filter(a => !a?.deletedAt);
@@ -176,12 +157,9 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
     } else if (statusFilter === "all_except_done") {
       arr = arr.filter(a => !isDone(a));
     }
-    // "all": ingen extra statusfiltrering
-
     if (respFilter !== "all") {
       arr = arr.filter(a => (a?.responsible || "Övrig") === respFilter);
     }
-
     if (rangeFilter === "today") {
       const ymd = todayISO();
       arr = arr.filter(a => isSameDay(a?.dueDate, ymd));
@@ -199,7 +177,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
     return arr;
   }, [activities, respFilter, rangeFilter, dateFilter, statusFilter]);
 
-  // Åtgärder
   const markKlar = (aOrId) => {
     const a = typeof aOrId === "string" ? (activities||[]).find(x=>x.id===aOrId) : aOrId;
     if (!a) return;
@@ -218,7 +195,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
     if (openItem?.id === a.id) { setOpenItem(null); setDraft(null); }
   };
 
-  // Redigering
   const openEdit = (a) => {
     setOpenItem(a);
     setDraft({
@@ -268,7 +244,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
     setDraft(null);
   };
 
-  // Små ikoner i listan
   const Icons = ({ a }) => (
     <div className="flex items-center gap-1 text-xs text-gray-600">
       {a.isPhone   ? <span title="Telefon">📞</span> : null}
@@ -280,12 +255,10 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      {/* Header + filter */}
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <h2 className="font-semibold">Aktiviteter</h2>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Snabbfilter: Idag / 7 dagar / Alla */}
           <div className="flex rounded-xl overflow-hidden border">
             {[
               {k:"today", label:"Idag"},
@@ -303,7 +276,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
             ))}
           </div>
 
-          {/* Exakt dag */}
           <div className="flex items-center gap-2 border rounded-xl px-2 py-1">
             <label className="text-sm">Dag:</label>
             <input
@@ -319,7 +291,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
             )}
           </div>
 
-          {/* Statusfilter inkl. "Alla utom klara" */}
           <div className="flex items-center gap-2 border rounded-xl px-2 py-1">
             <label className="text-sm">Status:</label>
             <select
@@ -336,7 +307,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
             </select>
           </div>
 
-          {/* Ansvarig-filter */}
           <div className="flex rounded-xl overflow-hidden border">
             {["all","Mattias","Cralle","Övrig"].map(r => (
               <button
@@ -352,12 +322,10 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
         </div>
       </div>
 
-      {/* Lista */}
       <ul className="divide-y">
         {list.map(a => (
           <li key={a.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
-              {/* Klick öppnar redigeringsmodalen */}
               <button
                 className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
                 onClick={()=>openEdit(a)}
@@ -373,10 +341,8 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
               <div className="flex items-center gap-2 shrink-0">
                 <span className={prBadge(a.priority)}>{a.priority || "normal"}</span>
                 <span className={respChip(a.responsible)}>{a.responsible || "Övrig"}</span>
-                {/* Visa status-chip endast om satt */}
                 {a.status ? <span className={statusBadge(a.status)}>{a.status}</span> : null}
 
-                {/* I översikten visar vi bara "Ta bort" */}
                 <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(a)} title="Ta bort (sparas historiskt)">
                   Ta bort
                 </button>
@@ -390,7 +356,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
         )}
       </ul>
 
-      {/* Redigeringsmodal: inkluderar Titel, Kund, Leverantör, Kontakt, Telefon/Mail/Lunch/Möte */}
       {openItem && draft && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
@@ -400,7 +365,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              {/* TITEL */}
               <div className="col-span-2">
                 <label className="text-sm font-medium">Titel</label>
                 <input
@@ -411,7 +375,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 />
               </div>
 
-              {/* ANSVARIG */}
               <div>
                 <label className="text-sm font-medium">Ansvarig</label>
                 <select className="w-full border rounded px-3 py-2" value={draft.responsible} onChange={e=>updateDraft("responsible", e.target.value)}>
@@ -421,7 +384,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 </select>
               </div>
 
-              {/* DATUM/TID */}
               <div>
                 <label className="text-sm font-medium">Datum</label>
                 <input type="date" className="w-full border rounded px-3 py-2" value={draft.dueDate} onChange={e=>updateDraft("dueDate", e.target.value)} />
@@ -431,7 +393,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 <input type="time" className="w-full border rounded px-3 py-2" value={draft.dueTime} onChange={e=>updateDraft("dueTime", e.target.value)} />
               </div>
 
-              {/* PRIORITET/STATUS */}
               <div>
                 <label className="text-sm font-medium">Prioritet</label>
                 <select className="w-full border rounded px-3 py-2" value={draft.priority} onChange={e=>updateDraft("priority", e.target.value)}>
@@ -450,7 +411,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 </select>
               </div>
 
-              {/* CHECKBOX-IKONER */}
               <div className="col-span-2">
                 <div className="text-sm font-medium mb-1">Typ</div>
                 <div className="flex flex-wrap gap-4 text-sm">
@@ -473,7 +433,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 </div>
               </div>
 
-              {/* KUND / LEVERANTÖR / KONTAKT */}
               <div>
                 <label className="text-sm font-medium">Kund</label>
                 <select className="w-full border rounded px-3 py-2" value={draft.customerId} onChange={e=>updateDraft("customerId", e.target.value)}>
@@ -495,7 +454,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 <input className="w-full border rounded px-3 py-2" value={draft.contactName} onChange={e=>updateDraft("contactName", e.target.value)} placeholder="Namn på kontaktperson" />
               </div>
 
-              {/* BESKRIVNING */}
               <div className="col-span-2">
                 <label className="text-sm font-medium">Beskrivning</label>
                 <textarea className="w-full border rounded px-3 py-2 min-h-[100px]" value={draft.description} onChange={e=>updateDraft("description", e.target.value)} />
@@ -503,7 +461,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              {/* Statusknappar i popupen (inte i listan) */}
               <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={()=>{ saveDraft(); markKlar(draft.id); }}>
                 Spara & Markera Klar
               </button>
@@ -528,11 +485,162 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   );
 }
 
+/* ======================================
+   CustomersPanel — sök + kategorifilter
+   ====================================== */
+function CustomersPanel({ entities = [], setState }) {
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("all"); // StålHall | Totalentreprenad | Turbovex | all
+
+  const list = useMemo(() => {
+    let arr = (entities || []).filter(e => e.type === "customer");
+    if (q.trim()) {
+      const s = q.trim().toLowerCase();
+      arr = arr.filter(e =>
+        (e.companyName||"").toLowerCase().includes(s) ||
+        (e.orgNo||"").toLowerCase().includes(s) ||
+        (e.city||"").toLowerCase().includes(s)
+      );
+    }
+    if (cat !== "all") {
+      arr = arr.filter(e => (e.customerCategory||"") === cat);
+    }
+    arr.sort((a,b)=> (a.companyName||"").localeCompare(b.companyName||""));
+    return arr;
+  }, [entities, q, cat]);
+
+  const setCategory = (id, value) => {
+    setState(s => ({
+      ...s,
+      entities: (s.entities||[]).map(e => e.id===id ? { ...e, customerCategory: value || "" } : e)
+    }));
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-4">
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <h2 className="font-semibold">Kunder</h2>
+        <div className="flex gap-2">
+          <input className="border rounded-xl px-3 py-2" placeholder="Sök..." value={q} onChange={e=>setQ(e.target.value)} />
+          <select className="border rounded-xl px-3 py-2" value={cat} onChange={e=>setCat(e.target.value)}>
+            <option value="all">Alla kategorier</option>
+            <option value="StålHall">StålHall</option>
+            <option value="Totalentreprenad">Totalentreprenad</option>
+            <option value="Turbovex">Turbovex</option>
+          </select>
+        </div>
+      </div>
+
+      <ul className="divide-y">
+        {list.map(c => (
+          <li key={c.id} className="py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium truncate">{c.companyName || "(namnlös kund)"}</div>
+                <div className="text-xs text-gray-500">{c.city || ""}</div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <select className="text-sm border rounded px-2 py-1"
+                        value={c.customerCategory||""}
+                        onChange={e=>setCategory(c.id, e.target.value)}>
+                  <option value="">— kategori —</option>
+                  <option value="StålHall">StålHall</option>
+                  <option value="Totalentreprenad">Totalentreprenad</option>
+                  <option value="Turbovex">Turbovex</option>
+                </select>
+              </div>
+            </div>
+          </li>
+        ))}
+        {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga kunder.</li>}
+      </ul>
+    </div>
+  );
+}
+
+/* ==========================================
+   SuppliersPanel — sök + kategorifilter
+   ========================================== */
+function SuppliersPanel({ entities = [], setState }) {
+  const [q, setQ] = useState("");
+  const [cat, setCat] = useState("all"); // Stålhalls leverantör | Mark företag | EL leverantör | VVS Leverantör | Vent Leverantör | all
+
+  const list = useMemo(() => {
+    let arr = (entities || []).filter(e => e.type === "supplier");
+    if (q.trim()) {
+      const s = q.trim().toLowerCase();
+      arr = arr.filter(e =>
+        (e.companyName||"").toLowerCase().includes(s) ||
+        (e.orgNo||"").toLowerCase().includes(s) ||
+        (e.city||"").toLowerCase().includes(s)
+      );
+    }
+    if (cat !== "all") {
+      arr = arr.filter(e => (e.supplierCategory||"") === cat);
+    }
+    arr.sort((a,b)=> (a.companyName||"").localeCompare(b.companyName||""));
+    return arr;
+  }, [entities, q, cat]);
+
+  const setCategory = (id, value) => {
+    setState(s => ({
+      ...s,
+      entities: (s.entities||[]).map(e => e.id===id ? { ...e, supplierCategory: value || "" } : e)
+    }));
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-4">
+      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <h2 className="font-semibold">Leverantörer</h2>
+        <div className="flex gap-2">
+          <input className="border rounded-xl px-3 py-2" placeholder="Sök..." value={q} onChange={e=>setQ(e.target.value)} />
+          <select className="border rounded-xl px-3 py-2" value={cat} onChange={e=>setCat(e.target.value)}>
+            <option value="all">Alla kategorier</option>
+            <option value="Stålhalls leverantör">Stålhalls leverantör</option>
+            <option value="Mark företag">Mark företag</option>
+            <option value="EL leverantör">EL leverantör</option>
+            <option value="VVS Leverantör">VVS Leverantör</option>
+            <option value="Vent Leverantör">Vent Leverantör</option>
+          </select>
+        </div>
+      </div>
+
+      <ul className="divide-y">
+        {list.map(sup => (
+          <li key={sup.id} className="py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium truncate">{sup.companyName || "(namnlös leverantör)"}</div>
+                <div className="text-xs text-gray-500">{sup.city || ""}</div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <select className="text-sm border rounded px-2 py-1"
+                        value={sup.supplierCategory||""}
+                        onChange={e=>setCategory(sup.id, e.target.value)}>
+                  <option value="">— kategori —</option>
+                  <option value="Stålhalls leverantör">Stålhalls leverantör</option>
+                  <option value="Mark företag">Mark företag</option>
+                  <option value="EL leverantör">EL leverantör</option>
+                  <option value="VVS Leverantör">VVS Leverantör</option>
+                  <option value="Vent Leverantör">Vent Leverantör</option>
+                </select>
+              </div>
+            </div>
+          </li>
+        ))}
+        {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga leverantörer.</li>}
+      </ul>
+    </div>
+  );
+}
+
 /* ===========================
    App — default export
    =========================== */
 export default function App() {
   const [state, setState] = useStore();
+  const [view, setView] = useState("activities"); // activities | customers | suppliers | offers | projects | settings
 
   const newId = () => (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
@@ -550,40 +658,49 @@ export default function App() {
       customerId: "",
       supplierId: "",
       contactName: "",
+      isPhone: false,
+      isEmail: false,
+      isLunch: false,
+      isMeeting: false,
       createdAt: new Date().toISOString(),
-      _shouldOpen: true, // öppna pop-up direkt
+      _shouldOpen: true,
     };
     setState(s => ({ ...s, activities: [...(s.activities || []), a] }));
+    setView("activities");
   }
 
   function createOffer() {
     const id = newId();
     const o = { id, title: "Ny offert", customerId: "", value: 0, status: "utkast", createdAt: new Date().toISOString() };
     setState(s => ({ ...s, offers: [...(s.offers || []), o] }));
+    setView("offers");
   }
 
   function createProjectEmpty() {
     const id = newId();
     const p = { id, name: "Nytt projekt", status: "pågående", createdAt: new Date().toISOString() };
     setState(s => ({ ...s, projects: [...(s.projects || []), p] }));
+    setView("projects");
   }
 
   function createCustomer() {
     const id = newId();
-    const c = { id, type: "customer", companyName: "Ny kund", createdAt: new Date().toISOString() };
+    const c = { id, type: "customer", companyName: "Ny kund", createdAt: new Date().toISOString(), customerCategory:"" };
     setState(s => ({ ...s, entities: [...(s.entities || []), c] }));
+    setView("customers");
   }
 
   function createSupplier() {
     const id = newId();
-    const sup = { id, type: "supplier", companyName: "Ny leverantör", createdAt: new Date().toISOString() };
+    const sup = { id, type: "supplier", companyName: "Ny leverantör", createdAt: new Date().toISOString(), supplierCategory:"" };
     setState(s => ({ ...s, entities: [...(s.entities || []), sup] }));
+    setView("suppliers");
   }
 
   return (
     <div className="mx-auto max-w-7xl p-4">
       {/* HEADER med färgade knappar */}
-      <header className="flex items-center justify-between mb-4">
+      <header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Mach CRM</h1>
         <div className="flex items-center gap-2">
           <button className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300" onClick={createActivity} title="Skapa ny aktivitet">
@@ -604,12 +721,71 @@ export default function App() {
         </div>
       </header>
 
-      {/* AKTIVITETER */}
-      <ActivitiesPanelNew
-        activities={state.activities || []}
-        entities={state.entities || []}
-        setState={setState}
-      />
+      {/* TOPPMENY */}
+      <nav className="mb-4">
+        <div className="flex flex-wrap gap-2">
+          {[
+            ["activities","Aktiviteter"],
+            ["customers","Kunder"],
+            ["suppliers","Leverantörer"],
+            ["offers","Offerter"],
+            ["projects","Projekt"],
+            ["settings","Inställningar"],
+          ].map(([k,label])=>(
+            <button
+              key={k}
+              className={`px-3 py-2 rounded-xl border ${view===k? "bg-black text-white":"bg-white text-gray-800 hover:bg-gray-50"}`}
+              onClick={()=>setView(k)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* VYER */}
+      {view==="activities" && (
+        <ActivitiesPanelNew
+          activities={state.activities || []}
+          entities={state.entities || []}
+          setState={setState}
+        />
+      )}
+
+      {view==="customers" && (
+        <CustomersPanel
+          entities={state.entities || []}
+          setState={setState}
+        />
+      )}
+
+      {view==="suppliers" && (
+        <SuppliersPanel
+          entities={state.entities || []}
+          setState={setState}
+        />
+      )}
+
+      {view==="offers" && (
+        <div className="bg-white rounded-2xl shadow p-4">
+          <h2 className="font-semibold mb-2">Offerter</h2>
+          <p className="text-sm text-gray-600">Stub-vy (vi bygger detaljer i nästa steg).</p>
+        </div>
+      )}
+
+      {view==="projects" && (
+        <div className="bg-white rounded-2xl shadow p-4">
+          <h2 className="font-semibold mb-2">Projekt</h2>
+          <p className="text-sm text-gray-600">Stub-vy (vi bygger detaljer i nästa steg).</p>
+        </div>
+      )}
+
+      {view==="settings" && (
+        <div className="bg-white rounded-2xl shadow p-4">
+          <h2 className="font-semibold mb-2">Inställningar</h2>
+          <p className="text-sm text-gray-600">Stub-vy – export/import m.m. fyller vi på här.</p>
+        </div>
+      )}
     </div>
   );
 }
