@@ -62,7 +62,9 @@ function useStore() {
 }
 
 /* ==========================================================
-   ActivitiesPanelNew — popup vid ny aktivitet, filter m.m.
+   ActivitiesPanelNew — ikoner (telefon/mail/lunch/möte),
+   status-chip endast om satt, "Ta bort" i listan,
+   statusknappar i popup.
    ========================================================== */
 function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter]   = useState("all");     // Alla / Mattias / Cralle / Övrig
@@ -74,7 +76,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   //  - done = endast klara (priority === "klar" eller status === "klar")
   //  - followup = endast status "återkoppling"
   //  - done_or_followup = klara + återkoppling
-  //  - all_except_done = alla utom klara (efterfrågad)
+  //  - all_except_done = alla utom klara
   const [statusFilter, setStatusFilter] = useState("all");
 
   const [openItem, setOpenItem] = useState(null); // vald aktivitet i modal
@@ -139,11 +141,16 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
       dueDate: a.dueDate || "",
       dueTime: a.dueTime || "",
       priority: a.priority || "medium",
-      status: a.status || "",
+      status: a.status || "",             // visas bara i översikten om satt
       description: a.description || "",
       customerId: a.customerId || "",
       supplierId: a.supplierId || "",
       contactName: a.contactName || "",
+      // nya booleans (ikoner/kryss)
+      isPhone: !!a.isPhone,
+      isEmail: !!a.isEmail,
+      isLunch: !!a.isLunch,
+      isMeeting: !!a.isMeeting,
     });
     // plocka bort flaggan så det inte öppnas igen varje render
     setState(s => ({
@@ -193,11 +200,15 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   }, [activities, respFilter, rangeFilter, dateFilter, statusFilter]);
 
   // Åtgärder
-  const markKlar = (a) => {
+  const markKlar = (aOrId) => {
+    const a = typeof aOrId === "string" ? (activities||[]).find(x=>x.id===aOrId) : aOrId;
+    if (!a) return;
     const upd = { ...a, priority: "klar", status: "klar", completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === a.id ? upd : x) }));
   };
-  const markAterkoppling = (a) => {
+  const markAterkoppling = (aOrId) => {
+    const a = typeof aOrId === "string" ? (activities||[]).find(x=>x.id===aOrId) : aOrId;
+    if (!a) return;
     const upd = { ...a, status: "återkoppling", updatedAt: new Date().toISOString() };
     setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === a.id ? upd : x) }));
   };
@@ -222,12 +233,16 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
       customerId: a.customerId || "",
       supplierId: a.supplierId || "",
       contactName: a.contactName || "",
+      isPhone: !!a.isPhone,
+      isEmail: !!a.isEmail,
+      isLunch: !!a.isLunch,
+      isMeeting: !!a.isMeeting,
     });
   };
   const updateDraft = (field, val) => setDraft(d => ({ ...d, [field]: val }));
   const saveDraft = () => {
     if (!draft) return;
-    const upd = {
+    const baseUpd = {
       ...openItem,
       title: draft.title || "",
       responsible: draft.responsible || "Övrig",
@@ -239,15 +254,29 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
       customerId: draft.customerId || "",
       supplierId: draft.supplierId || "",
       contactName: draft.contactName || "",
+      isPhone: !!draft.isPhone,
+      isEmail: !!draft.isEmail,
+      isLunch: !!draft.isLunch,
+      isMeeting: !!draft.isMeeting,
       updatedAt: new Date().toISOString(),
     };
     setState(s => ({
       ...s,
-      activities: (s.activities || []).map(x => x.id === upd.id ? upd : x),
+      activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x),
     }));
     setOpenItem(null);
     setDraft(null);
   };
+
+  // Små ikoner i listan
+  const Icons = ({ a }) => (
+    <div className="flex items-center gap-1 text-xs text-gray-600">
+      {a.isPhone   ? <span title="Telefon">📞</span> : null}
+      {a.isEmail   ? <span title="E-post">✉️</span> : null}
+      {a.isLunch   ? <span title="Lunch">🥪</span> : null}
+      {a.isMeeting ? <span title="Möte">📅</span> : null}
+    </div>
+  );
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
@@ -335,7 +364,10 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 title="Öppna aktiviteten"
               >
                 <div className="font-medium truncate">{a.title || "Aktivitet"}</div>
-                <div className="text-xs text-gray-500">{fmt(a.dueDate, a.dueTime)}</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-xs text-gray-500">{fmt(a.dueDate, a.dueTime)}</div>
+                  <Icons a={a} />
+                </div>
               </button>
 
               <div className="flex items-center gap-2 shrink-0">
@@ -344,12 +376,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 {/* Visa status-chip endast om satt */}
                 {a.status ? <span className={statusBadge(a.status)}>{a.status}</span> : null}
 
-                <button className="text-xs px-2 py-1 rounded bg-green-500 text-white" onClick={()=>markKlar(a)} title="Markera som klar">
-                  Klar
-                </button>
-                <button className="text-xs px-2 py-1 rounded bg-orange-400 text-white" onClick={()=>markAterkoppling(a)} title="Återkoppling">
-                  Återkoppling
-                </button>
+                {/* I översikten visar vi bara "Ta bort" */}
                 <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(a)} title="Ta bort (sparas historiskt)">
                   Ta bort
                 </button>
@@ -363,7 +390,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
         )}
       </ul>
 
-      {/* Redigeringsmodal: inkluderar Titel, Kund, Leverantör, Kontakt */}
+      {/* Redigeringsmodal: inkluderar Titel, Kund, Leverantör, Kontakt, Telefon/Mail/Lunch/Möte */}
       {openItem && draft && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
@@ -423,6 +450,29 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 </select>
               </div>
 
+              {/* CHECKBOX-IKONER */}
+              <div className="col-span-2">
+                <div className="text-sm font-medium mb-1">Typ</div>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={!!draft.isPhone} onChange={e=>updateDraft("isPhone", e.target.checked)} />
+                    <span>📞 Telefon</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={!!draft.isEmail} onChange={e=>updateDraft("isEmail", e.target.checked)} />
+                    <span>✉️ Mail</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={!!draft.isLunch} onChange={e=>updateDraft("isLunch", e.target.checked)} />
+                    <span>🥪 Lunch</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={!!draft.isMeeting} onChange={e=>updateDraft("isMeeting", e.target.checked)} />
+                    <span>📅 Möte</span>
+                  </label>
+                </div>
+              </div>
+
               {/* KUND / LEVERANTÖR / KONTAKT */}
               <div>
                 <label className="text-sm font-medium">Kund</label>
@@ -453,13 +503,21 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
-                Spara
+              {/* Statusknappar i popupen (inte i listan) */}
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={()=>{ saveDraft(); markKlar(draft.id); }}>
+                Spara & Markera Klar
               </button>
-              <button className="px-3 py-2 rounded bg-rose-500 text-white" onClick={()=>softDelete(openItem)}>
+              <button className="px-3 py-2 rounded bg-orange-500 text-white" onClick={()=>{ saveDraft(); markAterkoppling(draft.id); }}>
+                Spara & Återkoppling
+              </button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
                 Ta bort
               </button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+
+              <button className="ml-auto px-3 py-2 rounded border" onClick={saveDraft}>
+                Spara
+              </button>
+              <button className="px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
                 Avbryt
               </button>
             </div>
