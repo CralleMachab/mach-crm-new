@@ -60,11 +60,31 @@ function useStore() {
   return [state, setState];
 }
 
+/* ===== Hjälpare för filhantering (gemensamt) ===== */
+const FILE_CATS = ["Ritningar","Offerter","Kalkyler","KMA"];
+
+function flattenFiles(obj) {
+  if (!obj || typeof obj !== "object") return [];
+  const out = [];
+  FILE_CATS.forEach(cat => {
+    const arr = Array.isArray(obj[cat]) ? obj[cat] : [];
+    arr.forEach(f => out.push({ id: f.id || Math.random().toString(36).slice(2), name: f.name||"fil", webUrl: f.webUrl||f.url||"#", category: cat }));
+  });
+  return out;
+}
+function groupFiles(list) {
+  const obj = { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
+  (list||[]).forEach(f=>{
+    const cat = FILE_CATS.includes(f.category) ? f.category : "Offerter";
+    obj[cat].push({ id:f.id||Math.random().toString(36).slice(2), name:f.name||"fil", webUrl:f.webUrl||f.url||"#" });
+  });
+  return obj;
+}
+
 /* ==========================================================
-   ActivitiesPanelNew — popup, ikoner, filter, Ta bort
-   (oförändrad från din version som fungerade)
+   Aktiviteter — (oförändrad logik från fungerande version)
    ========================================================== */
-function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
+function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter]   = useState("all");
   const [rangeFilter, setRangeFilter] = useState("7");
   const [dateFilter, setDateFilter]   = useState("");
@@ -183,18 +203,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
     return arr;
   }, [activities, respFilter, rangeFilter, dateFilter, statusFilter]);
 
-  const markKlar = (aOrId) => {
-    const a = typeof aOrId === "string" ? (activities||[]).find(x=>x.id===aOrId) : aOrId;
-    if (!a) return;
-    const upd = { ...a, priority: "klar", status: "klar", completedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === a.id ? upd : x) }));
-  };
-  const markAterkoppling = (aOrId) => {
-    const a = typeof aOrId === "string" ? (activities||[]).find(x=>x.id===aOrId) : aOrId;
-    if (!a) return;
-    const upd = { ...a, status: "återkoppling", updatedAt: new Date().toISOString() };
-    setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === a.id ? upd : x) }));
-  };
   const softDelete = (a) => {
     const upd = { ...a, deletedAt: new Date().toISOString() };
     setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === a.id ? upd : x) }));
@@ -220,34 +228,6 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
       isLunch: !!a.isLunch,
       isMeeting: !!a.isMeeting,
     });
-  };
-  const updateDraft = (field, val) => setDraft(d => ({ ...d, [field]: val }));
-  const saveDraft = () => {
-    if (!draft) return;
-    const baseUpd = {
-      ...openItem,
-      title: draft.title || "",
-      responsible: draft.responsible || "Övrig",
-      dueDate: draft.dueDate || "",
-      dueTime: draft.dueTime || "",
-      priority: draft.priority || "medium",
-      status: draft.status || "",
-      description: draft.description || "",
-      customerId: draft.customerId || "",
-      supplierId: draft.supplierId || "",
-      contactName: draft.contactName || "",
-      isPhone: !!draft.isPhone,
-      isEmail: !!draft.isEmail,
-      isLunch: !!draft.isLunch,
-      isMeeting: !!draft.isMeeting,
-      updatedAt: new Date().toISOString(),
-    };
-    setState(s => ({
-      ...s,
-      activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x),
-    }));
-    setOpenItem(null);
-    setDraft(null);
   };
 
   const Icons = ({ a }) => (
@@ -277,6 +257,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 className={`px-3 py-2 ${rangeFilter===o.k ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
                 onClick={()=>{ setRangeFilter(o.k); if (o.k!=="date") setDateFilter(""); }}
                 title={o.label}
+                type="button"
               >
                 {o.label}
               </button>
@@ -292,7 +273,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
               onChange={e=>{ setDateFilter(e.target.value); setRangeFilter("date"); }}
             />
             {dateFilter && (
-              <button className="text-xs underline" onClick={()=>{ setDateFilter(""); setRangeFilter("all"); }}>
+              <button className="text-xs underline" onClick={()=>{ setDateFilter(""); setRangeFilter("all"); }} type="button">
                 Rensa datum
               </button>
             )}
@@ -321,6 +302,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 className={`px-3 py-2 ${respFilter===r ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
                 onClick={()=>setRespFilter(r)}
                 title={r==="all" ? "Visa alla" : `Visa endast ${r}`}
+                type="button"
               >
                 {r==="all" ? "Alla" : r}
               </button>
@@ -338,6 +320,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
                 onClick={()=>openEdit(a)}
                 title="Öppna aktiviteten"
+                type="button"
               >
                 <div className="font-medium truncate">{a.title || "Aktivitet"}</div>
                 <div className="flex items-center gap-3">
@@ -351,7 +334,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 <span className={respChip(a.responsible)}>{a.responsible || "Övrig"}</span>
                 {a.status ? <span className={statusBadge(a.status)}>{a.status}</span> : null}
 
-                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(a)} title="Ta bort (sparas historiskt)">
+                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(a)} title="Ta bort (sparas historiskt)" type="button">
                   Ta bort
                 </button>
               </div>
@@ -370,7 +353,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera aktivitet</div>
-              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">Stäng</button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -470,71 +453,32 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={()=>{ 
-                const aId = draft.id;
-                // spara
-                const baseUpd = {
-                  ...openItem,
-                  title: draft.title || "",
-                  responsible: draft.responsible || "Övrig",
-                  dueDate: draft.dueDate || "",
-                  dueTime: draft.dueTime || "",
-                  priority: draft.priority || "medium",
-                  status: draft.status || "",
-                  description: draft.description || "",
-                  customerId: draft.customerId || "",
-                  supplierId: draft.supplierId || "",
-                  contactName: draft.contactName || "",
-                  isPhone: !!draft.isPhone,
-                  isEmail: !!draft.isEmail,
-                  isLunch: !!draft.isLunch,
-                  isMeeting: !!draft.isMeeting,
-                  updatedAt: new Date().toISOString(),
-                };
-                setState(s => ({
-                  ...s,
-                  activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x),
-                }));
-                // markera klar
-                setState(s => ({
-                  ...s,
-                  activities: (s.activities || []).map(x => x.id === aId ? { ...x, priority:"klar", status:"klar", completedAt:new Date().toISOString() } : x),
-                }));
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={()=>{
+                const baseUpd = { ...openItem, ...draft, updatedAt: new Date().toISOString(), priority:"klar", status:"klar", completedAt:new Date().toISOString() };
+                setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x) }));
                 setOpenItem(null); setDraft(null);
-              }}>
+              }} type="button">
                 Spara & Markera Klar
               </button>
               <button className="px-3 py-2 rounded bg-orange-500 text-white" onClick={()=>{
-                // spara
-                const baseUpd = { ...openItem, ...draft, updatedAt:new Date().toISOString() };
-                setState(s => ({
-                  ...s,
-                  activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x),
-                }));
-                // återkoppling
-                setState(s => ({
-                  ...s,
-                  activities: (s.activities || []).map(x => x.id === baseUpd.id ? { ...x, status:"återkoppling" } : x),
-                }));
+                const baseUpd = { ...openItem, ...draft, updatedAt:new Date().toISOString(), status:"återkoppling" };
+                setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x) }));
                 setOpenItem(null); setDraft(null);
-              }}>
+              }} type="button">
                 Spara & Återkoppling
               </button>
-              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)} type="button">
                 Ta bort
               </button>
 
               <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{
                 const baseUpd = { ...openItem, ...draft, updatedAt:new Date().toISOString() };
-                setState(s => ({
-                  ...s,
-                  activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x),
-                }));
+                setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x) }));
                 setOpenItem(null); setDraft(null);
-              }}>
+              }} type="button">
                 Spara
               </button>
-              <button className="px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+              <button className="px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">
                 Avbryt
               </button>
             </div>
@@ -545,31 +489,8 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   );
 }
 
-/* ===== Gemensamt för fil-hantering (UI i Offers/Projects) ===== */
-const FILE_CATS = ["Ritningar","Offerter","Kalkyler","KMA"];
-
-// Konvertera objekt -> lista
-function flattenFiles(obj) {
-  if (!obj || typeof obj !== "object") return [];
-  const out = [];
-  FILE_CATS.forEach(cat => {
-    const arr = Array.isArray(obj[cat]) ? obj[cat] : [];
-    arr.forEach(f => out.push({ id: f.id || Math.random().toString(36).slice(2), name: f.name||"fil", webUrl: f.webUrl||f.url||"#", category: cat }));
-  });
-  return out;
-}
-// Konvertera lista -> objekt
-function groupFiles(list) {
-  const obj = { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
-  (list||[]).forEach(f=>{
-    const cat = FILE_CATS.includes(f.category) ? f.category : "Offerter";
-    obj[cat].push({ id:f.id||Math.random().toString(36).slice(2), name:f.name||"fil", webUrl:f.webUrl||f.url||"#" });
-  });
-  return obj;
-}
-
 /* ======================================
-   CustomersPanel — popup vid ny kund
+   Kunder — popup vid ny kund
    ====================================== */
 function CustomersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
@@ -666,13 +587,13 @@ function CustomersPanel({ entities = [], setState }) {
         {list.map(c => (
           <li key={c.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
-              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(c)}>
+              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(c)} type="button">
                 <div className="font-medium truncate">{c.companyName || "(namnlös kund)"}</div>
                 <div className="text-xs text-gray-500">{c.city || ""}</div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{c.customerCategory || "—"}</span>
-                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(c)}>
+                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(c)} type="button">
                   Ta bort
                 </button>
               </div>
@@ -687,7 +608,7 @@ function CustomersPanel({ entities = [], setState }) {
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera kund</div>
-              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">Stäng</button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -731,9 +652,9 @@ function CustomersPanel({ entities = [], setState }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>Spara</button>
-              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>Ta bort</button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Avbryt</button>
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft} type="button">Spara</button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)} type="button">Ta bort</button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">Avbryt</button>
             </div>
           </div>
         </div>
@@ -742,9 +663,9 @@ function CustomersPanel({ entities = [], setState }) {
   );
 }
 
-/* ==========================================
-   SuppliersPanel — popup vid ny leverantör
-   ========================================== */
+/* ======================================
+   Leverantörer — popup vid ny leverantör
+   ====================================== */
 function SuppliersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
@@ -825,7 +746,7 @@ function SuppliersPanel({ entities = [], setState }) {
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+      <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold">Leverantörer</h2>
         <div className="flex gap-2">
           <input className="border rounded-xl px-3 py-2" placeholder="Sök..." value={q} onChange={e=>setQ(e.target.value)} />
@@ -844,13 +765,13 @@ function SuppliersPanel({ entities = [], setState }) {
         {list.map(sup => (
           <li key={sup.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
-              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(sup)}>
+              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(sup)} type="button">
                 <div className="font-medium truncate">{sup.companyName || "(namnlös leverantör)"}</div>
                 <div className="text-xs text-gray-500">{sup.city || ""}</div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{sup.supplierCategory || "—"}</span>
-                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(sup)}>
+                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(sup)} type="button">
                   Ta bort
                 </button>
               </div>
@@ -865,7 +786,7 @@ function SuppliersPanel({ entities = [], setState }) {
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera leverantör</div>
-              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">Stäng</button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -911,9 +832,9 @@ function SuppliersPanel({ entities = [], setState }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>Spara</button>
-              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>Ta bort</button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Avbryt</button>
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft} type="button">Spara</button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)} type="button">Ta bort</button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">Avbryt</button>
             </div>
           </div>
         </div>
@@ -923,7 +844,7 @@ function SuppliersPanel({ entities = [], setState }) {
 }
 
 /* ======================================
-   OffersPanel — filrader med kategori + flera leverantörer
+   Offerter — filrader + flera leverantörer
    ====================================== */
 function OffersPanel({ offers = [], entities = [], setState }) {
   const [q, setQ] = useState("");
@@ -1005,7 +926,7 @@ function OffersPanel({ offers = [], entities = [], setState }) {
             id: p.id || Math.random().toString(36).slice(2),
             name: p.name || "fil",
             webUrl: p.webUrl || p.url || "#",
-            category: "Offerter"
+            category: "Offerter" // användare kan ändra i dropdown per rad
           }))
         ]
       }));
@@ -1073,7 +994,7 @@ function OffersPanel({ offers = [], entities = [], setState }) {
       files,
       originatingOfferId: draft.id,
       createdAt: new Date().toISOString(),
-      _shouldOpen: true
+      // OBS: ingen _shouldOpen – vi öppnar inte popupen automatiskt
     };
     setState(s=>({
       ...s,
@@ -1081,7 +1002,7 @@ function OffersPanel({ offers = [], entities = [], setState }) {
       offers: (s.offers||[]).map(o=>o.id===draft.id ? { ...o, status:"vunnen", updatedAt:new Date().toISOString() } : o)
     }));
     setOpenItem(null); setDraft(null);
-    alert("Projekt skapat från offert.");
+    alert("Projekt skapat från offert (öppnas inte automatiskt).");
   };
 
   return (
@@ -1095,13 +1016,14 @@ function OffersPanel({ offers = [], entities = [], setState }) {
         {list.map(o=>(
           <li key={o.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
-              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(o)}>
+              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(o)} type="button">
                 <div className="font-medium truncate">{o.title||"Offert"}</div>
-                <div className="text-xs text-gray-500">Kund: {customerName(o.customerId)} · {o.status||"utkast"}</div>
+                <div className="text-xs text-gray-500">
+                  Kund: {customerName(o.customerId)} · {o.status||"utkast"} · {(o.value||0).toLocaleString("sv-SE")} kr
+                </div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{(o.value||0).toLocaleString("sv-SE")} kr</span>
-                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(o)}>Ta bort</button>
+                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(o)} type="button">Ta bort</button>
               </div>
             </div>
           </li>
@@ -1114,7 +1036,7 @@ function OffersPanel({ offers = [], entities = [], setState }) {
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-3xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera offert</div>
-              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">Stäng</button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1170,7 +1092,7 @@ function OffersPanel({ offers = [], entities = [], setState }) {
                     return (
                       <li key={id} className="flex items-center justify-between gap-2">
                         <span className="truncate">{sup?.companyName || id}</span>
-                        <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeSupplierFromOffer(id)}>Ta bort</button>
+                        <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeSupplierFromOffer(id)} type="button">Ta bort</button>
                       </li>
                     );
                   })}
@@ -1183,8 +1105,8 @@ function OffersPanel({ offers = [], entities = [], setState }) {
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">Filer</div>
                 <div className="flex gap-2">
-                  <button className="text-xs px-2 py-1 rounded border" onClick={addFilesFromOneDrive}>+ Lägg till från OneDrive</button>
-                  <button className="text-xs px-2 py-1 rounded border" onClick={addManualFile}>+ Lägg till länk manuellt</button>
+                  <button className="text-xs px-2 py-1 rounded border" onClick={addFilesFromOneDrive} type="button">+ Lägg till från OneDrive</button>
+                  <button className="text-xs px-2 py-1 rounded border" onClick={addManualFile} type="button">+ Lägg till länk manuellt</button>
                 </div>
               </div>
 
@@ -1206,7 +1128,7 @@ function OffersPanel({ offers = [], entities = [], setState }) {
                         <input className="w-full border rounded px-2 py-1 text-sm" value={f.webUrl||""} onChange={e=>setFileField(idx,"webUrl",e.target.value)} placeholder="Länk (URL)" />
                       </div>
                       <div className="col-span-1 text-right">
-                        <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFileRow(idx)}>Ta bort</button>
+                        <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFileRow(idx)} type="button">Ta bort</button>
                       </div>
                     </div>
                   ))}
@@ -1215,14 +1137,14 @@ function OffersPanel({ offers = [], entities = [], setState }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>Spara</button>
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft} type="button">Spara</button>
               {draft.status==="vunnen" && (
-                <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={createProjectFromOffer}>
+                <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={createProjectFromOffer} type="button">
                   Skapa projekt från offert (ärver filer)
                 </button>
               )}
-              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>Ta bort</button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Avbryt</button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)} type="button">Ta bort</button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">Avbryt</button>
             </div>
           </div>
         </div>
@@ -1232,9 +1154,9 @@ function OffersPanel({ offers = [], entities = [], setState }) {
 }
 
 /* ======================================
-   ProjectsPanel — filrader med kategori
+   Projekt — filrader + vunnen-offert-badge
    ====================================== */
-function ProjectsPanel({ projects = [], setState, entities = [] }) {
+function ProjectsPanel({ projects = [], setState, entities = [], offers = [] }) {
   const [q, setQ] = useState("");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -1356,6 +1278,17 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
     if(openItem?.id===p.id){ setOpenItem(null); setDraft(null); }
   };
 
+  const projectStatusBadge = (status)=>{
+    const base="text-xs px-2 py-1 rounded";
+    switch(status){
+      case "pågående": return `${base} bg-blue-100 text-blue-700`;
+      case "klar":     return `${base} bg-green-100 text-green-700`;
+      case "pausad":   return `${base} bg-yellow-100 text-yellow-700`;
+      case "förlorad": return `${base} bg-rose-100 text-rose-700`;
+      default:         return `${base} bg-gray-100 text-gray-700`;
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow p-4">
       <div className="flex items-center justify-between mb-3">
@@ -1364,20 +1297,26 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
       </div>
 
       <ul className="divide-y">
-        {list.map(p=>(
-          <li key={p.id} className="py-3">
-            <div className="flex items-center justify-between gap-3">
-              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(p)}>
-                <div className="font-medium truncate">{p.name||"Projekt"}</div>
-                <div className="text-xs text-gray-500">Kund: {customerName(p.customerId)} · {p.status||"pågående"}</div>
-              </button>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{(p.budget||0).toLocaleString("sv-SE")} kr</span>
-                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(p)}>Ta bort</button>
+        {list.map(p=>{
+          const wonOffer = p.originatingOfferId && (offers||[]).find(o=>o.id===p.originatingOfferId && o.status==="vunnen");
+          return (
+            <li key={p.id} className="py-3">
+              <div className="flex items-center justify-between gap-3">
+                <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(p)} type="button">
+                  <div className="font-medium truncate">{p.name||"Projekt"}</div>
+                  <div className="text-xs text-gray-500">
+                    Kund: {customerName(p.customerId)} · <span className={projectStatusBadge(p.status)}>{p.status||"pågående"}</span>
+                    {wonOffer ? <span className="ml-2 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">Vunnen offert</span> : null}
+                  </div>
+                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{(p.budget||0).toLocaleString("sv-SE")} kr</span>
+                  <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(p)} type="button">Ta bort</button>
+                </div>
               </div>
-            </div>
-          </li>
-        ))}
+            </li>
+          );
+        })}
         {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga projekt.</li>}
       </ul>
 
@@ -1386,7 +1325,7 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-3xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera projekt</div>
-              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">Stäng</button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -1407,6 +1346,7 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
                   <option value="pågående">pågående</option>
                   <option value="klar">klar</option>
                   <option value="pausad">pausad</option>
+                  <option value="förlorad">förlorad</option>
                 </select>
               </div>
               <div>
@@ -1431,8 +1371,8 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">Filer</div>
                 <div className="flex gap-2">
-                  <button className="text-xs px-2 py-1 rounded border" onClick={addFilesFromOneDrive}>+ Lägg till från OneDrive</button>
-                  <button className="text-xs px-2 py-1 rounded border" onClick={addManualFile}>+ Lägg till länk manuellt</button>
+                  <button className="text-xs px-2 py-1 rounded border" onClick={addFilesFromOneDrive} type="button">+ Lägg till från OneDrive</button>
+                  <button className="text-xs px-2 py-1 rounded border" onClick={addManualFile} type="button">+ Lägg till länk manuellt</button>
                 </div>
               </div>
 
@@ -1454,7 +1394,7 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
                         <input className="w-full border rounded px-2 py-1 text-sm" value={f.webUrl||""} onChange={e=>setFileField(idx,"webUrl",e.target.value)} placeholder="Länk (URL)" />
                       </div>
                       <div className="col-span-1 text-right">
-                        <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFileRow(idx)}>Ta bort</button>
+                        <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFileRow(idx)} type="button">Ta bort</button>
                       </div>
                     </div>
                   ))}
@@ -1463,9 +1403,9 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>Spara</button>
-              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>Ta bort</button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Avbryt</button>
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft} type="button">Spara</button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)} type="button">Ta bort</button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">Avbryt</button>
             </div>
           </div>
         </div>
@@ -1474,12 +1414,58 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
   );
 }
 
+/* ======================================
+   Arkiv — förlorade + borttagna
+   ====================================== */
+function ArchivePanel({ offers = [], projects = [] }) {
+  const lostOffers   = useMemo(()=> (offers||[]).filter(o=>o.status==="förlorad" && !o.deletedAt), [offers]);
+  const lostProjects = useMemo(()=> (projects||[]).filter(p=>p.status==="förlorad" && !p.deletedAt), [projects]);
+  const deletedOffers  = useMemo(()=> (offers||[]).filter(o=>o.deletedAt), [offers]);
+  const deletedProjects= useMemo(()=> (projects||[]).filter(p=>p.deletedAt), [projects]);
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-4 space-y-6">
+      <section>
+        <h3 className="font-semibold mb-2">Förlorade offerter</h3>
+        <ul className="text-sm list-disc pl-5">
+          {lostOffers.map(o => <li key={o.id}>{o.title||o.id}</li>)}
+          {lostOffers.length===0 && <li className="text-gray-500">Inga förlorade offerter.</li>}
+        </ul>
+      </section>
+
+      <section>
+        <h3 className="font-semibold mb-2">Förlorade projekt</h3>
+        <ul className="text-sm list-disc pl-5">
+          {lostProjects.map(p => <li key={p.id}>{p.name||p.id}</li>)}
+          {lostProjects.length===0 && <li className="text-gray-500">Inga förlorade projekt.</li>}
+        </ul>
+      </section>
+
+      <section>
+        <h3 className="font-semibold mb-2">Borttagna offerter</h3>
+        <ul className="text-sm list-disc pl-5">
+          {deletedOffers.map(o => <li key={o.id}>{o.title||o.id}</li>)}
+          {deletedOffers.length===0 && <li className="text-gray-500">Inga borttagna offerter.</li>}
+        </ul>
+      </section>
+
+      <section>
+        <h3 className="font-semibold mb-2">Borttagna projekt</h3>
+        <ul className="text-sm list-disc pl-5">
+          {deletedProjects.map(p => <li key={p.id}>{p.name||p.id}</li>)}
+          {deletedProjects.length===0 && <li className="text-gray-500">Inga borttagna projekt.</li>}
+        </ul>
+      </section>
+    </div>
+  );
+}
+
 /* ===========================
-   App — default export med layout
+   App — layout + sidomeny
    =========================== */
 export default function App() {
   const [state, setState] = useStore();
-  const [view, setView] = useState("activities"); // activities | customers | suppliers | offers | projects
+  const [view, setView] = useState("activities"); // activities | customers | suppliers | offers | projects | archive
 
   const newId = () => (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
@@ -1565,19 +1551,19 @@ export default function App() {
       <header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Mach CRM</h1>
         <div className="flex items-center gap-2">
-          <button className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300" onClick={createActivity} title="Skapa ny aktivitet">
+          <button className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300" onClick={createActivity} title="Skapa ny aktivitet" type="button">
             + Ny aktivitet
           </button>
-          <button className="border rounded-xl px-3 py-2 bg-orange-300 hover:bg-orange-400" onClick={createOffer} title="Skapa ny offert">
+          <button className="border rounded-xl px-3 py-2 bg-orange-300 hover:bg-orange-400" onClick={createOffer} title="Skapa ny offert" type="button">
             + Ny offert
           </button>
-          <button className="border rounded-xl px-3 py-2 bg-green-200 hover:bg-green-300" onClick={createProjectEmpty} title="Skapa nytt projekt">
+          <button className="border rounded-xl px-3 py-2 bg-green-200 hover:bg-green-300" onClick={createProjectEmpty} title="Skapa nytt projekt" type="button">
             + Nytt projekt
           </button>
-          <button className="border rounded-xl px-3 py-2 bg-blue-200 hover:bg-blue-300" onClick={createCustomer} title="Lägg till kund">
+          <button className="border rounded-xl px-3 py-2 bg-blue-200 hover:bg-blue-300" onClick={createCustomer} title="Lägg till kund" type="button">
             + Ny kund
           </button>
-          <button className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300" onClick={createSupplier} title="Lägg till leverantör">
+          <button className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300" onClick={createSupplier} title="Lägg till leverantör" type="button">
             + Ny leverantör
           </button>
 
@@ -1586,6 +1572,7 @@ export default function App() {
             className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
             onClick={()=>alert("Inställningar (export/import, OneDrive-konfig) lägger vi här i nästa steg.")}
             title="Inställningar"
+            type="button"
           >
             🛠️
           </button>
@@ -1603,11 +1590,13 @@ export default function App() {
               ["suppliers","Leverantörer"],
               ["offers","Offerter"],
               ["projects","Projekt"],
+              ["archive","Arkiv"],
             ].map(([k,label])=>(
               <button
                 key={k}
                 className={`w-full text-left px-3 py-2 rounded-xl border ${view===k? "bg-black text-white":"bg-white text-gray-800 hover:bg-gray-50"}`}
                 onClick={()=>setView(k)}
+                type="button"
               >
                 {label}
               </button>
@@ -1618,7 +1607,7 @@ export default function App() {
         {/* INNEHÅLL (höger) */}
         <main className="col-span-12 md:col-span-9 lg:col-span-10">
           {view==="activities" && (
-            <ActivitiesPanelNew
+            <ActivitiesPanel
               activities={state.activities || []}
               entities={state.entities || []}
               setState={setState}
@@ -1652,6 +1641,14 @@ export default function App() {
               projects={state.projects || []}
               setState={setState}
               entities={state.entities || []}
+              offers={state.offers || []}
+            />
+          )}
+
+          {view==="archive" && (
+            <ArchivePanel
+              offers={state.offers || []}
+              projects={state.projects || []}
             />
           )}
         </main>
