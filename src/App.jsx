@@ -62,7 +62,7 @@ function useStore() {
 
 /* ==========================================================
    ActivitiesPanelNew — popup, ikoner, filter, Ta bort
-   (Låt denna vara — det är samma variant som du gillade)
+   (oförändrad från din version som fungerade)
    ========================================================== */
 function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter]   = useState("all");
@@ -261,6 +261,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
+      {/* filterraden */}
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <h2 className="font-semibold">Aktiviteter</h2>
 
@@ -328,6 +329,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
         </div>
       </div>
 
+      {/* lista */}
       <ul className="divide-y">
         {list.map(a => (
           <li key={a.id} className="py-3">
@@ -362,6 +364,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
         )}
       </ul>
 
+      {/* popup */}
       {openItem && draft && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
@@ -376,14 +379,14 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.title}
-                  onChange={e=>updateDraft("title", e.target.value)}
+                  onChange={e=>setDraft(d=>({...d, title:e.target.value}))}
                   placeholder="Vad handlar aktiviteten om?"
                 />
               </div>
 
               <div>
                 <label className="text-sm font-medium">Ansvarig</label>
-                <select className="w-full border rounded px-3 py-2" value={draft.responsible} onChange={e=>updateDraft("responsible", e.target.value)}>
+                <select className="w-full border rounded px-3 py-2" value={draft.responsible} onChange={e=>setDraft(d=>({...d, responsible:e.target.value}))}>
                   <option>Mattias</option>
                   <option>Cralle</option>
                   <option>Övrig</option>
@@ -392,16 +395,16 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
 
               <div>
                 <label className="text-sm font-medium">Datum</label>
-                <input type="date" className="w-full border rounded px-3 py-2" value={draft.dueDate} onChange={e=>updateDraft("dueDate", e.target.value)} />
+                <input type="date" className="w-full border rounded px-3 py-2" value={draft.dueDate} onChange={e=>setDraft(d=>({...d, dueDate:e.target.value}))} />
               </div>
               <div>
                 <label className="text-sm font-medium">Tid</label>
-                <input type="time" className="w-full border rounded px-3 py-2" value={draft.dueTime} onChange={e=>updateDraft("dueTime", e.target.value)} />
+                <input type="time" className="w-full border rounded px-3 py-2" value={draft.dueTime} onChange={e=>setDraft(d=>({...d, dueTime:e.target.value}))} />
               </div>
 
               <div>
                 <label className="text-sm font-medium">Prioritet</label>
-                <select className="w-full border rounded px-3 py-2" value={draft.priority} onChange={e=>updateDraft("priority", e.target.value)}>
+                <select className="w-full border rounded px-3 py-2" value={draft.priority} onChange={e=>setDraft(d=>({...d, priority:e.target.value}))}>
                   <option value="low">Låg</option>
                   <option value="medium">Normal</option>
                   <option value="high">Hög</option>
@@ -410,7 +413,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
               </div>
               <div>
                 <label className="text-sm font-medium">Status</label>
-                <select className="w-full border rounded px-3 py-2" value={draft.status} onChange={e=>updateDraft("status", e.target.value)}>
+                <select className="w-full border rounded px-3 py-2" value={draft.status} onChange={e=>setDraft(d=>({...d, status:e.target.value}))}>
                   <option value="">—</option>
                   <option value="återkoppling">Återkoppling</option>
                   <option value="klar">Klar</option>
@@ -421,19 +424,19 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
                 <div className="text-sm font-medium mb-1">Typ</div>
                 <div className="flex flex-wrap gap-4 text-sm">
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={!!draft.isPhone} onChange={e=>updateDraft("isPhone", e.target.checked)} />
+                    <input type="checkbox" checked={!!draft.isPhone} onChange={e=>setDraft(d=>({...d, isPhone:e.target.checked}))} />
                     <span>📞 Telefon</span>
                   </label>
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={!!draft.isEmail} onChange={e=>updateDraft("isEmail", e.target.checked)} />
+                    <input type="checkbox" checked={!!draft.isEmail} onChange={e=>setDraft(d=>({...d, isEmail:e.target.checked}))} />
                     <span>✉️ Mail</span>
                   </label>
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={!!draft.isLunch} onChange={e=>updateDraft("isLunch", e.target.checked)} />
+                    <input type="checkbox" checked={!!draft.isLunch} onChange={e=>setDraft(d=>({...d, isLunch:e.target.checked}))} />
                     <span>🥪 Lunch</span>
                   </label>
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={!!draft.isMeeting} onChange={e=>updateDraft("isMeeting", e.target.checked)} />
+                    <input type="checkbox" checked={!!draft.isMeeting} onChange={e=>setDraft(d=>({...d, isMeeting:e.target.checked}))} />
                     <span>📅 Möte</span>
                   </label>
                 </div>
@@ -441,7 +444,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
 
               <div>
                 <label className="text-sm font-medium">Kund</label>
-                <select className="w-full border rounded px-3 py-2" value={draft.customerId} onChange={e=>updateDraft("customerId", e.target.value)}>
+                <select className="w-full border rounded px-3 py-2" value={draft.customerId} onChange={e=>setDraft(d=>({...d, customerId:e.target.value}))}>
                   <option value="">—</option>
                   {customers.map(c => (<option key={c.id} value={c.id}>{c.companyName || c.name || c.id}</option>))}
                 </select>
@@ -449,7 +452,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
 
               <div>
                 <label className="text-sm font-medium">Leverantör</label>
-                <select className="w-full border rounded px-3 py-2" value={draft.supplierId} onChange={e=>updateDraft("supplierId", e.target.value)}>
+                <select className="w-full border rounded px-3 py-2" value={draft.supplierId} onChange={e=>setDraft(d=>({...d, supplierId:e.target.value}))}>
                   <option value="">—</option>
                   {suppliers.map(s => (<option key={s.id} value={s.id}>{s.companyName || s.name || s.id}</option>))}
                 </select>
@@ -457,27 +460,78 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
 
               <div className="col-span-2">
                 <label className="text-sm font-medium">Kontakt</label>
-                <input className="w-full border rounded px-3 py-2" value={draft.contactName} onChange={e=>updateDraft("contactName", e.target.value)} placeholder="Namn på kontaktperson" />
+                <input className="w-full border rounded px-3 py-2" value={draft.contactName} onChange={e=>setDraft(d=>({...d, contactName:e.target.value}))} placeholder="Namn på kontaktperson" />
               </div>
 
               <div className="col-span-2">
                 <label className="text-sm font-medium">Beskrivning</label>
-                <textarea className="w-full border rounded px-3 py-2 min-h-[100px]" value={draft.description} onChange={e=>updateDraft("description", e.target.value)} />
+                <textarea className="w-full border rounded px-3 py-2 min-h-[100px]" value={draft.description} onChange={e=>setDraft(d=>({...d, description:e.target.value}))} />
               </div>
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={()=>{ saveDraft(); markKlar(draft.id); }}>
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={()=>{ 
+                const aId = draft.id;
+                // spara
+                const baseUpd = {
+                  ...openItem,
+                  title: draft.title || "",
+                  responsible: draft.responsible || "Övrig",
+                  dueDate: draft.dueDate || "",
+                  dueTime: draft.dueTime || "",
+                  priority: draft.priority || "medium",
+                  status: draft.status || "",
+                  description: draft.description || "",
+                  customerId: draft.customerId || "",
+                  supplierId: draft.supplierId || "",
+                  contactName: draft.contactName || "",
+                  isPhone: !!draft.isPhone,
+                  isEmail: !!draft.isEmail,
+                  isLunch: !!draft.isLunch,
+                  isMeeting: !!draft.isMeeting,
+                  updatedAt: new Date().toISOString(),
+                };
+                setState(s => ({
+                  ...s,
+                  activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x),
+                }));
+                // markera klar
+                setState(s => ({
+                  ...s,
+                  activities: (s.activities || []).map(x => x.id === aId ? { ...x, priority:"klar", status:"klar", completedAt:new Date().toISOString() } : x),
+                }));
+                setOpenItem(null); setDraft(null);
+              }}>
                 Spara & Markera Klar
               </button>
-              <button className="px-3 py-2 rounded bg-orange-500 text-white" onClick={()=>{ saveDraft(); markAterkoppling(draft.id); }}>
+              <button className="px-3 py-2 rounded bg-orange-500 text-white" onClick={()=>{
+                // spara
+                const baseUpd = { ...openItem, ...draft, updatedAt:new Date().toISOString() };
+                setState(s => ({
+                  ...s,
+                  activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x),
+                }));
+                // återkoppling
+                setState(s => ({
+                  ...s,
+                  activities: (s.activities || []).map(x => x.id === baseUpd.id ? { ...x, status:"återkoppling" } : x),
+                }));
+                setOpenItem(null); setDraft(null);
+              }}>
                 Spara & Återkoppling
               </button>
               <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
                 Ta bort
               </button>
 
-              <button className="ml-auto px-3 py-2 rounded border" onClick={saveDraft}>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{
+                const baseUpd = { ...openItem, ...draft, updatedAt:new Date().toISOString() };
+                setState(s => ({
+                  ...s,
+                  activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x),
+                }));
+                setOpenItem(null); setDraft(null);
+              }}>
                 Spara
               </button>
               <button className="px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
@@ -491,15 +545,50 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   );
 }
 
+/* ===== Gemensamt för fil-hantering (UI i Offers/Projects) ===== */
+const FILE_CATS = ["Ritningar","Offerter","Kalkyler","KMA"];
+
+// Konvertera objekt -> lista
+function flattenFiles(obj) {
+  if (!obj || typeof obj !== "object") return [];
+  const out = [];
+  FILE_CATS.forEach(cat => {
+    const arr = Array.isArray(obj[cat]) ? obj[cat] : [];
+    arr.forEach(f => out.push({ id: f.id || Math.random().toString(36).slice(2), name: f.name||"fil", webUrl: f.webUrl||f.url||"#", category: cat }));
+  });
+  return out;
+}
+// Konvertera lista -> objekt
+function groupFiles(list) {
+  const obj = { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
+  (list||[]).forEach(f=>{
+    const cat = FILE_CATS.includes(f.category) ? f.category : "Offerter";
+    obj[cat].push({ id:f.id||Math.random().toString(36).slice(2), name:f.name||"fil", webUrl:f.webUrl||f.url||"#" });
+  });
+  return obj;
+}
+
 /* ======================================
-   CustomersPanel — sök + kategorifilter + pop-up
+   CustomersPanel — popup vid ny kund
    ====================================== */
 function CustomersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
-  const [cat, setCat] = useState("all"); // StålHall | Totalentreprenad | Turbovex | all
-
+  const [cat, setCat] = useState("all");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
+
+  // Öppna direkt om _shouldOpen är satt
+  useEffect(() => {
+    const c = (entities||[]).find(e => e.type==="customer" && e._shouldOpen);
+    if (!c) return;
+    setOpenItem(c);
+    setDraft({
+      id: c.id, companyName: c.companyName||"", orgNo:c.orgNo||"", phone:c.phone||"",
+      email:c.email||"", address:c.address||"", zip:c.zip||"", city:c.city||"",
+      customerCategory:c.customerCategory||""
+    });
+    setState(s=>({...s, entities:(s.entities||[]).map(e=> e.id===c.id? {...e, _shouldOpen:undefined }:e)}));
+  }, [entities, setState]);
 
   const list = useMemo(() => {
     let arr = (entities || []).filter(e => e.type === "customer" && !e.deletedAt);
@@ -511,9 +600,7 @@ function CustomersPanel({ entities = [], setState }) {
         (e.city||"").toLowerCase().includes(s)
       );
     }
-    if (cat !== "all") {
-      arr = arr.filter(e => (e.customerCategory||"") === cat);
-    }
+    if (cat !== "all") arr = arr.filter(e => (e.customerCategory||"") === cat);
     arr.sort((a,b)=> (a.companyName||"").localeCompare(b.companyName||""));
     return arr;
   }, [entities, q, cat]);
@@ -644,15 +731,9 @@ function CustomersPanel({ entities = [], setState }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
-                Spara
-              </button>
-              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
-                Ta bort
-              </button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
-                Avbryt
-              </button>
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>Spara</button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>Ta bort</button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Avbryt</button>
             </div>
           </div>
         </div>
@@ -662,14 +743,26 @@ function CustomersPanel({ entities = [], setState }) {
 }
 
 /* ==========================================
-   SuppliersPanel — sök + kategorifilter + pop-up
+   SuppliersPanel — popup vid ny leverantör
    ========================================== */
 function SuppliersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
-
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
+
+  // Öppna direkt om _shouldOpen är satt
+  useEffect(() => {
+    const s = (entities||[]).find(e => e.type==="supplier" && e._shouldOpen);
+    if (!s) return;
+    setOpenItem(s);
+    setDraft({
+      id:s.id, companyName:s.companyName||"", orgNo:s.orgNo||"", phone:s.phone||"",
+      email:s.email||"", address:s.address||"", zip:s.zip||"", city:s.city||"",
+      supplierCategory:s.supplierCategory||""
+    });
+    setState(st=>({...st, entities:(st.entities||[]).map(e=> e.id===s.id? {...e,_shouldOpen:undefined}:e)}));
+  }, [entities, setState]);
 
   const list = useMemo(() => {
     let arr = (entities || []).filter(e => e.type === "supplier" && !e.deletedAt);
@@ -818,15 +911,9 @@ function SuppliersPanel({ entities = [], setState }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
-                Spara
-              </button>
-              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
-                Ta bort
-              </button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
-                Avbryt
-              </button>
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>Spara</button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>Ta bort</button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Avbryt</button>
             </div>
           </div>
         </div>
@@ -836,24 +923,22 @@ function SuppliersPanel({ entities = [], setState }) {
 }
 
 /* ======================================
-   OffersPanel — list + pop-up + OneDrive
+   OffersPanel — filrader med kategori + flera leverantörer
    ====================================== */
 function OffersPanel({ offers = [], entities = [], setState }) {
   const [q, setQ] = useState("");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
-  const CATS = ["Ritningar", "Offerter", "Kalkyler", "KMA"];
-  const newId = () => (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-
-  const customers = useMemo(() => (entities || []).filter(e => e.type === "customer"), [entities]);
+  const customers  = useMemo(() => (entities || []).filter(e => e.type === "customer"), [entities]);
+  const suppliers  = useMemo(() => (entities || []).filter(e => e.type === "supplier"), [entities]);
   const customerName = id => (customers.find(c=>c.id===id)?.companyName) || "—";
 
-  // Öppna direkt om _shouldOpen är satt (nyss skapad)
+  // Öppna direkt vid ny skapad
   useEffect(() => {
     const o = (offers || []).find(x => x?._shouldOpen);
     if (!o) return;
-    const files = o.files && typeof o.files === "object" ? o.files : { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
+    const filesList = flattenFiles(o.files);
     setOpenItem(o);
     setDraft({
       id:o.id,
@@ -862,12 +947,8 @@ function OffersPanel({ offers = [], entities = [], setState }) {
       value:o.value ?? 0,
       status:o.status||"utkast",
       note:o.note||"",
-      files: {
-        Ritningar: Array.isArray(files.Ritningar)? files.Ritningar.slice():[],
-        Offerter:  Array.isArray(files.Offerter)?  files.Offerter.slice():[],
-        Kalkyler:  Array.isArray(files.Kalkyler)?  files.Kalkyler.slice():[],
-        KMA:       Array.isArray(files.KMA)?       files.KMA.slice():[],
-      },
+      filesList, // [{id,name,webUrl,category}]
+      supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
     });
     setState(s => ({
       ...s,
@@ -886,7 +967,7 @@ function OffersPanel({ offers = [], entities = [], setState }) {
   }, [offers, q]);
 
   const openEdit = (o)=>{
-    const files = o.files && typeof o.files === "object" ? o.files : { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
+    const filesList = flattenFiles(o.files);
     setOpenItem(o);
     setDraft({
       id:o.id,
@@ -895,38 +976,68 @@ function OffersPanel({ offers = [], entities = [], setState }) {
       value:o.value ?? 0,
       status:o.status||"utkast",
       note:o.note||"",
-      files: {
-        Ritningar: Array.isArray(files.Ritningar)? files.Ritningar.slice():[],
-        Offerter:  Array.isArray(files.Offerter)?  files.Offerter.slice():[],
-        Kalkyler:  Array.isArray(files.Kalkyler)?  files.Kalkyler.slice():[],
-        KMA:       Array.isArray(files.KMA)?       files.KMA.slice():[],
-      },
+      filesList,
+      supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
     });
   };
-  const updateDraft = (k,v)=> setDraft(d=>({ ...d, [k]: v }));
-  const updateFiles = (cat, files)=> setDraft(d=>({ ...d, files: { ...d.files, [cat]: files }}));
 
-  const addFiles = async (cat)=>{
+  const setFileField = (idx, field, value) => {
+    setDraft(d=>{
+      const copy = (d.filesList||[]).slice();
+      copy[idx] = { ...copy[idx], [field]: value };
+      return { ...d, filesList: copy };
+    });
+  };
+  const addManualFile = () => {
+    setDraft(d => ({
+      ...d,
+      filesList: [...(d.filesList||[]), { id: Math.random().toString(36).slice(2), name:"Ny fil", webUrl:"#", category:"Offerter" }]
+    }));
+  };
+  const addFilesFromOneDrive = async () => {
     try{
       const picked = await pickOneDriveFiles();
       if (!picked || picked.length===0) return;
-      const next = (draft.files[cat]||[]).concat(
-        picked.map(p=>({ id:p.id||newId(), name:p.name||"fil", webUrl:p.webUrl||p.url||"#" }))
-      );
-      updateFiles(cat, next);
+      setDraft(d => ({
+        ...d,
+        filesList: [...(d.filesList||[]),
+          ...picked.map(p => ({
+            id: p.id || Math.random().toString(36).slice(2),
+            name: p.name || "fil",
+            webUrl: p.webUrl || p.url || "#",
+            category: "Offerter"
+          }))
+        ]
+      }));
     }catch(e){
-      alert("Kunde inte hämta filer från OneDrive.");
-      console.warn(e);
+      // Fallback — låt användaren lägga till manuellt
+      alert("Kunde inte hämta filer från OneDrive. Du kan lägga till manuellt med knappen nedan.");
     }
   };
-  const removeFile = (cat, idx)=>{
-    const next = (draft.files[cat]||[]).slice();
-    next.splice(idx,1);
-    updateFiles(cat, next);
+  const removeFileRow = (idx) => {
+    setDraft(d=>{
+      const copy = (d.filesList||[]).slice();
+      copy.splice(idx,1);
+      return { ...d, filesList: copy };
+    });
+  };
+
+  // Leverantörer på offert (flera)
+  const addSupplierToOffer = (supplierId)=>{
+    if (!supplierId) return;
+    setDraft(d=>{
+      const set = new Set(d.supplierIds||[]);
+      set.add(supplierId);
+      return { ...d, supplierIds: Array.from(set) };
+    });
+  };
+  const removeSupplierFromOffer = (supplierId)=>{
+    setDraft(d=> ({ ...d, supplierIds: (d.supplierIds||[]).filter(id=>id!==supplierId) }));
   };
 
   const saveDraft = ()=>{
     if (!draft) return;
+    const files = groupFiles(draft.filesList||[]);
     setState(s=>({
       ...s,
       offers: (s.offers||[]).map(o=>o.id===draft.id ? {
@@ -936,12 +1047,8 @@ function OffersPanel({ offers = [], entities = [], setState }) {
         value: Number(draft.value)||0,
         status: draft.status||"utkast",
         note: draft.note||"",
-        files: {
-          Ritningar: draft.files.Ritningar||[],
-          Offerter:  draft.files.Offerter||[],
-          Kalkyler:  draft.files.Kalkyler||[],
-          KMA:       draft.files.KMA||[],
-        },
+        files,
+        supplierIds: Array.isArray(draft.supplierIds) ? draft.supplierIds.slice() : [],
         updatedAt:new Date().toISOString()
       } : o)
     }));
@@ -955,6 +1062,7 @@ function OffersPanel({ offers = [], entities = [], setState }) {
 
   const createProjectFromOffer = ()=>{
     if (!draft) return;
+    const files = groupFiles(draft.filesList||[]);
     const proj = {
       id: (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)),
       name: draft.title || "Projekt",
@@ -962,14 +1070,10 @@ function OffersPanel({ offers = [], entities = [], setState }) {
       status: "pågående",
       budget: Number(draft.value)||0,
       note: (draft.note||""),
-      files: {
-        Ritningar: draft.files.Ritningar||[],
-        Offerter:  draft.files.Offerter||[],
-        Kalkyler:  draft.files.Kalkyler||[],
-        KMA:       draft.files.KMA||[],
-      },
+      files,
       originatingOfferId: draft.id,
       createdAt: new Date().toISOString(),
+      _shouldOpen: true
     };
     setState(s=>({
       ...s,
@@ -1007,7 +1111,7 @@ function OffersPanel({ offers = [], entities = [], setState }) {
 
       {openItem && draft && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
-          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-3xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera offert</div>
               <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
@@ -1016,22 +1120,22 @@ function OffersPanel({ offers = [], entities = [], setState }) {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="text-sm font-medium">Titel</label>
-                <input className="w-full border rounded px-3 py-2" value={draft.title} onChange={e=>updateDraft("title", e.target.value)} />
+                <input className="w-full border rounded px-3 py-2" value={draft.title} onChange={e=>setDraft(d=>({...d,title:e.target.value}))} />
               </div>
               <div>
                 <label className="text-sm font-medium">Kund</label>
-                <select className="w-full border rounded px-3 py-2" value={draft.customerId} onChange={e=>updateDraft("customerId", e.target.value)}>
+                <select className="w-full border rounded px-3 py-2" value={draft.customerId} onChange={e=>setDraft(d=>({...d,customerId:e.target.value}))}>
                   <option value="">—</option>
                   {customers.map(c=><option key={c.id} value={c.id}>{c.companyName||c.id}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-sm font-medium">Belopp (kr)</label>
-                <input type="number" className="w-full border rounded px-3 py-2" value={draft.value} onChange={e=>updateDraft("value", e.target.value)} />
+                <input type="number" className="w-full border rounded px-3 py-2" value={draft.value} onChange={e=>setDraft(d=>({...d,value:e.target.value}))} />
               </div>
               <div>
                 <label className="text-sm font-medium">Status</label>
-                <select className="w-full border rounded px-3 py-2" value={draft.status} onChange={e=>updateDraft("status", e.target.value)}>
+                <select className="w-full border rounded px-3 py-2" value={draft.status} onChange={e=>setDraft(d=>({...d,status:e.target.value}))}>
                   <option value="utkast">Utkast</option>
                   <option value="inskickad">Inskickad</option>
                   <option value="vunnen">Vunnen</option>
@@ -1040,49 +1144,85 @@ function OffersPanel({ offers = [], entities = [], setState }) {
               </div>
               <div className="col-span-2">
                 <label className="text-sm font-medium">Anteckning</label>
-                <textarea className="w-full border rounded px-3 py-2 min-h-[80px]" value={draft.note} onChange={e=>updateDraft("note", e.target.value)} />
+                <textarea className="w-full border rounded px-3 py-2 min-h-[80px]" value={draft.note} onChange={e=>setDraft(d=>({...d,note:e.target.value}))} />
               </div>
             </div>
 
-            {/* Filer per kategori */}
-            <div className="mt-4 space-y-3">
-              {CATS.map(cat=>(
-                <div key={cat} className="border rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium">{cat}</div>
-                    <button className="text-xs px-2 py-1 rounded border" onClick={()=>addFiles(cat)}>+ Lägg till från OneDrive</button>
-                  </div>
-                  {(draft.files[cat]||[]).length===0 ? (
-                    <div className="text-xs text-gray-500">Inga filer.</div>
-                  ) : (
-                    <ul className="text-sm space-y-1">
-                      {draft.files[cat].map((f,idx)=>(
-                        <li key={f.id||idx} className="flex items-center justify-between gap-2">
-                          <a className="underline truncate" href={f.webUrl||"#"} target="_blank" rel="noreferrer">{f.name||"fil"}</a>
-                          <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFile(cat, idx)}>Ta bort</button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+            {/* Leverantörer (flera) */}
+            <div className="mt-4 border rounded-xl p-3">
+              <div className="font-medium mb-2">Kopplade leverantörer</div>
+              <div className="flex gap-2 mb-2">
+                <select className="border rounded px-2 py-1" onChange={e=>{ addSupplierToOffer(e.target.value); e.target.value=""; }}>
+                  <option value="">+ Lägg till leverantör…</option>
+                  {suppliers
+                    .filter(s=>!(draft.supplierIds||[]).includes(s.id))
+                    .sort((a,b)=> (a.companyName||"").localeCompare(b.companyName||""))
+                    .map(s=><option key={s.id} value={s.id}>{s.companyName||s.id}</option>)
+                  }
+                </select>
+              </div>
+              {(draft.supplierIds||[]).length===0 ? (
+                <div className="text-xs text-gray-500">Inga leverantörer kopplade.</div>
+              ) : (
+                <ul className="text-sm space-y-1">
+                  {draft.supplierIds.map(id=>{
+                    const sup = suppliers.find(s=>s.id===id);
+                    return (
+                      <li key={id} className="flex items-center justify-between gap-2">
+                        <span className="truncate">{sup?.companyName || id}</span>
+                        <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeSupplierFromOffer(id)}>Ta bort</button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Filer som rader: kategori + namn + länk */}
+            <div className="mt-4 border rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium">Filer</div>
+                <div className="flex gap-2">
+                  <button className="text-xs px-2 py-1 rounded border" onClick={addFilesFromOneDrive}>+ Lägg till från OneDrive</button>
+                  <button className="text-xs px-2 py-1 rounded border" onClick={addManualFile}>+ Lägg till länk manuellt</button>
                 </div>
-              ))}
+              </div>
+
+              {(draft.filesList||[]).length===0 ? (
+                <div className="text-xs text-gray-500">Inga filer tillagda.</div>
+              ) : (
+                <div className="space-y-2">
+                  {(draft.filesList||[]).map((f,idx)=>(
+                    <div key={f.id||idx} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-3">
+                        <select className="w-full border rounded px-2 py-1 text-sm" value={f.category||"Offerter"} onChange={e=>setFileField(idx,"category",e.target.value)}>
+                          {FILE_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-span-4">
+                        <input className="w-full border rounded px-2 py-1 text-sm" value={f.name||""} onChange={e=>setFileField(idx,"name",e.target.value)} placeholder="Filnamn" />
+                      </div>
+                      <div className="col-span-4">
+                        <input className="w-full border rounded px-2 py-1 text-sm" value={f.webUrl||""} onChange={e=>setFileField(idx,"webUrl",e.target.value)} placeholder="Länk (URL)" />
+                      </div>
+                      <div className="col-span-1 text-right">
+                        <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFileRow(idx)}>Ta bort</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
-                Spara
-              </button>
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>Spara</button>
               {draft.status==="vunnen" && (
                 <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={createProjectFromOffer}>
                   Skapa projekt från offert (ärver filer)
                 </button>
               )}
-              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
-                Ta bort
-              </button>
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
-                Avbryt
-              </button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>Ta bort</button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Avbryt</button>
             </div>
           </div>
         </div>
@@ -1092,21 +1232,19 @@ function OffersPanel({ offers = [], entities = [], setState }) {
 }
 
 /* ======================================
-   ProjectsPanel — list + pop-up + OneDrive
+   ProjectsPanel — filrader med kategori
    ====================================== */
 function ProjectsPanel({ projects = [], setState, entities = [] }) {
   const [q, setQ] = useState("");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
-  const CATS = ["Ritningar", "Offerter", "Kalkyler", "KMA"];
   const customers = useMemo(() => (entities || []).filter(e => e.type === "customer"), [entities]);
   const customerName = id => (customers.find(c=>c.id===id)?.companyName) || "—";
 
   useEffect(() => {
     const p = (projects || []).find(x => x?._shouldOpen);
     if (!p) return;
-    const files = p.files && typeof p.files === "object" ? p.files : { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
     setOpenItem(p);
     setDraft({
       id:p.id,
@@ -1117,12 +1255,7 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
       startDate: p.startDate || "",
       endDate: p.endDate || "",
       note:p.note||"",
-      files: {
-        Ritningar: Array.isArray(files.Ritningar)? files.Ritningar.slice():[],
-        Offerter:  Array.isArray(files.Offerter)?  files.Offerter.slice():[],
-        Kalkyler:  Array.isArray(files.Kalkyler)?  files.Kalkyler.slice():[],
-        KMA:       Array.isArray(files.KMA)?       files.KMA.slice():[],
-      },
+      filesList: flattenFiles(p.files),
       originatingOfferId: p.originatingOfferId || "",
     });
     setState(s => ({
@@ -1142,7 +1275,6 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
   },[projects,q]);
 
   const openEdit = (p)=>{
-    const files = p.files && typeof p.files === "object" ? p.files : { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
     setOpenItem(p);
     setDraft({
       id:p.id,
@@ -1153,35 +1285,49 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
       startDate: p.startDate || "",
       endDate: p.endDate || "",
       note:p.note||"",
-      files: {
-        Ritningar: Array.isArray(files.Ritningar)? files.Ritningar.slice():[],
-        Offerter:  Array.isArray(files.Offerter)?  files.Offerter.slice():[],
-        Kalkyler:  Array.isArray(files.Kalkyler)?  files.Kalkyler.slice():[],
-        KMA:       Array.isArray(files.KMA)?       files.KMA.slice():[],
-      },
+      filesList: flattenFiles(p.files),
       originatingOfferId: p.originatingOfferId || "",
     });
   };
-  const updateDraft = (k,v)=> setDraft(d=>({ ...d, [k]: v }));
-  const updateFiles = (cat, files)=> setDraft(d=>({ ...d, files: { ...d.files, [cat]: files }}));
 
-  const addFiles = async (cat)=>{
+  const setFileField = (idx, field, value) => {
+    setDraft(d=>{
+      const copy = (d.filesList||[]).slice();
+      copy[idx] = { ...copy[idx], [field]: value };
+      return { ...d, filesList: copy };
+    });
+  };
+  const addManualFile = () => {
+    setDraft(d => ({
+      ...d,
+      filesList: [...(d.filesList||[]), { id: Math.random().toString(36).slice(2), name:"Ny fil", webUrl:"#", category:"Offerter" }]
+    }));
+  };
+  const addFilesFromOneDrive = async () => {
     try{
       const picked = await pickOneDriveFiles();
       if (!picked || picked.length===0) return;
-      const next = (draft.files[cat]||[]).concat(
-        picked.map(p=>({ id:p.id||Math.random().toString(36).slice(2), name:p.name||"fil", webUrl:p.webUrl||p.url||"#" }))
-      );
-      updateFiles(cat, next);
+      setDraft(d => ({
+        ...d,
+        filesList: [...(d.filesList||[]),
+          ...picked.map(p => ({
+            id: p.id || Math.random().toString(36).slice(2),
+            name: p.name || "fil",
+            webUrl: p.webUrl || p.url || "#",
+            category: "Offerter"
+          }))
+        ]
+      }));
     }catch(e){
-      alert("Kunde inte hämta filer från OneDrive.");
-      console.warn(e);
+      alert("Kunde inte hämta filer från OneDrive. Du kan lägga till manuellt med knappen nedan.");
     }
   };
-  const removeFile = (cat, idx)=>{
-    const next = (draft.files[cat]||[]).slice();
-    next.splice(idx,1);
-    updateFiles(cat, next);
+  const removeFileRow = (idx) => {
+    setDraft(d=>{
+      const copy = (d.filesList||[]).slice();
+      copy.splice(idx,1);
+      return { ...d, filesList: copy };
+    });
   };
 
   const saveDraft = ()=>{
@@ -1197,12 +1343,7 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
         startDate: draft.startDate||"",
         endDate: draft.endDate||"",
         note:draft.note||"",
-        files:{
-          Ritningar: draft.files.Ritningar||[],
-          Offerter:  draft.files.Offerter||[],
-          Kalkyler:  draft.files.Kalkyler||[],
-          KMA:       draft.files.KMA||[],
-        },
+        files: groupFiles(draft.filesList||[]),
         originatingOfferId: draft.originatingOfferId||"",
         updatedAt:new Date().toISOString()
       } : p)
@@ -1242,7 +1383,7 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
 
       {openItem && draft && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
-          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-3xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera projekt</div>
               <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
@@ -1251,18 +1392,18 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="text-sm font-medium">Namn</label>
-                <input className="w-full border rounded px-3 py-2" value={draft.name} onChange={e=>updateDraft("name", e.target.value)} />
+                <input className="w-full border rounded px-3 py-2" value={draft.name} onChange={e=>setDraft(d=>({...d,name:e.target.value}))} />
               </div>
               <div>
                 <label className="text-sm font-medium">Kund</label>
-                <select className="w-full border rounded px-3 py-2" value={draft.customerId} onChange={e=>updateDraft("customerId", e.target.value)}>
+                <select className="w-full border rounded px-3 py-2" value={draft.customerId} onChange={e=>setDraft(d=>({...d,customerId:e.target.value}))}>
                   <option value="">—</option>
                   {customers.map(c=><option key={c.id} value={c.id}>{c.companyName||c.id}</option>)}
                 </select>
               </div>
               <div>
                 <label className="text-sm font-medium">Status</label>
-                <select className="w-full border rounded px-3 py-2" value={draft.status} onChange={e=>updateDraft("status", e.target.value)}>
+                <select className="w-full border rounded px-3 py-2" value={draft.status} onChange={e=>setDraft(d=>({...d,status:e.target.value}))}>
                   <option value="pågående">pågående</option>
                   <option value="klar">klar</option>
                   <option value="pausad">pausad</option>
@@ -1270,44 +1411,55 @@ function ProjectsPanel({ projects = [], setState, entities = [] }) {
               </div>
               <div>
                 <label className="text-sm font-medium">Budget (kr)</label>
-                <input type="number" className="w-full border rounded px-3 py-2" value={draft.budget} onChange={e=>updateDraft("budget", e.target.value)} />
+                <input type="number" className="w-full border rounded px-3 py-2" value={draft.budget} onChange={e=>setDraft(d=>({...d,budget:e.target.value}))} />
               </div>
               <div>
                 <label className="text-sm font-medium">Start</label>
-                <input type="date" className="w-full border rounded px-3 py-2" value={draft.startDate} onChange={e=>updateDraft("startDate", e.target.value)} />
+                <input type="date" className="w-full border rounded px-3 py-2" value={draft.startDate} onChange={e=>setDraft(d=>({...d,startDate:e.target.value}))} />
               </div>
               <div>
                 <label className="text-sm font-medium">Slut</label>
-                <input type="date" className="w-full border rounded px-3 py-2" value={draft.endDate} onChange={e=>updateDraft("endDate", e.target.value)} />
+                <input type="date" className="w-full border rounded px-3 py-2" value={draft.endDate} onChange={e=>setDraft(d=>({...d,endDate:e.target.value}))} />
               </div>
               <div className="col-span-2">
                 <label className="text-sm font-medium">Anteckning</label>
-                <textarea className="w-full border rounded px-3 py-2 min-h-[80px]" value={draft.note} onChange={e=>updateDraft("note", e.target.value)} />
+                <textarea className="w-full border rounded px-3 py-2 min-h-[80px]" value={draft.note} onChange={e=>setDraft(d=>({...d,note:e.target.value}))} />
               </div>
             </div>
 
-            {/* Filer per kategori */}
-            <div className="mt-4 space-y-3">
-              {CATS.map(cat=>(
-                <div key={cat} className="border rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-medium">{cat}</div>
-                    <button className="text-xs px-2 py-1 rounded border" onClick={()=>addFiles(cat)}>+ Lägg till från OneDrive</button>
-                  </div>
-                  {(draft.files[cat]||[]).length===0 ? (
-                    <div className="text-xs text-gray-500">Inga filer.</div>
-                  ) : (
-                    <ul className="text-sm space-y-1">
-                      {draft.files[cat].map((f,idx)=>(
-                        <li key={f.id||idx} className="flex items-center justify-between gap-2">
-                          <a className="underline truncate" href={f.webUrl||"#"} target="_blank" rel="noreferrer">{f.name||"fil"}</a>
-                          <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFile(cat, idx)}>Ta bort</button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+            <div className="mt-4 border rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium">Filer</div>
+                <div className="flex gap-2">
+                  <button className="text-xs px-2 py-1 rounded border" onClick={addFilesFromOneDrive}>+ Lägg till från OneDrive</button>
+                  <button className="text-xs px-2 py-1 rounded border" onClick={addManualFile}>+ Lägg till länk manuellt</button>
                 </div>
-              ))}
+              </div>
+
+              {(draft.filesList||[]).length===0 ? (
+                <div className="text-xs text-gray-500">Inga filer tillagda.</div>
+              ) : (
+                <div className="space-y-2">
+                  {(draft.filesList||[]).map((f,idx)=>(
+                    <div key={f.id||idx} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-3">
+                        <select className="w-full border rounded px-2 py-1 text-sm" value={f.category||"Offerter"} onChange={e=>setFileField(idx,"category",e.target.value)}>
+                          {FILE_CATS.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div className="col-span-4">
+                        <input className="w-full border rounded px-2 py-1 text-sm" value={f.name||""} onChange={e=>setFileField(idx,"name",e.target.value)} placeholder="Filnamn" />
+                      </div>
+                      <div className="col-span-4">
+                        <input className="w-full border rounded px-2 py-1 text-sm" value={f.webUrl||""} onChange={e=>setFileField(idx,"webUrl",e.target.value)} placeholder="Länk (URL)" />
+                      </div>
+                      <div className="col-span-1 text-right">
+                        <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFileRow(idx)}>Ta bort</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="mt-4 flex gap-2">
@@ -1350,7 +1502,7 @@ export default function App() {
       isLunch: false,
       isMeeting: false,
       createdAt: new Date().toISOString(),
-      _shouldOpen: true, // öppna popup direkt
+      _shouldOpen: true, // popup direkt
     };
     setState(s => ({ ...s, activities: [...(s.activities || []), a] }));
     setView("activities");
@@ -1366,8 +1518,9 @@ export default function App() {
       status: "utkast",
       note: "",
       files: { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] },
+      supplierIds: [],
       createdAt: new Date().toISOString(),
-      _shouldOpen: true, // öppna popup direkt
+      _shouldOpen: true, // popup direkt
     };
     setState(s => ({ ...s, offers: [...(s.offers || []), o] }));
     setView("offers");
@@ -1386,7 +1539,7 @@ export default function App() {
       note: "",
       files: { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] },
       createdAt: new Date().toISOString(),
-      _shouldOpen: true, // öppna popup direkt
+      _shouldOpen: true, // popup direkt
     };
     setState(s => ({ ...s, projects: [...(s.projects || []), p] }));
     setView("projects");
@@ -1394,14 +1547,14 @@ export default function App() {
 
   function createCustomer() {
     const id = newId();
-    const c = { id, type: "customer", companyName: "Ny kund", createdAt: new Date().toISOString(), customerCategory:"" };
+    const c = { id, type: "customer", companyName: "", createdAt: new Date().toISOString(), customerCategory:"", _shouldOpen:true };
     setState(s => ({ ...s, entities: [...(s.entities || []), c] }));
     setView("customers");
   }
 
   function createSupplier() {
     const id = newId();
-    const sup = { id, type: "supplier", companyName: "Ny leverantör", createdAt: new Date().toISOString(), supplierCategory:"" };
+    const sup = { id, type: "supplier", companyName: "", createdAt: new Date().toISOString(), supplierCategory:"", _shouldOpen:true };
     setState(s => ({ ...s, entities: [...(s.entities || []), sup] }));
     setView("suppliers");
   }
@@ -1428,10 +1581,10 @@ export default function App() {
             + Ny leverantör
           </button>
 
-          {/* Inställningar som ikon */}
+          {/* Inställningar som ikon (placeholder) */}
           <button
             className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
-            onClick={()=>alert("Inställningar flyttas hit i nästa steg (backup, import/export, OneDrive mm).")}
+            onClick={()=>alert("Inställningar (export/import, OneDrive-konfig) lägger vi här i nästa steg.")}
             title="Inställningar"
           >
             🛠️
@@ -1498,7 +1651,7 @@ export default function App() {
             <ProjectsPanel
               projects={state.projects || []}
               setState={setState}
-              entities={state.entities || []} // för kundnamn i listan
+              entities={state.entities || []}
             />
           )}
         </main>
