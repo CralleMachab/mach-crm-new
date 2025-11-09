@@ -248,6 +248,7 @@ function useStore() {
 /* === slut useStore === */
 
 /* === ActivitiesPanel — pop-up vid ny aktivitet, kund/leverantör/kontakt, statusfilter inkl. "Alla utom klara" === */
+/* === ActivitiesPanel — pop-up vid ny aktivitet, kund/leverantör/kontakt, statusfilter inkl. "Alla utom klara" === */
 function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter]   = useState("all");     // Alla / Mattias / Cralle / Övrig
   const [rangeFilter, setRangeFilter] = useState("7");       // today | 7 | all | date
@@ -655,7 +656,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 }
 
 /* === ActivitiesPanel — dagfilter, “visa klara” (endast klara), redigera befintliga, tydlig titel === */
-function ActivitiesPanel({ activities = [], entities = [], setState }) {
+function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter] = useState("all");   // Alla / Mattias / Cralle / Övrig
   const [rangeFilter, setRangeFilter] = useState("7");   // "today" | "7" | "all" | "date"
   const [dateFilter, setDateFilter] = useState("");      // YYYY-MM-DD när rangeFilter === "date"
