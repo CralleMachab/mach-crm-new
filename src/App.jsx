@@ -14,11 +14,13 @@ function useStore() {
     return { activities: [], entities: [], offers: [], projects: [], _lastSavedAt: "" };
   });
 
+  // Lokalt
   useEffect(() => {
     saveState(state);
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
   }, [state]);
 
+  // Push till SharePoint (debounce)
   useEffect(() => {
     const t = setTimeout(async () => {
       try {
@@ -31,6 +33,7 @@ function useStore() {
     return () => clearTimeout(t);
   }, [state]);
 
+  // Poll från SharePoint
   useEffect(() => {
     let stopped = false;
     const tick = async () => {
@@ -57,7 +60,8 @@ function useStore() {
 }
 
 /* ==========================================================
-   ActivitiesPanelNew — ikoner, popup, filter, "Ta bort" i listan
+   ActivitiesPanelNew — LÅT DENNA VARA OFÖRÄNDRAD HOS DIG!
+   (Jag inkluderar samma version som du kör nu.)
    ========================================================== */
 function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter]   = useState("all");
@@ -486,14 +490,17 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
 }
 
 /* ======================================
-   CustomersPanel — sök + kategorifilter
+   CustomersPanel — sök + kategorifilter + pop-up
    ====================================== */
 function CustomersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all"); // StålHall | Totalentreprenad | Turbovex | all
 
+  const [openItem, setOpenItem] = useState(null);
+  const [draft, setDraft] = useState(null);
+
   const list = useMemo(() => {
-    let arr = (entities || []).filter(e => e.type === "customer");
+    let arr = (entities || []).filter(e => e.type === "customer" && !e.deletedAt);
     if (q.trim()) {
       const s = q.trim().toLowerCase();
       arr = arr.filter(e =>
@@ -509,11 +516,46 @@ function CustomersPanel({ entities = [], setState }) {
     return arr;
   }, [entities, q, cat]);
 
-  const setCategory = (id, value) => {
-    setState(s => ({
+  const openEdit = (c) => {
+    setOpenItem(c);
+    setDraft({
+      id: c.id,
+      companyName: c.companyName||"",
+      orgNo: c.orgNo||"",
+      phone: c.phone||"",
+      email: c.email||"",
+      address: c.address||"",
+      zip: c.zip||"",
+      city: c.city||"",
+      customerCategory: c.customerCategory||"",
+    });
+  };
+  const updateDraft = (k,v)=> setDraft(d=>({ ...d, [k]: v }));
+  const saveDraft = ()=>{
+    if (!draft) return;
+    setState(s=>({
       ...s,
-      entities: (s.entities||[]).map(e => e.id===id ? { ...e, customerCategory: value || "" } : e)
+      entities: (s.entities||[]).map(e => e.id===draft.id ? {
+        ...e,
+        companyName: draft.companyName||"",
+        orgNo: draft.orgNo||"",
+        phone: draft.phone||"",
+        email: draft.email||"",
+        address: draft.address||"",
+        zip: draft.zip||"",
+        city: draft.city||"",
+        customerCategory: draft.customerCategory||"",
+        updatedAt: new Date().toISOString(),
+      } : e)
     }));
+    setOpenItem(null); setDraft(null);
+  };
+  const softDelete = (c)=>{
+    setState(s=>({
+      ...s,
+      entities: (s.entities||[]).map(e => e.id===c.id ? { ...e, deletedAt: new Date().toISOString() } : e)
+    }));
+    if (openItem?.id===c.id){ setOpenItem(null); setDraft(null); }
   };
 
   return (
@@ -535,38 +577,100 @@ function CustomersPanel({ entities = [], setState }) {
         {list.map(c => (
           <li key={c.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
+              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(c)}>
                 <div className="font-medium truncate">{c.companyName || "(namnlös kund)"}</div>
                 <div className="text-xs text-gray-500">{c.city || ""}</div>
-              </div>
+              </button>
               <div className="flex items-center gap-2 shrink-0">
-                <select className="text-sm border rounded px-2 py-1"
-                        value={c.customerCategory||""}
-                        onChange={e=>setCategory(c.id, e.target.value)}>
-                  <option value="">— kategori —</option>
-                  <option value="StålHall">StålHall</option>
-                  <option value="Totalentreprenad">Totalentreprenad</option>
-                  <option value="Turbovex">Turbovex</option>
-                </select>
+                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{c.customerCategory || "—"}</span>
+                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(c)}>
+                  Ta bort
+                </button>
               </div>
             </div>
           </li>
         ))}
         {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga kunder.</li>}
       </ul>
+
+      {openItem && draft && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Redigera kund</div>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Företag</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.companyName} onChange={e=>updateDraft("companyName", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">OrgNr</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.orgNo} onChange={e=>updateDraft("orgNo", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Telefon</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.phone} onChange={e=>updateDraft("phone", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Epost</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.email} onChange={e=>updateDraft("email", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Adress</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.address} onChange={e=>updateDraft("address", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Postnr</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.zip} onChange={e=>updateDraft("zip", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Ort</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.city} onChange={e=>updateDraft("city", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Kategori</label>
+                <select className="w-full border rounded px-3 py-2" value={draft.customerCategory} onChange={e=>updateDraft("customerCategory", e.target.value)}>
+                  <option value="">—</option>
+                  <option value="StålHall">StålHall</option>
+                  <option value="Totalentreprenad">Totalentreprenad</option>
+                  <option value="Turbovex">Turbovex</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
+                Spara
+              </button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
+                Ta bort
+              </button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+                Avbryt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ==========================================
-   SuppliersPanel — sök + kategorifilter
+   SuppliersPanel — sök + kategorifilter + pop-up
    ========================================== */
 function SuppliersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
-  const [cat, setCat] = useState("all"); // Stålhalls leverantör | Mark företag | EL leverantör | VVS Leverantör | Vent Leverantör | all
+  const [cat, setCat] = useState("all");
+
+  const [openItem, setOpenItem] = useState(null);
+  const [draft, setDraft] = useState(null);
 
   const list = useMemo(() => {
-    let arr = (entities || []).filter(e => e.type === "supplier");
+    let arr = (entities || []).filter(e => e.type === "supplier" && !e.deletedAt);
     if (q.trim()) {
       const s = q.trim().toLowerCase();
       arr = arr.filter(e =>
@@ -582,11 +686,46 @@ function SuppliersPanel({ entities = [], setState }) {
     return arr;
   }, [entities, q, cat]);
 
-  const setCategory = (id, value) => {
-    setState(s => ({
+  const openEdit = (s) => {
+    setOpenItem(s);
+    setDraft({
+      id: s.id,
+      companyName: s.companyName||"",
+      orgNo: s.orgNo||"",
+      phone: s.phone||"",
+      email: s.email||"",
+      address: s.address||"",
+      zip: s.zip||"",
+      city: s.city||"",
+      supplierCategory: s.supplierCategory||"",
+    });
+  };
+  const updateDraft = (k,v)=> setDraft(d=>({ ...d, [k]: v }));
+  const saveDraft = ()=>{
+    if (!draft) return;
+    setState(s=>({
       ...s,
-      entities: (s.entities||[]).map(e => e.id===id ? { ...e, supplierCategory: value || "" } : e)
+      entities: (s.entities||[]).map(e => e.id===draft.id ? {
+        ...e,
+        companyName: draft.companyName||"",
+        orgNo: draft.orgNo||"",
+        phone: draft.phone||"",
+        email: draft.email||"",
+        address: draft.address||"",
+        zip: draft.zip||"",
+        city: draft.city||"",
+        supplierCategory: draft.supplierCategory||"",
+        updatedAt: new Date().toISOString(),
+      } : e)
     }));
+    setOpenItem(null); setDraft(null);
+  };
+  const softDelete = (s)=>{
+    setState(s0=>({
+      ...s0,
+      entities: (s0.entities||[]).map(e => e.id===s.id ? { ...e, deletedAt: new Date().toISOString() } : e)
+    }));
+    if (openItem?.id===s.id){ setOpenItem(null); setDraft(null); }
   };
 
   return (
@@ -610,15 +749,63 @@ function SuppliersPanel({ entities = [], setState }) {
         {list.map(sup => (
           <li key={sup.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
+              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(sup)}>
                 <div className="font-medium truncate">{sup.companyName || "(namnlös leverantör)"}</div>
                 <div className="text-xs text-gray-500">{sup.city || ""}</div>
-              </div>
+              </button>
               <div className="flex items-center gap-2 shrink-0">
-                <select className="text-sm border rounded px-2 py-1"
-                        value={sup.supplierCategory||""}
-                        onChange={e=>setCategory(sup.id, e.target.value)}>
-                  <option value="">— kategori —</option>
+                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{sup.supplierCategory || "—"}</span>
+                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(sup)}>
+                  Ta bort
+                </button>
+              </div>
+            </div>
+          </li>
+        ))}
+        {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga leverantörer.</li>}
+      </ul>
+
+      {openItem && draft && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Redigera leverantör</div>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Företag</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.companyName} onChange={e=>updateDraft("companyName", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">OrgNr</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.orgNo} onChange={e=>updateDraft("orgNo", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Telefon</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.phone} onChange={e=>updateDraft("phone", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Epost</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.email} onChange={e=>updateDraft("email", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Adress</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.address} onChange={e=>updateDraft("address", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Postnr</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.zip} onChange={e=>updateDraft("zip", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Ort</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.city} onChange={e=>updateDraft("city", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Kategori</label>
+                <select className="w-full border rounded px-3 py-2" value={draft.supplierCategory} onChange={e=>updateDraft("supplierCategory", e.target.value)}>
+                  <option value="">—</option>
                   <option value="Stålhalls leverantör">Stålhalls leverantör</option>
                   <option value="Mark företag">Mark företag</option>
                   <option value="EL leverantör">EL leverantör</option>
@@ -627,20 +814,248 @@ function SuppliersPanel({ entities = [], setState }) {
                 </select>
               </div>
             </div>
+
+            <div className="mt-4 flex gap-2">
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
+                Spara
+              </button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
+                Ta bort
+              </button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+                Avbryt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ======================================
+   OffersPanel — enkel lista + pop-up
+   ====================================== */
+function OffersPanel({ offers = [], entities = [], setState }) {
+  const [q, setQ] = useState("");
+  const [openItem, setOpenItem] = useState(null);
+  const [draft, setDraft] = useState(null);
+
+  const customers = useMemo(() => (entities || []).filter(e => e.type==="customer"), [entities]);
+
+  const list = useMemo(() => {
+    let arr = (offers||[]).filter(o=>!o.deletedAt);
+    if (q.trim()) {
+      const s = q.trim().toLowerCase();
+      arr = arr.filter(o => (o.title||"").toLowerCase().includes(s));
+    }
+    arr.sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
+    return arr;
+  }, [offers, q]);
+
+  const openEdit = (o)=>{
+    setOpenItem(o);
+    setDraft({
+      id:o.id, title:o.title||"", customerId:o.customerId||"", value:o.value||0, status:o.status||"utkast",
+    });
+  };
+  const updateDraft = (k,v)=> setDraft(d=>({...d, [k]: v}));
+  const saveDraft = ()=>{
+    if(!draft) return;
+    setState(s=>({
+      ...s,
+      offers: (s.offers||[]).map(o=>o.id===draft.id ? {
+        ...o, title:draft.title||"", customerId:draft.customerId||"", value:Number(draft.value)||0, status:draft.status||"utkast", updatedAt:new Date().toISOString()
+      } : o)
+    }));
+    setOpenItem(null); setDraft(null);
+  };
+  const softDelete = (o)=>{
+    setState(s=>({...s, offers:(s.offers||[]).map(x=>x.id===o.id?{...x,deletedAt:new Date().toISOString()}:x)}));
+    if(openItem?.id===o.id){ setOpenItem(null); setDraft(null); }
+  };
+
+  const customerName = id => (customers.find(c=>c.id===id)?.companyName) || "—";
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold">Offerter</h2>
+        <input className="border rounded-xl px-3 py-2" placeholder="Sök..." value={q} onChange={e=>setQ(e.target.value)} />
+      </div>
+
+      <ul className="divide-y">
+        {list.map(o=>(
+          <li key={o.id} className="py-3">
+            <div className="flex items-center justify-between gap-3">
+              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(o)}>
+                <div className="font-medium truncate">{o.title||"Offert"}</div>
+                <div className="text-xs text-gray-500">Kund: {customerName(o.customerId)} · {o.status||"utkast"}</div>
+              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{(o.value||0).toLocaleString("sv-SE")} kr</span>
+                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(o)}>Ta bort</button>
+              </div>
+            </div>
           </li>
         ))}
-        {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga leverantörer.</li>}
+        {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga offerter.</li>}
       </ul>
+
+      {openItem && draft && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-xl" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Redigera offert</div>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Titel</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.title} onChange={e=>updateDraft("title", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Kund</label>
+                <select className="w-full border rounded px-3 py-2" value={draft.customerId} onChange={e=>updateDraft("customerId", e.target.value)}>
+                  <option value="">—</option>
+                  {customers.map(c=><option key={c.id} value={c.id}>{c.companyName||c.id}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Belopp (kr)</label>
+                <input type="number" className="w-full border rounded px-3 py-2" value={draft.value} onChange={e=>updateDraft("value", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Status</label>
+                <select className="w-full border rounded px-3 py-2" value={draft.status} onChange={e=>updateDraft("status", e.target.value)}>
+                  <option value="utkast">Utkast</option>
+                  <option value="inskickad">Inskickad</option>
+                  <option value="vunnen">Vunnen</option>
+                  <option value="förlorad">Förlorad</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
+                Spara
+              </button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
+                Ta bort
+              </button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+                Avbryt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ======================================
+   ProjectsPanel — enkel lista + pop-up
+   ====================================== */
+function ProjectsPanel({ projects = [], setState }) {
+  const [q, setQ] = useState("");
+  const [openItem, setOpenItem] = useState(null);
+  const [draft, setDraft] = useState(null);
+
+  const list = useMemo(()=>{
+    let arr = (projects||[]).filter(p=>!p.deletedAt);
+    if (q.trim()){
+      const s = q.trim().toLowerCase();
+      arr = arr.filter(p => (p.name||"").toLowerCase().includes(s));
+    }
+    arr.sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
+    return arr;
+  },[projects,q]);
+
+  const openEdit = (p)=>{
+    setOpenItem(p);
+    setDraft({ id:p.id, name:p.name||"", status:p.status||"pågående" });
+  };
+  const updateDraft = (k,v)=> setDraft(d=>({...d,[k]:v}));
+  const saveDraft = ()=>{
+    if(!draft) return;
+    setState(s=>({
+      ...s,
+      projects:(s.projects||[]).map(p=>p.id===draft.id?{...p, name:draft.name||"", status:draft.status||"pågående", updatedAt:new Date().toISOString()}:p)
+    }));
+    setOpenItem(null); setDraft(null);
+  };
+  const softDelete = (p)=>{
+    setState(s=>({...s, projects:(s.projects||[]).map(x=>x.id===p.id?{...x,deletedAt:new Date().toISOString()}:x)}));
+    if(openItem?.id===p.id){ setOpenItem(null); setDraft(null); }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-4">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold">Projekt</h2>
+        <input className="border rounded-xl px-3 py-2" placeholder="Sök..." value={q} onChange={e=>setQ(e.target.value)} />
+      </div>
+
+      <ul className="divide-y">
+        {list.map(p=>(
+          <li key={p.id} className="py-3">
+            <div className="flex items-center justify-between gap-3">
+              <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(p)}>
+                <div className="font-medium truncate">{p.name||"Projekt"}</div>
+                <div className="text-xs text-gray-500">{p.status||"pågående"}</div>
+              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(p)}>Ta bort</button>
+              </div>
+            </div>
+          </li>
+        ))}
+        {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga projekt.</li>}
+      </ul>
+
+      {openItem && draft && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-xl" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <div className="font-semibold">Redigera projekt</div>
+              <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm font-medium">Namn</label>
+                <input className="w-full border rounded px-3 py-2" value={draft.name} onChange={e=>updateDraft("name", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Status</label>
+                <select className="w-full border rounded px-3 py-2" value={draft.status} onChange={e=>updateDraft("status", e.target.value)}>
+                  <option value="pågående">pågående</option>
+                  <option value="klar">klar</option>
+                  <option value="pausad">pausad</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>Spara</button>
+              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>Ta bort</button>
+              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Avbryt</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ===========================
-   App — default export
+   App — default export med layout
    =========================== */
 export default function App() {
   const [state, setState] = useStore();
-  const [view, setView] = useState("activities"); // activities | customers | suppliers | offers | projects | settings
+  const [view, setView] = useState("activities"); // activities | customers | suppliers | offers | projects
 
   const newId = () => (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
@@ -699,7 +1114,7 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-7xl p-4">
-      {/* HEADER med färgade knappar */}
+      {/* HEADER med färgade knappar + inställningsikon */}
       <header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Mach CRM</h1>
         <div className="flex items-center gap-2">
@@ -718,74 +1133,81 @@ export default function App() {
           <button className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300" onClick={createSupplier} title="Lägg till leverantör">
             + Ny leverantör
           </button>
+
+          {/* Inställningar som ikon */}
+          <button
+            className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
+            onClick={()=>alert("Inställningar flyttas hit i nästa steg (backup, import/export, OneDrive mm).")}
+            title="Inställningar"
+          >
+            🛠️
+          </button>
         </div>
       </header>
 
-      {/* TOPPMENY */}
-      <nav className="mb-4">
-        <div className="flex flex-wrap gap-2">
-          {[
-            ["activities","Aktiviteter"],
-            ["customers","Kunder"],
-            ["suppliers","Leverantörer"],
-            ["offers","Offerter"],
-            ["projects","Projekt"],
-            ["settings","Inställningar"],
-          ].map(([k,label])=>(
-            <button
-              key={k}
-              className={`px-3 py-2 rounded-xl border ${view===k? "bg-black text-white":"bg-white text-gray-800 hover:bg-gray-50"}`}
-              onClick={()=>setView(k)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </nav>
+      {/* LAYOUT: vänster sidomeny + höger innehåll */}
+      <div className="grid grid-cols-12 gap-4">
+        {/* SIDOMENY (vänster) */}
+        <aside className="col-span-12 md:col-span-3 lg:col-span-2">
+          <div className="bg-white rounded-2xl shadow p-3 space-y-2">
+            {[
+              ["activities","Aktiviteter"],
+              ["customers","Kunder"],
+              ["suppliers","Leverantörer"],
+              ["offers","Offerter"],
+              ["projects","Projekt"],
+            ].map(([k,label])=>(
+              <button
+                key={k}
+                className={`w-full text-left px-3 py-2 rounded-xl border ${view===k? "bg-black text-white":"bg-white text-gray-800 hover:bg-gray-50"}`}
+                onClick={()=>setView(k)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </aside>
 
-      {/* VYER */}
-      {view==="activities" && (
-        <ActivitiesPanelNew
-          activities={state.activities || []}
-          entities={state.entities || []}
-          setState={setState}
-        />
-      )}
+        {/* INNEHÅLL (höger) */}
+        <main className="col-span-12 md:col-span-9 lg:col-span-10">
+          {view==="activities" && (
+            <ActivitiesPanelNew
+              activities={state.activities || []}
+              entities={state.entities || []}
+              setState={setState}
+            />
+          )}
 
-      {view==="customers" && (
-        <CustomersPanel
-          entities={state.entities || []}
-          setState={setState}
-        />
-      )}
+          {view==="customers" && (
+            <CustomersPanel
+              entities={state.entities || []}
+              setState={setState}
+            />
+          )}
 
-      {view==="suppliers" && (
-        <SuppliersPanel
-          entities={state.entities || []}
-          setState={setState}
-        />
-      )}
+          {view==="suppliers" && (
+            <SuppliersPanel
+              entities={state.entities || []}
+              setState={setState}
+            />
+          )}
 
-      {view==="offers" && (
-        <div className="bg-white rounded-2xl shadow p-4">
-          <h2 className="font-semibold mb-2">Offerter</h2>
-          <p className="text-sm text-gray-600">Stub-vy (vi bygger detaljer i nästa steg).</p>
-        </div>
-      )}
+          {view==="offers" && (
+            <OffersPanel
+              offers={state.offers || []}
+              entities={state.entities || []}
+              setState={setState}
+            />
+          )}
 
-      {view==="projects" && (
-        <div className="bg-white rounded-2xl shadow p-4">
-          <h2 className="font-semibold mb-2">Projekt</h2>
-          <p className="text-sm text-gray-600">Stub-vy (vi bygger detaljer i nästa steg).</p>
-        </div>
-      )}
-
-      {view==="settings" && (
-        <div className="bg-white rounded-2xl shadow p-4">
-          <h2 className="font-semibold mb-2">Inställningar</h2>
-          <p className="text-sm text-gray-600">Stub-vy – export/import m.m. fyller vi på här.</p>
-        </div>
-      )}
+          {view==="projects" && (
+            <ProjectsPanel
+              projects={state.projects || []}
+              setState={setState}
+            />
+          )}
+        </main>
+      </div>
     </div>
   );
 }
