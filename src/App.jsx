@@ -251,36 +251,127 @@ function useStore() {
 /* ========== App ========== */
 export default function App() {
   const [state, setState] = useStore();
-  const [search, setSearch] = useState("");
-  const [modal, setModal] = useState(null); // {kind:'entity'|'activity'|'offer'|'project'|'settings', id, draft?}
-  const [activeTab, setActiveTab] = useState("activities");
 
-  // Skapa-knappar
- /* === createActivity — skapa och öppna direkt === */
-function createActivity() {
-  const id = crypto.randomUUID();
-  const a = {
-    id,
-    title: "",              // tom titel — fylls i i dialogen
-    ingress: "",            // ny kort ingress som syns i översikten
-    responsible: "Övrig",
-    priority: "medium",
-    status: "",
-    dueDate: "",
-    dueTime: "",
-    customerId: null,
-    supplierId: null,
-    description: "",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-  setState(s => ({ ...s, activities: [...(s.activities || []), a] }));
+  // Säker ID-generator
+  const newId = () => (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
-  // Be ActivitiesPanel att öppna dialog på den nya posten
-  try {
-    window.dispatchEvent(new CustomEvent("machcrm:open-activity", { detail: { id } }));
-  } catch {}
+  // --- Skapa poster (saknade funktioner) ---
+  function createActivity() {
+    const id = newId();
+    const a = {
+      id,
+      title: "Ny aktivitet",
+      responsible: "Övrig",
+      priority: "medium",
+      status: "",
+      dueDate: "",
+      dueTime: "",
+      description: "",
+      createdAt: new Date().toISOString(),
+    };
+    setState(s => ({ ...s, activities: [...(s.activities || []), a] }));
+  }
+
+  function createOffer() {
+    const id = newId();
+    const o = {
+      id,
+      title: "Ny offert",
+      customerId: "",
+      value: 0,
+      status: "utkast",
+      createdAt: new Date().toISOString(),
+    };
+    setState(s => ({ ...s, offers: [...(s.offers || []), o] }));
+  }
+
+  function createProjectEmpty() {
+    const id = newId();
+    const p = {
+      id,
+      name: "Nytt projekt",
+      status: "pågående",
+      createdAt: new Date().toISOString(),
+    };
+    setState(s => ({ ...s, projects: [...(s.projects || []), p] }));
+  }
+
+  function createCustomer() {
+    const id = newId();
+    const c = {
+      id,
+      type: "customer",
+      companyName: "Ny kund",
+      createdAt: new Date().toISOString(),
+    };
+    setState(s => ({ ...s, entities: [...(s.entities || []), c] }));
+  }
+
+  function createSupplier() {
+    const id = newId();
+    const sup = {
+      id,
+      type: "supplier",
+      companyName: "Ny leverantör",
+      createdAt: new Date().toISOString(),
+    };
+    setState(s => ({ ...s, entities: [...(s.entities || []), sup] }));
+  }
+
+  return (
+    <div className="mx-auto max-w-7xl p-4">
+      {/* HEADER med färgade knappar */}
+      <header className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold">Mach CRM</h1>
+        <div className="flex items-center gap-2">
+          <button
+            className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
+            onClick={createActivity}
+            title="Skapa ny aktivitet"
+          >
+            + Ny aktivitet
+          </button>
+          <button
+            className="border rounded-xl px-3 py-2 bg-orange-300 hover:bg-orange-400"
+            onClick={createOffer}
+            title="Skapa ny offert"
+          >
+            + Ny offert
+          </button>
+          <button
+            className="border rounded-xl px-3 py-2 bg-green-200 hover:bg-green-300"
+            onClick={createProjectEmpty}
+            title="Skapa nytt projekt"
+          >
+            + Nytt projekt
+          </button>
+          <button
+            className="border rounded-xl px-3 py-2 bg-blue-200 hover:bg-blue-300"
+            onClick={createCustomer}
+            title="Lägg till kund"
+          >
+            + Ny kund
+          </button>
+          <button
+            className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300"
+            onClick={createSupplier}
+            title="Lägg till leverantör"
+          >
+            + Ny leverantör
+          </button>
+        </div>
+      </header>
+
+      {/* AKTIVITETER */}
+      <ActivitiesPanel
+        activities={state.activities || []}
+        entities={state.entities || []}
+        setState={setState}
+      />
+    </div>
+  );
 }
+
 
   function createCustomer(){ const e=newEntity("customer"); setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;}); setModal({kind:"entity", id:e.id}); }
   function createSupplier(){ const e=newEntity("supplier"); setState(s=>{const nxt={...s}; upsertEntity(nxt,e); return nxt;}); setModal({kind:"entity", id:e.id}); }
