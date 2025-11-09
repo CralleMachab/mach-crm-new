@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { loadState, saveState } from "./lib/storage";
 import { fetchRemoteState, pushRemoteState } from "./lib/cloud";
+import { pickOneDriveFiles } from "./components/onedrive";
 
 /* ===========================
    useStore — lokal + SharePoint
@@ -60,8 +61,8 @@ function useStore() {
 }
 
 /* ==========================================================
-   ActivitiesPanelNew — LÅT DENNA VARA OFÖRÄNDRAD HOS DIG!
-   (Jag inkluderar samma version som du kör nu.)
+   ActivitiesPanelNew — popup, ikoner, filter, Ta bort
+   (Låt denna vara — det är samma variant som du gillade)
    ========================================================== */
 function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter]   = useState("all");
@@ -118,6 +119,7 @@ function ActivitiesPanelNew({ activities = [], entities = [], setState }) {
     return `${base} bg-gray-100 text-gray-700`;
   };
 
+  // Öppna direkt om _shouldOpen är satt (nyss skapad)
   useEffect(() => {
     const a = (activities || []).find(x => x?._shouldOpen);
     if (!a) return;
@@ -834,14 +836,44 @@ function SuppliersPanel({ entities = [], setState }) {
 }
 
 /* ======================================
-   OffersPanel — enkel lista + pop-up
+   OffersPanel — list + pop-up + OneDrive
    ====================================== */
 function OffersPanel({ offers = [], entities = [], setState }) {
   const [q, setQ] = useState("");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
-  const customers = useMemo(() => (entities || []).filter(e => e.type==="customer"), [entities]);
+  const CATS = ["Ritningar", "Offerter", "Kalkyler", "KMA"];
+  const newId = () => (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+
+  const customers = useMemo(() => (entities || []).filter(e => e.type === "customer"), [entities]);
+  const customerName = id => (customers.find(c=>c.id===id)?.companyName) || "—";
+
+  // Öppna direkt om _shouldOpen är satt (nyss skapad)
+  useEffect(() => {
+    const o = (offers || []).find(x => x?._shouldOpen);
+    if (!o) return;
+    const files = o.files && typeof o.files === "object" ? o.files : { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
+    setOpenItem(o);
+    setDraft({
+      id:o.id,
+      title:o.title||"",
+      customerId:o.customerId||"",
+      value:o.value ?? 0,
+      status:o.status||"utkast",
+      note:o.note||"",
+      files: {
+        Ritningar: Array.isArray(files.Ritningar)? files.Ritningar.slice():[],
+        Offerter:  Array.isArray(files.Offerter)?  files.Offerter.slice():[],
+        Kalkyler:  Array.isArray(files.Kalkyler)?  files.Kalkyler.slice():[],
+        KMA:       Array.isArray(files.KMA)?       files.KMA.slice():[],
+      },
+    });
+    setState(s => ({
+      ...s,
+      offers: (s.offers || []).map(x => x.id === o.id ? { ...x, _shouldOpen: undefined } : x),
+    }));
+  }, [offers, setState]);
 
   const list = useMemo(() => {
     let arr = (offers||[]).filter(o=>!o.deletedAt);
@@ -854,28 +886,99 @@ function OffersPanel({ offers = [], entities = [], setState }) {
   }, [offers, q]);
 
   const openEdit = (o)=>{
+    const files = o.files && typeof o.files === "object" ? o.files : { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
     setOpenItem(o);
     setDraft({
-      id:o.id, title:o.title||"", customerId:o.customerId||"", value:o.value||0, status:o.status||"utkast",
+      id:o.id,
+      title:o.title||"",
+      customerId:o.customerId||"",
+      value:o.value ?? 0,
+      status:o.status||"utkast",
+      note:o.note||"",
+      files: {
+        Ritningar: Array.isArray(files.Ritningar)? files.Ritningar.slice():[],
+        Offerter:  Array.isArray(files.Offerter)?  files.Offerter.slice():[],
+        Kalkyler:  Array.isArray(files.Kalkyler)?  files.Kalkyler.slice():[],
+        KMA:       Array.isArray(files.KMA)?       files.KMA.slice():[],
+      },
     });
   };
-  const updateDraft = (k,v)=> setDraft(d=>({...d, [k]: v}));
+  const updateDraft = (k,v)=> setDraft(d=>({ ...d, [k]: v }));
+  const updateFiles = (cat, files)=> setDraft(d=>({ ...d, files: { ...d.files, [cat]: files }}));
+
+  const addFiles = async (cat)=>{
+    try{
+      const picked = await pickOneDriveFiles();
+      if (!picked || picked.length===0) return;
+      const next = (draft.files[cat]||[]).concat(
+        picked.map(p=>({ id:p.id||newId(), name:p.name||"fil", webUrl:p.webUrl||p.url||"#" }))
+      );
+      updateFiles(cat, next);
+    }catch(e){
+      alert("Kunde inte hämta filer från OneDrive.");
+      console.warn(e);
+    }
+  };
+  const removeFile = (cat, idx)=>{
+    const next = (draft.files[cat]||[]).slice();
+    next.splice(idx,1);
+    updateFiles(cat, next);
+  };
+
   const saveDraft = ()=>{
-    if(!draft) return;
+    if (!draft) return;
     setState(s=>({
       ...s,
       offers: (s.offers||[]).map(o=>o.id===draft.id ? {
-        ...o, title:draft.title||"", customerId:draft.customerId||"", value:Number(draft.value)||0, status:draft.status||"utkast", updatedAt:new Date().toISOString()
+        ...o,
+        title: draft.title||"",
+        customerId: draft.customerId||"",
+        value: Number(draft.value)||0,
+        status: draft.status||"utkast",
+        note: draft.note||"",
+        files: {
+          Ritningar: draft.files.Ritningar||[],
+          Offerter:  draft.files.Offerter||[],
+          Kalkyler:  draft.files.Kalkyler||[],
+          KMA:       draft.files.KMA||[],
+        },
+        updatedAt:new Date().toISOString()
       } : o)
     }));
     setOpenItem(null); setDraft(null);
   };
+
   const softDelete = (o)=>{
     setState(s=>({...s, offers:(s.offers||[]).map(x=>x.id===o.id?{...x,deletedAt:new Date().toISOString()}:x)}));
     if(openItem?.id===o.id){ setOpenItem(null); setDraft(null); }
   };
 
-  const customerName = id => (customers.find(c=>c.id===id)?.companyName) || "—";
+  const createProjectFromOffer = ()=>{
+    if (!draft) return;
+    const proj = {
+      id: (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)),
+      name: draft.title || "Projekt",
+      customerId: draft.customerId || "",
+      status: "pågående",
+      budget: Number(draft.value)||0,
+      note: (draft.note||""),
+      files: {
+        Ritningar: draft.files.Ritningar||[],
+        Offerter:  draft.files.Offerter||[],
+        Kalkyler:  draft.files.Kalkyler||[],
+        KMA:       draft.files.KMA||[],
+      },
+      originatingOfferId: draft.id,
+      createdAt: new Date().toISOString(),
+    };
+    setState(s=>({
+      ...s,
+      projects: [ ...(s.projects||[]), proj ],
+      offers: (s.offers||[]).map(o=>o.id===draft.id ? { ...o, status:"vunnen", updatedAt:new Date().toISOString() } : o)
+    }));
+    setOpenItem(null); setDraft(null);
+    alert("Projekt skapat från offert.");
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
@@ -904,14 +1007,14 @@ function OffersPanel({ offers = [], entities = [], setState }) {
 
       {openItem && draft && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
-          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-xl" onClick={e=>e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera offert</div>
               <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
             </div>
 
-            <div className="space-y-3">
-              <div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
                 <label className="text-sm font-medium">Titel</label>
                 <input className="w-full border rounded px-3 py-2" value={draft.title} onChange={e=>updateDraft("title", e.target.value)} />
               </div>
@@ -935,12 +1038,45 @@ function OffersPanel({ offers = [], entities = [], setState }) {
                   <option value="förlorad">Förlorad</option>
                 </select>
               </div>
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Anteckning</label>
+                <textarea className="w-full border rounded px-3 py-2 min-h-[80px]" value={draft.note} onChange={e=>updateDraft("note", e.target.value)} />
+              </div>
+            </div>
+
+            {/* Filer per kategori */}
+            <div className="mt-4 space-y-3">
+              {CATS.map(cat=>(
+                <div key={cat} className="border rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium">{cat}</div>
+                    <button className="text-xs px-2 py-1 rounded border" onClick={()=>addFiles(cat)}>+ Lägg till från OneDrive</button>
+                  </div>
+                  {(draft.files[cat]||[]).length===0 ? (
+                    <div className="text-xs text-gray-500">Inga filer.</div>
+                  ) : (
+                    <ul className="text-sm space-y-1">
+                      {draft.files[cat].map((f,idx)=>(
+                        <li key={f.id||idx} className="flex items-center justify-between gap-2">
+                          <a className="underline truncate" href={f.webUrl||"#"} target="_blank" rel="noreferrer">{f.name||"fil"}</a>
+                          <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFile(cat, idx)}>Ta bort</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
             </div>
 
             <div className="mt-4 flex gap-2">
               <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={saveDraft}>
                 Spara
               </button>
+              {draft.status==="vunnen" && (
+                <button className="px-3 py-2 rounded bg-blue-600 text-white" onClick={createProjectFromOffer}>
+                  Skapa projekt från offert (ärver filer)
+                </button>
+              )}
               <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)}>
                 Ta bort
               </button>
@@ -956,12 +1092,44 @@ function OffersPanel({ offers = [], entities = [], setState }) {
 }
 
 /* ======================================
-   ProjectsPanel — enkel lista + pop-up
+   ProjectsPanel — list + pop-up + OneDrive
    ====================================== */
-function ProjectsPanel({ projects = [], setState }) {
+function ProjectsPanel({ projects = [], setState, entities = [] }) {
   const [q, setQ] = useState("");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
+
+  const CATS = ["Ritningar", "Offerter", "Kalkyler", "KMA"];
+  const customers = useMemo(() => (entities || []).filter(e => e.type === "customer"), [entities]);
+  const customerName = id => (customers.find(c=>c.id===id)?.companyName) || "—";
+
+  useEffect(() => {
+    const p = (projects || []).find(x => x?._shouldOpen);
+    if (!p) return;
+    const files = p.files && typeof p.files === "object" ? p.files : { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
+    setOpenItem(p);
+    setDraft({
+      id:p.id,
+      name:p.name||"",
+      customerId:p.customerId||"",
+      status:p.status||"pågående",
+      budget: p.budget ?? 0,
+      startDate: p.startDate || "",
+      endDate: p.endDate || "",
+      note:p.note||"",
+      files: {
+        Ritningar: Array.isArray(files.Ritningar)? files.Ritningar.slice():[],
+        Offerter:  Array.isArray(files.Offerter)?  files.Offerter.slice():[],
+        Kalkyler:  Array.isArray(files.Kalkyler)?  files.Kalkyler.slice():[],
+        KMA:       Array.isArray(files.KMA)?       files.KMA.slice():[],
+      },
+      originatingOfferId: p.originatingOfferId || "",
+    });
+    setState(s => ({
+      ...s,
+      projects: (s.projects || []).map(x => x.id === p.id ? { ...x, _shouldOpen: undefined } : x),
+    }));
+  }, [projects, setState]);
 
   const list = useMemo(()=>{
     let arr = (projects||[]).filter(p=>!p.deletedAt);
@@ -974,18 +1142,74 @@ function ProjectsPanel({ projects = [], setState }) {
   },[projects,q]);
 
   const openEdit = (p)=>{
+    const files = p.files && typeof p.files === "object" ? p.files : { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
     setOpenItem(p);
-    setDraft({ id:p.id, name:p.name||"", status:p.status||"pågående" });
+    setDraft({
+      id:p.id,
+      name:p.name||"",
+      customerId:p.customerId||"",
+      status:p.status||"pågående",
+      budget: p.budget ?? 0,
+      startDate: p.startDate || "",
+      endDate: p.endDate || "",
+      note:p.note||"",
+      files: {
+        Ritningar: Array.isArray(files.Ritningar)? files.Ritningar.slice():[],
+        Offerter:  Array.isArray(files.Offerter)?  files.Offerter.slice():[],
+        Kalkyler:  Array.isArray(files.Kalkyler)?  files.Kalkyler.slice():[],
+        KMA:       Array.isArray(files.KMA)?       files.KMA.slice():[],
+      },
+      originatingOfferId: p.originatingOfferId || "",
+    });
   };
-  const updateDraft = (k,v)=> setDraft(d=>({...d,[k]:v}));
+  const updateDraft = (k,v)=> setDraft(d=>({ ...d, [k]: v }));
+  const updateFiles = (cat, files)=> setDraft(d=>({ ...d, files: { ...d.files, [cat]: files }}));
+
+  const addFiles = async (cat)=>{
+    try{
+      const picked = await pickOneDriveFiles();
+      if (!picked || picked.length===0) return;
+      const next = (draft.files[cat]||[]).concat(
+        picked.map(p=>({ id:p.id||Math.random().toString(36).slice(2), name:p.name||"fil", webUrl:p.webUrl||p.url||"#" }))
+      );
+      updateFiles(cat, next);
+    }catch(e){
+      alert("Kunde inte hämta filer från OneDrive.");
+      console.warn(e);
+    }
+  };
+  const removeFile = (cat, idx)=>{
+    const next = (draft.files[cat]||[]).slice();
+    next.splice(idx,1);
+    updateFiles(cat, next);
+  };
+
   const saveDraft = ()=>{
     if(!draft) return;
     setState(s=>({
       ...s,
-      projects:(s.projects||[]).map(p=>p.id===draft.id?{...p, name:draft.name||"", status:draft.status||"pågående", updatedAt:new Date().toISOString()}:p)
+      projects:(s.projects||[]).map(p=>p.id===draft.id ? {
+        ...p,
+        name:draft.name||"",
+        customerId:draft.customerId||"",
+        status:draft.status||"pågående",
+        budget:Number(draft.budget)||0,
+        startDate: draft.startDate||"",
+        endDate: draft.endDate||"",
+        note:draft.note||"",
+        files:{
+          Ritningar: draft.files.Ritningar||[],
+          Offerter:  draft.files.Offerter||[],
+          Kalkyler:  draft.files.Kalkyler||[],
+          KMA:       draft.files.KMA||[],
+        },
+        originatingOfferId: draft.originatingOfferId||"",
+        updatedAt:new Date().toISOString()
+      } : p)
     }));
     setOpenItem(null); setDraft(null);
   };
+
   const softDelete = (p)=>{
     setState(s=>({...s, projects:(s.projects||[]).map(x=>x.id===p.id?{...x,deletedAt:new Date().toISOString()}:x)}));
     if(openItem?.id===p.id){ setOpenItem(null); setDraft(null); }
@@ -1004,9 +1228,10 @@ function ProjectsPanel({ projects = [], setState }) {
             <div className="flex items-center justify-between gap-3">
               <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(p)}>
                 <div className="font-medium truncate">{p.name||"Projekt"}</div>
-                <div className="text-xs text-gray-500">{p.status||"pågående"}</div>
+                <div className="text-xs text-gray-500">Kund: {customerName(p.customerId)} · {p.status||"pågående"}</div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{(p.budget||0).toLocaleString("sv-SE")} kr</span>
                 <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(p)}>Ta bort</button>
               </div>
             </div>
@@ -1017,16 +1242,23 @@ function ProjectsPanel({ projects = [], setState }) {
 
       {openItem && draft && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
-          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-xl" onClick={e=>e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera projekt</div>
               <button className="text-sm" onClick={()=>{ setOpenItem(null); setDraft(null); }}>Stäng</button>
             </div>
 
-            <div className="space-y-3">
-              <div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
                 <label className="text-sm font-medium">Namn</label>
                 <input className="w-full border rounded px-3 py-2" value={draft.name} onChange={e=>updateDraft("name", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Kund</label>
+                <select className="w-full border rounded px-3 py-2" value={draft.customerId} onChange={e=>updateDraft("customerId", e.target.value)}>
+                  <option value="">—</option>
+                  {customers.map(c=><option key={c.id} value={c.id}>{c.companyName||c.id}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-sm font-medium">Status</label>
@@ -1036,6 +1268,46 @@ function ProjectsPanel({ projects = [], setState }) {
                   <option value="pausad">pausad</option>
                 </select>
               </div>
+              <div>
+                <label className="text-sm font-medium">Budget (kr)</label>
+                <input type="number" className="w-full border rounded px-3 py-2" value={draft.budget} onChange={e=>updateDraft("budget", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Start</label>
+                <input type="date" className="w-full border rounded px-3 py-2" value={draft.startDate} onChange={e=>updateDraft("startDate", e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Slut</label>
+                <input type="date" className="w-full border rounded px-3 py-2" value={draft.endDate} onChange={e=>updateDraft("endDate", e.target.value)} />
+              </div>
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Anteckning</label>
+                <textarea className="w-full border rounded px-3 py-2 min-h-[80px]" value={draft.note} onChange={e=>updateDraft("note", e.target.value)} />
+              </div>
+            </div>
+
+            {/* Filer per kategori */}
+            <div className="mt-4 space-y-3">
+              {CATS.map(cat=>(
+                <div key={cat} className="border rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium">{cat}</div>
+                    <button className="text-xs px-2 py-1 rounded border" onClick={()=>addFiles(cat)}>+ Lägg till från OneDrive</button>
+                  </div>
+                  {(draft.files[cat]||[]).length===0 ? (
+                    <div className="text-xs text-gray-500">Inga filer.</div>
+                  ) : (
+                    <ul className="text-sm space-y-1">
+                      {draft.files[cat].map((f,idx)=>(
+                        <li key={f.id||idx} className="flex items-center justify-between gap-2">
+                          <a className="underline truncate" href={f.webUrl||"#"} target="_blank" rel="noreferrer">{f.name||"fil"}</a>
+                          <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>removeFile(cat, idx)}>Ta bort</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
             </div>
 
             <div className="mt-4 flex gap-2">
@@ -1078,7 +1350,7 @@ export default function App() {
       isLunch: false,
       isMeeting: false,
       createdAt: new Date().toISOString(),
-      _shouldOpen: true,
+      _shouldOpen: true, // öppna popup direkt
     };
     setState(s => ({ ...s, activities: [...(s.activities || []), a] }));
     setView("activities");
@@ -1086,14 +1358,36 @@ export default function App() {
 
   function createOffer() {
     const id = newId();
-    const o = { id, title: "Ny offert", customerId: "", value: 0, status: "utkast", createdAt: new Date().toISOString() };
+    const o = {
+      id,
+      title: "",
+      customerId: "",
+      value: 0,
+      status: "utkast",
+      note: "",
+      files: { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] },
+      createdAt: new Date().toISOString(),
+      _shouldOpen: true, // öppna popup direkt
+    };
     setState(s => ({ ...s, offers: [...(s.offers || []), o] }));
     setView("offers");
   }
 
   function createProjectEmpty() {
     const id = newId();
-    const p = { id, name: "Nytt projekt", status: "pågående", createdAt: new Date().toISOString() };
+    const p = {
+      id,
+      name: "",
+      customerId: "",
+      status: "pågående",
+      budget: 0,
+      startDate: "",
+      endDate: "",
+      note: "",
+      files: { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] },
+      createdAt: new Date().toISOString(),
+      _shouldOpen: true, // öppna popup direkt
+    };
     setState(s => ({ ...s, projects: [...(s.projects || []), p] }));
     setView("projects");
   }
@@ -1204,6 +1498,7 @@ export default function App() {
             <ProjectsPanel
               projects={state.projects || []}
               setState={setState}
+              entities={state.entities || []} // för kundnamn i listan
             />
           )}
         </main>
