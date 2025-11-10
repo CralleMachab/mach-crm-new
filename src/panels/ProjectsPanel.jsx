@@ -9,7 +9,7 @@ const flattenFiles = (obj) => {
   FILE_CATS.forEach(cat => {
     const arr = Array.isArray(obj[cat]) ? obj[cat] : [];
     arr.forEach(f => out.push({
-      id: f.id || Math.random().toString(36).slice(2),
+      id: f.id || Math.random().toString(36).slice(0,8),
       name: f.name||"fil",
       webUrl: f.webUrl || f.url || "#",
       category: cat
@@ -21,7 +21,7 @@ const groupFiles = (list=[]) => {
   const obj = { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
   list.forEach(f=>{
     const cat = FILE_CATS.includes(f.category) ? f.category : "Offerter";
-    obj[cat].push({ id:f.id||Math.random().toString(36).slice(2), name:f.name||"fil", webUrl:f.webUrl||f.url||"#" });
+    obj[cat].push({ id:f.id||Math.random().toString(36).slice(0,8), name:f.name||"fil", webUrl:f.webUrl||f.url||"#" });
   });
   return obj;
 };
@@ -96,7 +96,7 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
   const addManualFile = () => {
     setDraft(d => ({
       ...d,
-      filesList: [...(d.filesList||[]), { id: Math.random().toString(36).slice(2), name:"Ny fil", webUrl:"#", category:"Offerter" }]
+      filesList: [...(d.filesList||[]), { id: Math.random().toString(36).slice(0,8), name:"Ny fil", webUrl:"#", category:"Offerter" }]
     }));
   };
   const addFilesFromOneDrive = async () => {
@@ -107,7 +107,7 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
         ...d,
         filesList: [...(d.filesList||[]),
           ...picked.map(p => ({
-            id: p.id || Math.random().toString(36).slice(2),
+            id: p.id || Math.random().toString(36).slice(0,8),
             name: p.name || "fil",
             webUrl: p.webUrl || p.url || "#",
             category: "Offerter"
@@ -332,4 +332,3 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
     </div>
   );
 }
-
