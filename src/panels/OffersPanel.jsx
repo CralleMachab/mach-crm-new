@@ -1,4 +1,3 @@
-// src/panels/OffersPanel.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { pickOneDriveFiles } from "../components/onedrive";
 
@@ -35,7 +34,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
   const suppliers  = useMemo(() => (entities || []).filter(e => e.type === "supplier"), [entities]);
   const customerName = id => (customers.find(c=>c.id===id)?.companyName) || "—";
 
-  // öppna nyss skapad offert
   useEffect(() => {
     const o = (offers || []).find(x => x?._shouldOpen);
     if (!o) return;
@@ -106,7 +104,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
             id: p.id || Math.random().toString(36).slice(0,8),
             name: p.name || "fil",
             webUrl: p.webUrl || p.url || "#",
-            category: "Offerter" // kan ändras i dropdown
+            category: "Offerter"
           }))
         ]
       }));
@@ -122,7 +120,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     });
   };
 
-  // leverantörer (flera)
   const addSupplierToOffer = (supplierId)=>{
     if (!supplierId) return;
     setDraft(d=>{
@@ -160,7 +157,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     if(openItem?.id===o.id){ setOpenItem(null); setDraft(null); }
   };
 
-  // Skapa projekt från VUNNEN offert (ärver filer + leverantörer)
   function createProjectFromOffer() {
     if (!draft) return;
     const files = groupFiles(draft.filesList || []);
@@ -250,7 +246,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               </div>
             </div>
 
-            {/* Leverantörer */}
             <div className="mt-4 border rounded-xl p-3">
               <div className="font-medium mb-2">Kopplade leverantörer</div>
               <div className="flex gap-2 mb-2">
@@ -280,7 +275,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               )}
             </div>
 
-            {/* Filer */}
             <div className="mt-4 border rounded-xl p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">Filer</div>
