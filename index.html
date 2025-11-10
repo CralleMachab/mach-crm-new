@@ -8,6 +8,16 @@
     <!-- Tailwind (enkelt för styling) -->
     <script src="https://cdn.tailwindcss.com"></script>
 
+    <!-- Exponera Client ID som fallback (Client ID är inte hemlig) -->
+<script>
+  window.__ENV = {
+    VITE_ONEDRIVE_CLIENT_ID: "48bd814b-47b9-4310-8c9d-af61d450cedc"
+  };
+</script>
+
+<!-- OneDrive File Picker (behövs för att välja filer/mappar) -->
+<script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
+
     <!-- OneDrive File Picker (behövs för att välja filer/mappar) -->
     <script type="text/javascript" src="https://js.live.net/v7.2/OneDrive.js"></script>
 
