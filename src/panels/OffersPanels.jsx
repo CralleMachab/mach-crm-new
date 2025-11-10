@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { pickOneDriveFiles } from "../components/onedrive";
 
-// lokala helpers – så vi inte ändrar App.jsx
 const FILE_CATS = ["Ritningar","Offerter","Kalkyler","KMA"];
 const flattenFiles = (obj) => {
   if (!obj || typeof obj !== "object") return [];
@@ -10,7 +9,7 @@ const flattenFiles = (obj) => {
   FILE_CATS.forEach(cat => {
     const arr = Array.isArray(obj[cat]) ? obj[cat] : [];
     arr.forEach(f => out.push({
-      id: f.id || Math.random().toString(36).slice(2),
+      id: f.id || Math.random().toString(36).slice(0,8),
       name: f.name||"fil",
       webUrl: f.webUrl || f.url || "#",
       category: cat
@@ -22,7 +21,7 @@ const groupFiles = (list=[]) => {
   const obj = { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
   list.forEach(f=>{
     const cat = FILE_CATS.includes(f.category) ? f.category : "Offerter";
-    obj[cat].push({ id:f.id||Math.random().toString(36).slice(2), name:f.name||"fil", webUrl:f.webUrl||f.url||"#" });
+    obj[cat].push({ id:f.id||Math.random().toString(36).slice(0,8), name:f.name||"fil", webUrl:f.webUrl||f.url||"#" });
   });
   return obj;
 };
@@ -93,7 +92,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
   const addManualFile = () => {
     setDraft(d => ({
       ...d,
-      filesList: [...(d.filesList||[]), { id: Math.random().toString(36).slice(2), name:"Ny fil", webUrl:"#", category:"Offerter" }]
+      filesList: [...(d.filesList||[]), { id: Math.random().toString(36).slice(0,8), name:"Ny fil", webUrl:"#", category:"Offerter" }]
     }));
   };
   const addFilesFromOneDrive = async () => {
@@ -104,7 +103,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
         ...d,
         filesList: [...(d.filesList||[]),
           ...picked.map(p => ({
-            id: p.id || Math.random().toString(36).slice(2),
+            id: p.id || Math.random().toString(36).slice(0,8),
             name: p.name || "fil",
             webUrl: p.webUrl || p.url || "#",
             category: "Offerter" // kan ändras i dropdown
@@ -123,7 +122,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     });
   };
 
-  // leverantörer på offert (flera)
+  // leverantörer (flera)
   const addSupplierToOffer = (supplierId)=>{
     if (!supplierId) return;
     setDraft(d=>{
@@ -161,12 +160,12 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     if(openItem?.id===o.id){ setOpenItem(null); setDraft(null); }
   };
 
-  // === Viktigt: skapa projekt från VUNNEN offert (ärver filer + leverantörer)
+  // Skapa projekt från VUNNEN offert (ärver filer + leverantörer)
   function createProjectFromOffer() {
     if (!draft) return;
     const files = groupFiles(draft.filesList || []);
     const proj = {
-      id: (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)),
+      id: (crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(0,8)),
       name: draft.title || "Projekt",
       customerId: draft.customerId || "",
       status: "pågående",
@@ -251,7 +250,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               </div>
             </div>
 
-            {/* Leverantörer (flera) */}
+            {/* Leverantörer */}
             <div className="mt-4 border rounded-xl p-3">
               <div className="font-medium mb-2">Kopplade leverantörer</div>
               <div className="flex gap-2 mb-2">
@@ -281,7 +280,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               )}
             </div>
 
-            {/* Filer som rader */}
+            {/* Filer */}
             <div className="mt-4 border rounded-xl p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">Filer</div>
@@ -333,4 +332,3 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     </div>
   );
 }
-
