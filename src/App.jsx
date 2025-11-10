@@ -2,8 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { loadState, saveState } from "./lib/storage";
 import { fetchRemoteState, pushRemoteState } from "./lib/cloud";
 import { pickOneDriveFiles } from "./components/onedrive";
-import OffersPanel from "./panels/OffersPanel";
-import ProjectsPanel from "./panels/ProjectsPanel";
+import OffersPanel from "./panels/OffersPanel.jsx";
+import ProjectsPanel from "./panels/ProjectsPanel.jsx";
 
 /* ===========================
    useStore — lokal + SharePoint
