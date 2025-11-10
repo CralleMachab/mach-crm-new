@@ -1,6 +1,5 @@
 // src/components/onedrive.js
-// Robust OneDrive-picker som läser clientId från Vite-miljövariabeln VITE_ONEDRIVE_CLIENT_ID
-// Användning i React: const picked = await pickOneDriveFiles();
+// OneDrive file picker – hämtar clientId från Vite env (Netlify: VITE_ONEDRIVE_CLIENT_ID)
 
 export async function pickOneDriveFiles() {
   return new Promise((resolve, reject) => {
@@ -11,7 +10,7 @@ export async function pickOneDriveFiles() {
         return reject(new Error("Missing VITE_ONEDRIVE_CLIENT_ID"));
       }
       if (typeof window === "undefined" || !window.OneDrive) {
-        alert("OneDrive SDK ej laddad. Kontrollera index.html (<script src='https://js.live.net/v7.2/OneDrive.js'>).");
+        alert("OneDrive SDK ej laddad. Kontrollera index.html (OneDrive.js).");
         return reject(new Error("OneDrive SDK not loaded"));
       }
 
@@ -20,9 +19,7 @@ export async function pickOneDriveFiles() {
         action: "share",
         multiSelect: true,
         openInNewWindow: true,
-        advanced: {
-          redirectUri: window.location.origin, // måste vara registrerad i Azure App (SPA)
-        },
+        advanced: { redirectUri: window.location.origin },
         success: (files) => {
           const out = (files?.value || []).map(f => ({
             id: f.id,
