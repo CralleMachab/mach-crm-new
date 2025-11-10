@@ -1,12 +1,15 @@
 // src/components/onedrive.js
-// OneDrive file picker – hämtar clientId från Vite env (Netlify: VITE_ONEDRIVE_CLIENT_ID)
-
+// OneDrive file picker – läser clientId från Vite env ELLER från window.__ENV fallback
 export async function pickOneDriveFiles() {
   return new Promise((resolve, reject) => {
     try {
-      const clientId = import.meta?.env?.VITE_ONEDRIVE_CLIENT_ID;
+      const clientId =
+        (import.meta && import.meta.env && import.meta.env.VITE_ONEDRIVE_CLIENT_ID) ||
+        (window.__ENV && window.__ENV.VITE_ONEDRIVE_CLIENT_ID) ||
+        "";
+
       if (!clientId) {
-        alert("Saknar VITE_ONEDRIVE_CLIENT_ID. Sätt den i Netlify → Environment variables.");
+        alert("Saknar VITE_ONEDRIVE_CLIENT_ID. Sätt den i Netlify eller i index.html (window.__ENV).");
         return reject(new Error("Missing VITE_ONEDRIVE_CLIENT_ID"));
       }
       if (typeof window === "undefined" || !window.OneDrive) {
