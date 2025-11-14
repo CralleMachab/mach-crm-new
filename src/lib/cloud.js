@@ -2,9 +2,21 @@
 const TENANT_ID = "c3485a3b-b394-47ee-a4c1-e2d1dd98bdfb";
 const CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
 
+// ===== SHAREPOINT/GRAPH KONFIG START =====
 const SITE_HOSTNAME = "machentreprenadab.sharepoint.com";
-const SITE_PATH = "/sites/crm";
-const CLOUD_FILE_PATH = "/Shared Documents/CRM/state.json";
+
+// VIKTIGT: Endast själva sites-sidans NAMN här. Inte "sites/crm", utan bara "crm".
+const SITE_PATH = "crm";
+
+// Dokumentbibliotekets visningsnamn (svensk standard är "Delade dokument")
+const DOC_LIB_NAME_SV = "Delade dokument";
+// Alternativt om er tenant använder engelsk beteckning:
+// const DOC_LIB_NAME_EN = "Shared Documents";
+
+// Var i dokumentbiblioteket du vill lägga CRM-filen:
+const FOLDER_PATH = "CRM";                  // bibliotekets undermapp (skapas automatiskt om den saknas)
+const FILE_NAME   = "mach-crm-state.json";  // filen där CRM-datat sparas
+// ===== SHAREPOINT/GRAPH KONFIG SLUT =====
 
 const SCOPES = ["Files.ReadWrite.All", "Sites.ReadWrite.All"];
 
