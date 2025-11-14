@@ -1,30 +1,34 @@
 // src/components/onedrive.js
-// OneDrive file picker – läser clientId från Vite env ELLER från window.__ENV fallback
+// Enklare OneDrive-filepicker med hårdkodat Client ID
+
+// Ditt Application (client) ID från Azure:
+const CLIENT_ID = "48bd814b-47b9-4310-8c9d-af61d450cedc";
+
 export async function pickOneDriveFiles() {
   return new Promise((resolve, reject) => {
     try {
-      const clientId =
-        (import.meta && import.meta.env && import.meta.env.VITE_ONEDRIVE_CLIENT_ID) ||
-        (window.__ENV && window.__ENV.VITE_ONEDRIVE_CLIENT_ID) ||
-        "";
-
-      if (!clientId) {
-        alert("Saknar VITE_ONEDRIVE_CLIENT_ID. Sätt den i Netlify eller i index.html (window.__ENV).");
-        return reject(new Error("Missing VITE_ONEDRIVE_CLIENT_ID"));
-      }
+      // Kontrollera att OneDrive SDK är laddad
       if (typeof window === "undefined" || !window.OneDrive) {
-        alert("OneDrive SDK ej laddad. Kontrollera index.html (OneDrive.js).");
+        alert("OneDrive SDK är inte laddad. Kontrollera <script src='https://js.live.net/v7.2/OneDrive.js'> i index.html.");
         return reject(new Error("OneDrive SDK not loaded"));
       }
 
+      if (!CLIENT_ID) {
+        alert("Saknar CLIENT_ID i src/components/onedrive.js.");
+        return reject(new Error("Missing CLIENT_ID"));
+      }
+
       window.OneDrive.open({
-        clientId,
+        clientId: CLIENT_ID,
         action: "share",
         multiSelect: true,
         openInNewWindow: true,
-        advanced: { redirectUri: window.location.origin },
+        advanced: {
+          // Måste matcha en redirect URI i din app-registrering (t.ex. Netlify-URLen)
+          redirectUri: window.location.origin,
+        },
         success: (files) => {
-          const out = (files?.value || []).map(f => ({
+          const out = (files?.value || []).map((f) => ({
             id: f.id,
             name: f.name,
             webUrl: f.webUrl || f.links?.sharingLink?.webUrl || "",
