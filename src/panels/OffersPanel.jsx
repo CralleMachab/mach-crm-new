@@ -35,6 +35,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
   const [q, setQ] = useState("");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [showArchive, setShowArchive] = useState(false);
 
   const customers  = useMemo(() => (entities || []).filter(e => e.type === "customer"), [entities]);
   const suppliers  = useMemo(() => (entities || []).filter(e => e.type === "supplier"), [entities]);
@@ -61,8 +62,9 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     }));
   }, [offers, setState]);
 
-  const list = useMemo(() => {
-    let arr = (offers||[]).filter(o=>!o.deletedAt);
+  // Aktiva + arkiverade listor
+  const activeOffers = useMemo(() => {
+    let arr = (offers||[]).filter(o => !o.deletedAt);
     if (q.trim()) {
       const s = q.trim().toLowerCase();
       arr = arr.filter(o => (o.title||"").toLowerCase().includes(s));
@@ -70,6 +72,18 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     arr.sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
     return arr;
   }, [offers, q]);
+
+  const archivedOffers = useMemo(() => {
+    let arr = (offers||[]).filter(o => !!o.deletedAt);
+    if (q.trim()) {
+      const s = q.trim().toLowerCase();
+      arr = arr.filter(o => (o.title||"").toLowerCase().includes(s));
+    }
+    arr.sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
+    return arr;
+  }, [offers, q]);
+
+  const viewList = showArchive ? archivedOffers : activeOffers;
 
   const openEdit = (o)=>{
     const filesList = flattenFiles(o.files);
@@ -131,6 +145,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
   };
 
   const removeFileRow = (idx) => {
+    if (!window.confirm("Vill du ta bort denna filrad?")) return;
     setDraft(d=>{
       const copy = (d.filesList||[]).slice();
       copy.splice(idx,1);
@@ -148,6 +163,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
   };
 
   const removeSupplierFromOffer = (supplierId)=>{
+    if (!window.confirm("Vill du ta bort denna leverantör från offerten?")) return;
     setDraft(d=> ({
       ...d,
       supplierIds: (d.supplierIds||[]).filter(id=>id!==supplierId)
@@ -176,6 +192,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
   };
 
   const softDelete = (o)=>{
+    if (!window.confirm("Vill du arkivera denna offert? Du kan hitta den under Arkiv senare.")) return;
     setState(s=>({
       ...s,
       offers:(s.offers||[]).map(x=>x.id===o.id
@@ -184,6 +201,18 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
       )
     }));
     if(openItem?.id===o.id){
+      setOpenItem(null);
+      setDraft(null);
+    }
+  };
+
+  const hardDelete = (o) => {
+    if (!window.confirm("Ta bort denna offert permanent från arkivet? Detta går inte att ångra.")) return;
+    setState(s => ({
+      ...s,
+      offers: (s.offers || []).filter(x => x.id !== o.id)
+    }));
+    if (openItem?.id === o.id) {
       setOpenItem(null);
       setDraft(null);
     }
@@ -221,16 +250,36 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     <div className="bg-white rounded-2xl shadow p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold">Offerter</h2>
-        <input
-          className="border rounded-xl px-3 py-2"
-          placeholder="Sök..."
-          value={q}
-          onChange={e=>setQ(e.target.value)}
-        />
+        <div className="flex items-center gap-2">
+          <input
+            className="border rounded-xl px-3 py-2"
+            placeholder="Sök..."
+            value={q}
+            onChange={e=>setQ(e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={()=>setShowArchive(false)}
+            className={`text-xs px-2 py-1 rounded border ${
+              !showArchive ? "bg-gray-200" : "bg-white"
+            }`}
+          >
+            Aktiva
+          </button>
+          <button
+            type="button"
+            onClick={()=>setShowArchive(true)}
+            className={`text-xs px-2 py-1 rounded border ${
+              showArchive ? "bg-gray-200" : "bg-white"
+            }`}
+          >
+            Arkiv
+          </button>
+        </div>
       </div>
 
       <ul className="divide-y">
-        {list.map(o=>(
+        {viewList.map(o=>(
           <li key={o.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
               <button
@@ -246,20 +295,31 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                 </div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
-                <button
-                  className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                  onClick={()=>softDelete(o)}
-                  type="button"
-                >
-                  Ta bort
-                </button>
+                {!showArchive && (
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                    onClick={()=>softDelete(o)}
+                    type="button"
+                  >
+                    Ta bort
+                  </button>
+                )}
+                {showArchive && (
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
+                    onClick={()=>hardDelete(o)}
+                    type="button"
+                  >
+                    Ta bort permanent
+                  </button>
+                )}
               </div>
             </div>
           </li>
         ))}
-        {list.length===0 && (
+        {viewList.length===0 && (
           <li className="py-6 text-sm text-gray-500">
-            Inga offerter.
+            {showArchive ? "Inga arkiverade offerter." : "Inga offerter."}
           </li>
         )}
       </ul>
@@ -470,7 +530,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                             href={f.webUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="text-xs underline text-blue-600"
+                            className="text-xs px-2 py-1 rounded border border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200 inline-flex items-center justify-center"
                           >
                             Öppna
                           </a>
