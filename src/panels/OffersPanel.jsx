@@ -199,24 +199,25 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
   };
 
   const saveDraft = ()=>{
-    if (!draft) return;
-    const files = groupFiles(draft.filesList||[]);
-    setState(s=>({
-      ...s,
-      offers: (s.offers||[]).map(o=>o.id===draft.id ? {
-        ...o,
-        title: draft.title||"",
-        customerId: draft.customerId||"",
-        value: Number(draft.value)||0,
-        status: draft.status||"utkast",
-        note: draft.note||"",
-        files,
-        supplierIds: Array.isArray(draft.supplierIds) ? draft.supplierIds.slice() : [],
-        updatedAt:new Date().toISOString()
-      } : o)
-    }));
-    setOpenItem(null); setDraft(null);
-  };
+  if (!draft) return;
+  const files = groupFiles(draft.filesList||[]);
+  setState(s=>({
+    ...s,
+    offers: (s.offers||[]).map(o=>o.id===draft.id ? {
+      ...o,
+      title: draft.title||"",
+      customerId: draft.customerId||"",
+      value: Number(draft.value)||0,
+      status: draft.status||"utkast",
+      note: draft.note||"",
+      offerType: draft.offerType || "",    // ← LÄGG TILL DENNA
+      files,
+      supplierIds: Array.isArray(draft.supplierIds) ? draft.supplierIds.slice() : [],
+      updatedAt:new Date().toISOString()
+    } : o)
+  }));
+  setOpenItem(null); setDraft(null);
+};
 
   const softDelete = (o)=>{
     if (!window.confirm("Ta bort denna offert? Den hamnar i Arkiv/borttagna och kan tas bort permanent senare.")) return;
