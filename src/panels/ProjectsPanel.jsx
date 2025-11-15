@@ -9,14 +9,12 @@ const flattenFiles = (obj) => {
   const out = [];
   FILE_CATS.forEach(cat => {
     const arr = Array.isArray(obj[cat]) ? obj[cat] : [];
-    arr.forEach(f =>
-      out.push({
-        id: f.id || Math.random().toString(36).slice(0,8),
-        name: f.name||"fil",
-        webUrl: f.webUrl || f.url || "#",
-        category: cat
-      })
-    );
+    arr.forEach(f => out.push({
+      id: f.id || Math.random().toString(36).slice(0,8),
+      name: f.name||"fil",
+      webUrl: f.webUrl || f.url || "#",
+      category: cat
+    }));
   });
   return out;
 };
@@ -25,31 +23,79 @@ const groupFiles = (list=[]) => {
   const obj = { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
   list.forEach(f=>{
     const cat = FILE_CATS.includes(f.category) ? f.category : "Offerter";
-    obj[cat].push({
-      id:f.id||Math.random().toString(36).slice(0,8),
-      name:f.name||"fil",
-      webUrl:f.webUrl||f.url||"#"
-    });
+    obj[cat].push({ id:f.id||Math.random().toString(36).slice(0,8), name:f.name||"fil", webUrl:f.webUrl||f.url||"#" });
   });
   return obj;
 };
 
+// ---------- skriv ut / maila helpers ----------
+function printProject(project, customerName) {
+  const w = window.open("", "_blank");
+  if (!w) return;
+
+  const html = `
+    <html>
+      <head>
+        <title>Projekt ${project.name || ""}</title>
+        <style>
+          body { font-family: system-ui, sans-serif; padding: 24px; }
+          h1 { font-size: 20px; margin-bottom: 8px; }
+          .label { font-weight: 600; }
+          p { margin: 4px 0; }
+        </style>
+      </head>
+      <body>
+        <h1>Projekt ${project.name || ""}</h1>
+        <p><span class="label">Kund:</span> ${customerName || ""}</p>
+        <p><span class="label">Status:</span> ${project.status || ""}</p>
+        <p><span class="label">Budget:</span> ${Number(project.budget||0).toLocaleString("sv-SE")} kr</p>
+        <p><span class="label">Start:</span> ${project.startDate || ""}</p>
+        <p><span class="label">Slut:</span> ${project.endDate || ""}</p>
+        <p><span class="label">Notering:</span></p>
+        <p>${(project.note || "").replace(/\n/g,"<br />")}</p>
+      </body>
+    </html>
+  `;
+
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
+function emailProject(project, customerName) {
+  const subject = encodeURIComponent(`Projekt ${project.name || ""}`);
+  const bodyLines = [
+    "Hej!",
+    "",
+    "Här kommer uppgifter om projekt:",
+    "",
+    `Namn: ${project.name || ""}`,
+    `Kund: ${customerName || ""}`,
+    `Status: ${project.status || ""}`,
+    `Budget: ${Number(project.budget||0).toLocaleString("sv-SE")} kr`,
+    `Start: ${project.startDate || ""}`,
+    `Slut: ${project.endDate || ""}`,
+    "",
+    project.note || "",
+    "",
+    "Med vänlig hälsning,",
+    ""
+  ];
+  const body = encodeURIComponent(bodyLines.join("\n"));
+
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+// ---------- Huvudkomponent ----------
 export default function ProjectsPanel({ projects = [], setState, entities = [], offers = [] }) {
   const [q, setQ] = useState("");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
-  const [showArchive, setShowArchive] = useState(false);
 
-  const customers = useMemo(
-    () => (entities || []).filter(e => e.type === "customer"),
-    [entities]
-  );
-  const suppliers = useMemo(
-    () => (entities || []).filter(e => e.type === "supplier"),
-    [entities]
-  );
-  const customerName = id =>
-    customers.find(c=>c.id===id)?.companyName || "—";
+  const customers = useMemo(() => (entities || []).filter(e => e.type === "customer"), [entities]);
+  const suppliers = useMemo(() => (entities || []).filter(e => e.type === "supplier"), [entities]);
+  const customerName = id => (customers.find(c=>c.id===id)?.companyName) || "—";
 
   useEffect(() => {
     const p = (projects || []).find(x => x?._shouldOpen);
@@ -70,34 +116,19 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
     });
     setState(s => ({
       ...s,
-      projects: (s.projects || []).map(x =>
-        x.id === p.id ? { ...x, _shouldOpen: undefined } : x
-      ),
+      projects: (s.projects || []).map(x => x.id === p.id ? { ...x, _shouldOpen: undefined } : x),
     }));
   }, [projects, setState]);
 
-  // Aktiva / arkiverade projekt
-  const activeProjects = useMemo(() => {
-    let arr = (projects||[]).filter(p => !p.deletedAt);
-    if (q.trim()) {
+  const list = useMemo(()=>{
+    let arr = (projects||[]).filter(p=>!p.deletedAt);
+    if (q.trim()){
       const s = q.trim().toLowerCase();
       arr = arr.filter(p => (p.name||"").toLowerCase().includes(s));
     }
     arr.sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
     return arr;
-  }, [projects, q]);
-
-  const archivedProjects = useMemo(() => {
-    let arr = (projects||[]).filter(p => !!p.deletedAt);
-    if (q.trim()) {
-      const s = q.trim().toLowerCase();
-      arr = arr.filter(p => (p.name||"").toLowerCase().includes(s));
-    }
-    arr.sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
-    return arr;
-  }, [projects, q]);
-
-  const viewList = showArchive ? archivedProjects : activeProjects;
+  },[projects,q]);
 
   const openEdit = (p)=>{
     setOpenItem(p);
@@ -124,30 +155,24 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       return { ...d, filesList: copy };
     });
   };
-
   const addManualFile = () => {
     setDraft(d => ({
       ...d,
-      filesList: [
-        ...(d.filesList||[]),
-        {
-          id: Math.random().toString(36).slice(0,8),
-          name:"Ny fil",
-          webUrl:"#",
-          category:"Offerter"
-        }
-      ]
+      filesList: [...(d.filesList||[]), {
+        id: Math.random().toString(36).slice(0,8),
+        name:"Ny fil",
+        webUrl:"#",
+        category:"Offerter"
+      }]
     }));
   };
-
   const addFilesFromOneDrive = async () => {
     try{
       const picked = await pickOneDriveFiles();
       if (!picked || picked.length===0) return;
       setDraft(d => ({
         ...d,
-        filesList: [
-          ...(d.filesList||[]),
+        filesList: [...(d.filesList||[]),
           ...picked.map(p => ({
             id: p.id || Math.random().toString(36).slice(0,8),
             name: p.name || "fil",
@@ -160,9 +185,7 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       alert("Kunde inte hämta filer från OneDrive. Du kan lägga till manuellt med knappen nedan.");
     }
   };
-
   const removeFileRow = (idx) => {
-    if (!window.confirm("Vill du ta bort denna filrad?")) return;
     setDraft(d=>{
       const copy = (d.filesList||[]).slice();
       copy.splice(idx,1);
@@ -179,13 +202,8 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       return { ...d, supplierIds: Array.from(set) };
     });
   };
-
   const removeSupplierFromProject = (supplierId)=>{
-    if (!window.confirm("Vill du ta bort denna leverantör från projektet?")) return;
-    setDraft(d=> ({
-      ...d,
-      supplierIds: (d.supplierIds||[]).filter(id=>id!==supplierId)
-    }));
+    setDraft(d=> ({ ...d, supplierIds: (d.supplierIds||[]).filter(id=>id!==supplierId) }));
   };
 
   const saveDraft = ()=>{
@@ -207,35 +225,16 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
         updatedAt:new Date().toISOString()
       } : p)
     }));
-    setOpenItem(null);
-    setDraft(null);
+    setOpenItem(null); setDraft(null);
   };
 
   const softDelete = (p)=>{
-    if (!window.confirm("Vill du arkivera detta projekt? Du kan hitta det under Arkiv senare.")) return;
+    if (!window.confirm("Ta bort detta projekt? Det hamnar som borttaget och kan rensas senare.")) return;
     setState(s=>({
       ...s,
-      projects:(s.projects||[]).map(x=>x.id===p.id
-        ? { ...x,deletedAt:new Date().toISOString() }
-        : x
-      )
+      projects:(s.projects||[]).map(x=>x.id===p.id?{...x,deletedAt:new Date().toISOString()}:x)
     }));
-    if(openItem?.id===p.id){
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
-
-  const hardDelete = (p) => {
-    if (!window.confirm("Ta bort detta projekt permanent från arkivet? Detta går inte att ångra.")) return;
-    setState(s => ({
-      ...s,
-      projects: (s.projects || []).filter(x => x.id !== p.id)
-    }));
-    if (openItem?.id === p.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
+    if(openItem?.id===p.id){ setOpenItem(null); setDraft(null); }
   };
 
   const projectStatusBadge = (status)=>{
@@ -253,39 +252,17 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
     <div className="bg-white rounded-2xl shadow p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold">Projekt</h2>
-        <div className="flex items-center gap-2">
-          <input
-            className="border rounded-xl px-3 py-2"
-            placeholder="Sök..."
-            value={q}
-            onChange={e=>setQ(e.target.value)}
-          />
-          <button
-            type="button"
-            onClick={()=>setShowArchive(false)}
-            className={`text-xs px-2 py-1 rounded border ${
-              !showArchive ? "bg-gray-200" : "bg-white"
-            }`}
-          >
-            Aktiva
-          </button>
-          <button
-            type="button"
-            onClick={()=>setShowArchive(true)}
-            className={`text-xs px-2 py-1 rounded border ${
-              showArchive ? "bg-gray-200" : "bg-white"
-            }`}
-          >
-            Arkiv
-          </button>
-        </div>
+        <input
+          className="border rounded-xl px-3 py-2"
+          placeholder="Sök..."
+          value={q}
+          onChange={e=>setQ(e.target.value)}
+        />
       </div>
 
       <ul className="divide-y">
-        {viewList.map(p=>{
-          const wonOffer =
-            p.originatingOfferId &&
-            (offers||[]).find(o=>o.id===p.originatingOfferId && o.status==="vunnen");
+        {list.map(p=>{
+          const wonOffer = p.originatingOfferId && (offers||[]).find(o=>o.id===p.originatingOfferId && o.status==="vunnen");
           return (
             <li key={p.id} className="py-3">
               <div className="flex items-center justify-between gap-3">
@@ -294,16 +271,12 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                   onClick={()=>openEdit(p)}
                   type="button"
                 >
-                  <div className="font-medium truncate">
-                    {p.name||"Projekt"}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Kund: {customerName(p.customerId)} ·{" "}
-                    <span className={projectStatusBadge(p.status)}>
-                      {p.status||"pågående"}
-                    </span>
+                  <div className="font-medium truncate">{p.name||"Projekt"}</div>
+                  <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+                    <span>Kund: {customerName(p.customerId)}</span>
+                    <span className={projectStatusBadge(p.status)}>{p.status||"pågående"}</span>
                     {wonOffer ? (
-                      <span className="ml-2 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">
+                      <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">
                         Vunnen offert
                       </span>
                     ) : null}
@@ -313,43 +286,25 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                   <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
                     {(p.budget||0).toLocaleString("sv-SE")} kr
                   </span>
-                  {!showArchive && (
-                    <button
-                      className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                      onClick={()=>softDelete(p)}
-                      type="button"
-                    >
-                      Ta bort
-                    </button>
-                  )}
-                  {showArchive && (
-                    <button
-                      className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
-                      onClick={()=>hardDelete(p)}
-                      type="button"
-                    >
-                      Ta bort permanent
-                    </button>
-                  )}
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                    onClick={()=>softDelete(p)}
+                    type="button"
+                  >
+                    Ta bort
+                  </button>
                 </div>
               </div>
             </li>
           );
         })}
-        {viewList.length===0 && (
-          <li className="py-6 text-sm text-gray-500">
-            {showArchive ? "Inga arkiverade projekt." : "Inga projekt."}
-          </li>
-        )}
+        {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga projekt.</li>}
       </ul>
 
       {openItem && draft && (
         <div
           className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-          onClick={()=>{
-            setOpenItem(null);
-            setDraft(null);
-          }}
+          onClick={()=>{ setOpenItem(null); setDraft(null); }}
         >
           <div
             className="bg-white rounded-2xl shadow p-4 w-full max-w-3xl"
@@ -359,10 +314,7 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
               <div className="font-semibold">Redigera projekt</div>
               <button
                 className="text-sm"
-                onClick={()=>{
-                  setOpenItem(null);
-                  setDraft(null);
-                }}
+                onClick={()=>{ setOpenItem(null); setDraft(null); }}
                 type="button"
               >
                 Stäng
@@ -524,13 +476,11 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                           onChange={e=>setFileField(idx,"category",e.target.value)}
                         >
                           {FILE_CATS.map(c => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
+                            <option key={c} value={c}>{c}</option>
                           ))}
                         </select>
                       </div>
-                      <div className="col-span-4">
+                      <div className="col-span-3">
                         <input
                           className="w-full border rounded px-2 py-1 text-sm"
                           value={f.name||""}
@@ -546,17 +496,17 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                           placeholder="Länk (URL)"
                         />
                       </div>
-                      <div className="col-span-1 flex flex-col items-end gap-1">
-                        {f.webUrl && (
-                          <a
-                            href={f.webUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs px-2 py-1 rounded border border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200 inline-flex items-center justify-center"
-                          >
-                            Öppna
-                          </a>
-                        )}
+                      <div className="col-span-1 text-center">
+                        <a
+                          href={f.webUrl || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex justify-center text-xs px-3 py-2 rounded bg-blue-600 text-white"
+                        >
+                          Öppna
+                        </a>
+                      </div>
+                      <div className="col-span-1 text-right">
                         <button
                           className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
                           onClick={()=>removeFileRow(idx)}
@@ -571,7 +521,8 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
               )}
             </div>
 
-            <div className="mt-4 flex gap-2">
+            {/* knapprad */}
+            <div className="mt-4 flex gap-2 flex-wrap">
               <button
                 className="px-3 py-2 rounded bg-green-600 text-white"
                 onClick={saveDraft}
@@ -579,6 +530,35 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
               >
                 Spara
               </button>
+
+              <button
+                className="px-3 py-2 rounded border"
+                type="button"
+                onClick={()=>{
+                  const customer = customers.find(c=>c.id===draft.customerId);
+                  printProject(
+                    { ...openItem, ...draft },
+                    customer?.companyName || ""
+                  );
+                }}
+              >
+                Skriv ut
+              </button>
+
+              <button
+                className="px-3 py-2 rounded border"
+                type="button"
+                onClick={()=>{
+                  const customer = customers.find(c=>c.id===draft.customerId);
+                  emailProject(
+                    { ...openItem, ...draft },
+                    customer?.companyName || ""
+                  );
+                }}
+              >
+                Maila
+              </button>
+
               <button
                 className="px-3 py-2 rounded bg-rose-600 text-white"
                 onClick={()=>softDelete(openItem)}
@@ -586,12 +566,10 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
               >
                 Ta bort
               </button>
+
               <button
                 className="ml-auto px-3 py-2 rounded border"
-                onClick={()=>{
-                  setOpenItem(null);
-                  setDraft(null);
-                }}
+                onClick={()=>{ setOpenItem(null); setDraft(null); }}
                 type="button"
               >
                 Avbryt
