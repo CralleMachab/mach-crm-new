@@ -99,15 +99,16 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     const filesList = flattenFiles(o.files);
     setOpenItem(o);
     setDraft({
-      id:o.id,
-      title:o.title||"",
-      customerId:o.customerId||"",
-      value:o.value ?? 0,
-      status:o.status||"utkast",
-      note:o.note||"",
-      filesList,
-      supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
-    });
+  id:o.id,
+  title:o.title||"",
+  customerId:o.customerId||"",
+  value:o.value ?? 0,
+  status:o.status||"utkast",
+  note:o.note||"",
+  offerType: o.offerType || "",
+  filesList,
+  supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
+});
     setState(s => ({
       ...s,
       offers: (s.offers || []).map(x => x.id === o.id ? { ...x, _shouldOpen: undefined } : x),
@@ -128,15 +129,16 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     const filesList = flattenFiles(o.files);
     setOpenItem(o);
     setDraft({
-      id:o.id,
-      title:o.title||"",
-      customerId:o.customerId||"",
-      value:o.value ?? 0,
-      status:o.status||"utkast",
-      note:o.note||"",
-      filesList,
-      supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
-    });
+  id:o.id,
+  title:o.title||"",
+  customerId:o.customerId||"",
+  value:o.value ?? 0,
+  status:o.status||"utkast",
+  note:o.note||"",
+  offerType: o.offerType || "",
+  filesList,
+  supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
+});
   };
 
   const setFileField = (idx, field, value) => {
