@@ -1444,11 +1444,12 @@ export default function App() {
       customerId: "",
       value: 0,
       status: "utkast",
+      offerType: "", // "Entreprenad" eller "Turbovex"
       note: "",
-      files: { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] },
+      files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
       supplierIds: [],
       createdAt: new Date().toISOString(),
-      _shouldOpen: true, // popup direkt
+      _shouldOpen: true,
     };
     setState(s => ({ ...s, offers: [...(s.offers || []), o] }));
     setView("offers");
@@ -1465,9 +1466,10 @@ export default function App() {
       startDate: "",
       endDate: "",
       note: "",
-      files: { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] },
+      projectType: "", // "Entreprenad" eller "Turbovex"
+      files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
       createdAt: new Date().toISOString(),
-      _shouldOpen: true, // popup direkt
+      _shouldOpen: true,
     };
     setState(s => ({ ...s, projects: [...(s.projects || []), p] }));
     setView("projects");
