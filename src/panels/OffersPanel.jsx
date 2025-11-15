@@ -275,8 +275,23 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               >
                 <div className="font-medium truncate">{o.title||"Offert"}</div>
                 <div className="text-xs text-gray-500">
-                  Kund: {customerName(o.customerId)} · {o.status||"utkast"} · {(o.value||0).toLocaleString("sv-SE")} kr
-                </div>
+                 <div className="flex items-center gap-2 text-xs text-gray-500">
+  <span>
+    Kund: {customerName(o.customerId)} · {o.status||"utkast"} · {(o.value||0).toLocaleString("sv-SE")} kr
+  </span>
+
+  {o.offerType === "entreprenad" && (
+    <span className="px-2 py-1 rounded bg-orange-200 text-orange-900">
+      Entreprenad
+    </span>
+  )}
+  {o.offerType === "turbovex" && (
+    <span className="px-2 py-1 rounded bg-sky-200 text-sky-900">
+      Turbovex
+    </span>
+  )}
+</div>
+
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <button
