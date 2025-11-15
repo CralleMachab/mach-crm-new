@@ -91,6 +91,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const [rangeFilter, setRangeFilter] = useState("7");
   const [dateFilter, setDateFilter]   = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [mode, setMode] = useState("active"); // "active" | "archive"
 
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft]       = useState(null);
@@ -171,30 +172,38 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
   const list = useMemo(() => {
     let arr = Array.isArray(activities) ? activities.slice() : [];
-    arr = arr.filter(a => !a?.deletedAt);
+
+    if (mode === "active") {
+      arr = arr.filter(a => !a?.deletedAt);
+    } else {
+      arr = arr.filter(a => !!a?.deletedAt);
+    }
 
     const isDone   = a => (a?.priority === "klar") || (a?.status === "klar");
     const isFollow = a => (a?.status === "återkoppling");
 
-    if (statusFilter === "done") {
-      arr = arr.filter(isDone);
-    } else if (statusFilter === "followup") {
-      arr = arr.filter(isFollow);
-    } else if (statusFilter === "done_or_followup") {
-      arr = arr.filter(a => isDone(a) || isFollow(a));
-    } else if (statusFilter === "all_except_done") {
-      arr = arr.filter(a => !isDone(a));
-    }
-    if (respFilter !== "all") {
-      arr = arr.filter(a => (a?.responsible || "Övrig") === respFilter);
-    }
-    if (rangeFilter === "today") {
-      const ymd = todayISO();
-      arr = arr.filter(a => isSameDay(a?.dueDate, ymd));
-    } else if (rangeFilter === "7") {
-      arr = arr.filter(a => inNext7(a?.dueDate, a?.dueTime));
-    } else if (rangeFilter === "date" && dateFilter) {
-      arr = arr.filter(a => isSameDay(a?.dueDate, dateFilter));
+    // Filtren ska bara påverka Aktiva (inte Arkiv)
+    if (mode === "active") {
+      if (statusFilter === "done") {
+        arr = arr.filter(isDone);
+      } else if (statusFilter === "followup") {
+        arr = arr.filter(isFollow);
+      } else if (statusFilter === "done_or_followup") {
+        arr = arr.filter(a => isDone(a) || isFollow(a));
+      } else if (statusFilter === "all_except_done") {
+        arr = arr.filter(a => !isDone(a));
+      }
+      if (respFilter !== "all") {
+        arr = arr.filter(a => (a?.responsible || "Övrig") === respFilter);
+      }
+      if (rangeFilter === "today") {
+        const ymd = todayISO();
+        arr = arr.filter(a => isSameDay(a?.dueDate, ymd));
+      } else if (rangeFilter === "7") {
+        arr = arr.filter(a => inNext7(a?.dueDate, a?.dueTime));
+      } else if (rangeFilter === "date" && dateFilter) {
+        arr = arr.filter(a => isSameDay(a?.dueDate, dateFilter));
+      }
     }
 
     arr.sort((a, b) => {
@@ -203,11 +212,21 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       return ad.localeCompare(bd);
     });
     return arr;
-  }, [activities, respFilter, rangeFilter, dateFilter, statusFilter]);
+  }, [activities, respFilter, rangeFilter, dateFilter, statusFilter, mode]);
 
   const softDelete = (a) => {
+    if (!window.confirm("Ta bort denna aktivitet? Den hamnar i Arkiv och kan tas bort permanent därifrån.")) return;
     const upd = { ...a, deletedAt: new Date().toISOString() };
     setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === a.id ? upd : x) }));
+    if (openItem?.id === a.id) { setOpenItem(null); setDraft(null); }
+  };
+
+  const hardDelete = (a) => {
+    if (!window.confirm("Ta bort denna aktivitet PERMANENT? Detta går inte att ångra.")) return;
+    setState(s => ({
+      ...s,
+      activities: (s.activities || []).filter(x => x.id !== a.id),
+    }));
     if (openItem?.id === a.id) { setOpenItem(null); setDraft(null); }
   };
 
@@ -243,74 +262,90 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      {/* filterraden */}
+      {/* rubrik + läge (Aktiva/Arkiv) + filter */}
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <h2 className="font-semibold">Aktiviteter</h2>
-
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-3">
+          <h2 className="font-semibold">Aktiviteter</h2>
           <div className="flex rounded-xl overflow-hidden border">
-            {[
-              {k:"today", label:"Idag"},
-              {k:"7",     label:"7 dagar"},
-              {k:"all",   label:"Alla"},
-            ].map(o => (
-              <button
-                key={o.k}
-                className={`px-3 py-2 ${rangeFilter===o.k ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
-                onClick={()=>{ setRangeFilter(o.k); if (o.k!=="date") setDateFilter(""); }}
-                title={o.label}
-                type="button"
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 border rounded-xl px-2 py-1">
-            <label className="text-sm">Dag:</label>
-            <input
-              type="date"
-              className="text-sm border rounded px-2 py-1"
-              value={dateFilter}
-              onChange={e=>{ setDateFilter(e.target.value); setRangeFilter("date"); }}
-            />
-            {dateFilter && (
-              <button className="text-xs underline" onClick={()=>{ setDateFilter(""); setRangeFilter("all"); }} type="button">
-                Rensa datum
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 border rounded-xl px-2 py-1">
-            <label className="text-sm">Status:</label>
-            <select
-              className="text-sm border rounded px-2 py-1"
-              value={statusFilter}
-              onChange={e=>setStatusFilter(e.target.value)}
-              title="Filtrera på status"
+            <button
+              type="button"
+              className={`px-3 py-1 text-sm ${mode==="active" ? "bg-black text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              onClick={()=>setMode("active")}
             >
-              <option value="all">Alla</option>
-              <option value="done">Endast klara</option>
-              <option value="followup">Endast återkoppling</option>
-              <option value="done_or_followup">Klara + Återkoppling</option>
-              <option value="all_except_done">Alla utom klara</option>
-            </select>
-          </div>
-
-          <div className="flex rounded-xl overflow-hidden border">
-            {["all","Mattias","Cralle","Övrig"].map(r => (
-              <button
-                key={r}
-                className={`px-3 py-2 ${respFilter===r ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
-                onClick={()=>setRespFilter(r)}
-                title={r==="all" ? "Visa alla" : `Visa endast ${r}`}
-                type="button"
-              >
-                {r==="all" ? "Alla" : r}
-              </button>
-            ))}
+              Aktiva
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1 text-sm ${mode==="archive" ? "bg-black text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              onClick={()=>setMode("archive")}
+            >
+              Arkiv
+            </button>
           </div>
         </div>
+
+        {mode === "active" && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex rounded-xl overflow-hidden border">
+              {[{k:"today", label:"Idag"},{k:"7", label:"7 dagar"},{k:"all", label:"Alla"}].map(o => (
+                <button
+                  key={o.k}
+                  className={`px-3 py-2 ${rangeFilter===o.k ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
+                  onClick={()=>{ setRangeFilter(o.k); if (o.k!=="date") setDateFilter(""); }}
+                  title={o.label}
+                  type="button"
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 border rounded-xl px-2 py-1">
+              <label className="text-sm">Dag:</label>
+              <input
+                type="date"
+                className="text-sm border rounded px-2 py-1"
+                value={dateFilter}
+                onChange={e=>{ setDateFilter(e.target.value); setRangeFilter("date"); }}
+              />
+              {dateFilter && (
+                <button className="text-xs underline" onClick={()=>{ setDateFilter(""); setRangeFilter("all"); }} type="button">
+                  Rensa datum
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 border rounded-xl px-2 py-1">
+              <label className="text-sm">Status:</label>
+              <select
+                className="text-sm border rounded px-2 py-1"
+                value={statusFilter}
+                onChange={e=>setStatusFilter(e.target.value)}
+                title="Filtrera på status"
+              >
+                <option value="all">Alla</option>
+                <option value="done">Endast klara</option>
+                <option value="followup">Endast återkoppling</option>
+                <option value="done_or_followup">Klara + Återkoppling</option>
+                <option value="all_except_done">Alla utom klara</option>
+              </select>
+            </div>
+
+            <div className="flex rounded-xl overflow-hidden border">
+              {["all","Mattias","Cralle","Övrig"].map(r => (
+                <button
+                  key={r}
+                  className={`px-3 py-2 ${respFilter===r ? "bg-black text-white":"bg-white text-gray-700 hover:bg-gray-50"}`}
+                  onClick={()=>setRespFilter(r)}
+                  title={r==="all" ? "Visa alla" : `Visa endast ${r}`}
+                  type="button"
+                >
+                  {r==="all" ? "Alla" : r}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* lista */}
@@ -324,7 +359,9 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 title="Öppna aktiviteten"
                 type="button"
               >
-                <div className="font-medium truncate">{a.title || "Aktivitet"}</div>
+                <div className="font-medium truncate">
+                  {a.title || "Aktivitet"}{mode==="archive" ? " (Arkiv)" : ""}
+                </div>
                 <div className="flex items-center gap-3">
                   <div className="text-xs text-gray-500">{fmt(a.dueDate, a.dueTime)}</div>
                   <Icons a={a} />
@@ -336,20 +373,38 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 <span className={respChip(a.responsible)}>{a.responsible || "Övrig"}</span>
                 {a.status ? <span className={statusBadge(a.status)}>{a.status}</span> : null}
 
-                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(a)} title="Ta bort (sparas historiskt)" type="button">
-                  Ta bort
-                </button>
+                {mode === "active" ? (
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                    onClick={()=>softDelete(a)}
+                    title="Ta bort (flyttas till Arkiv)"
+                    type="button"
+                  >
+                    Ta bort
+                  </button>
+                ) : (
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
+                    onClick={()=>hardDelete(a)}
+                    title="Ta bort permanent"
+                    type="button"
+                  >
+                    Ta bort permanent
+                  </button>
+                )}
               </div>
             </div>
           </li>
         ))}
 
         {list.length === 0 && (
-          <li className="py-6 text-sm text-gray-500">Inga aktiviteter att visa.</li>
+          <li className="py-6 text-sm text-gray-500">
+            {mode==="active" ? "Inga aktiviteter att visa." : "Inga arkiverade aktiviteter."}
+          </li>
         )}
       </ul>
 
-      {/* popup */}
+      {/* popup (samma logik, men Ta bort har confirm via softDelete) */}
       {openItem && draft && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={()=>{ setOpenItem(null); setDraft(null); }}>
           <div className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl" onClick={e=>e.stopPropagation()}>
@@ -455,32 +510,73 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
             </div>
 
             <div className="mt-4 flex gap-2">
-              <button className="px-3 py-2 rounded bg-green-600 text-white" onClick={()=>{
-                const baseUpd = { ...openItem, ...draft, updatedAt: new Date().toISOString(), priority:"klar", status:"klar", completedAt:new Date().toISOString() };
-                setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x) }));
-                setOpenItem(null); setDraft(null);
-              }} type="button">
+              <button
+                className="px-3 py-2 rounded bg-green-600 text-white"
+                onClick={()=>{
+                  const baseUpd = {
+                    ...openItem,
+                    ...draft,
+                    updatedAt: new Date().toISOString(),
+                    priority:"klar",
+                    status:"klar",
+                    completedAt:new Date().toISOString()
+                  };
+                  setState(s => ({
+                    ...s,
+                    activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x)
+                  }));
+                  setOpenItem(null); setDraft(null);
+                }}
+                type="button"
+              >
                 Spara & Markera Klar
               </button>
-              <button className="px-3 py-2 rounded bg-orange-500 text-white" onClick={()=>{
-                const baseUpd = { ...openItem, ...draft, updatedAt:new Date().toISOString(), status:"återkoppling" };
-                setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x) }));
-                setOpenItem(null); setDraft(null);
-              }} type="button">
+              <button
+                className="px-3 py-2 rounded bg-orange-500 text-white"
+                onClick={()=>{
+                  const baseUpd = {
+                    ...openItem,
+                    ...draft,
+                    updatedAt:new Date().toISOString(),
+                    status:"återkoppling"
+                  };
+                  setState(s => ({
+                    ...s,
+                    activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x)
+                  }));
+                  setOpenItem(null); setDraft(null);
+                }}
+                type="button"
+              >
                 Spara & Återkoppling
               </button>
-              <button className="px-3 py-2 rounded bg-rose-600 text-white" onClick={()=>softDelete(openItem)} type="button">
+              <button
+                className="px-3 py-2 rounded bg-rose-600 text-white"
+                onClick={()=>softDelete(openItem)}
+                type="button"
+              >
                 Ta bort
               </button>
 
-              <button className="ml-auto px-3 py-2 rounded border" onClick={()=>{
-                const baseUpd = { ...openItem, ...draft, updatedAt:new Date().toISOString() };
-                setState(s => ({ ...s, activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x) }));
-                setOpenItem(null); setDraft(null);
-              }} type="button">
+              <button
+                className="ml-auto px-3 py-2 rounded border"
+                onClick={()=>{
+                  const baseUpd = { ...openItem, ...draft, updatedAt:new Date().toISOString() };
+                  setState(s => ({
+                    ...s,
+                    activities: (s.activities || []).map(x => x.id === baseUpd.id ? baseUpd : x)
+                  }));
+                  setOpenItem(null); setDraft(null);
+                }}
+                type="button"
+              >
                 Spara
               </button>
-              <button className="px-3 py-2 rounded border" onClick={()=>{ setOpenItem(null); setDraft(null); }} type="button">
+              <button
+                className="px-3 py-2 rounded border"
+                onClick={()=>{ setOpenItem(null); setDraft(null); }}
+                type="button"
+              >
                 Avbryt
               </button>
             </div>
