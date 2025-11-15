@@ -1487,6 +1487,7 @@ export default function App() {
           <div className="bg-white rounded-2xl shadow p-3 space-y-2">
             {[
               ["activities","Aktiviteter"],
+       ["activitiesCalendar","Kalender"],   // 👈 NY rad
               ["customers","Kunder"],
               ["suppliers","Leverantörer"],
               ["offers","Offerter"],
@@ -1514,6 +1515,14 @@ export default function App() {
               setState={setState}
             />
           )}
+
+           {view==="activitiesCalendar" && (
+  <ActivitiesCalendarPanel
+    activities={state.activities || []}
+    setState={setState}
+    setView={setView}
+  />
+)}
 
           {view==="customers" && (
             <CustomersPanel
