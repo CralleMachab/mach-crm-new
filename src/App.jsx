@@ -242,6 +242,19 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     }));
     if (openItem?.id === a.id) { setOpenItem(null); setDraft(null); }
   };
+   const restoreActivity = (a) => {
+  if (!window.confirm("Återställa denna aktivitet till Aktiva?")) return;
+  setState((s) => ({
+    ...s,
+    activities: (s.activities || []).map((x) =>
+      x.id === a.id ? { ...x, deletedAt: undefined } : x
+    ),
+  }));
+  if (openItem?.id === a.id) {
+    setOpenItem(null);
+    setDraft(null);
+  }
+};
 
   const openEdit = (a) => {
     setOpenItem(a);
