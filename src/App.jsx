@@ -682,6 +682,9 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 /* ======================================
    Kunder — popup vid ny kund
    ====================================== */
+/* ======================================
+   Kunder — popup vid ny kund
+   ====================================== */
 function CustomersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
@@ -690,84 +693,123 @@ function CustomersPanel({ entities = [], setState }) {
 
   // Öppna direkt om _shouldOpen är satt
   useEffect(() => {
-    const c = (entities||[]).find(e => e.type==="customer" && e._shouldOpen);
+    const c = (entities || []).find(e => e.type === "customer" && e._shouldOpen);
     if (!c) return;
     setOpenItem(c);
     setDraft({
       id: c.id,
-      companyName: c.companyName||"",
-      orgNo: c.orgNo||"",
-      phone: c.phone||"",
-      email: c.email||"",
-      address: c.address||"",
-      zip: c.zip||"",
-      city: c.city||"",
-      customerCategory: c.customerCategory||""
+      companyName: c.companyName || "",
+      orgNo: c.orgNo || "",
+      phone: c.phone || "",
+      email: c.email || "",
+      address: c.address || "",
+      zip: c.zip || "",
+      city: c.city || "",
+      customerCategory: c.customerCategory || ""
     });
-    setState(s=>({
+    setState(s => ({
       ...s,
-      entities:(s.entities||[]).map(e=> e.id===c.id ? { ...e, _shouldOpen:undefined } : e)
+      entities: (s.entities || []).map(e =>
+        e.id === c.id ? { ...e, _shouldOpen: undefined } : e
+      )
     }));
   }, [entities, setState]);
 
   const list = useMemo(() => {
     let arr = (entities || []).filter(e => e.type === "customer" && !e.deletedAt);
+
+    // Sök + kategori
     if (q.trim()) {
       const s = q.trim().toLowerCase();
       arr = arr.filter(e =>
-        (e.companyName||"").toLowerCase().includes(s) ||
-        (e.orgNo||"").toLowerCase().includes(s) ||
-        (e.city||"").toLowerCase().includes(s)
+        (e.companyName || "").toLowerCase().includes(s) ||
+        (e.orgNo || "").toLowerCase().includes(s) ||
+        (e.city || "").toLowerCase().includes(s)
       );
     }
     if (cat !== "all") {
-      arr = arr.filter(e => (e.customerCategory||"") === cat);
+      arr = arr.filter(e => (e.customerCategory || "") === cat);
     }
-    arr.sort((a,b)=> (a.companyName||"").localeCompare(b.companyName||""));
-    return arr;
+
+    // Sortera alfabetiskt
+    const byName = [...arr].sort((a, b) =>
+      (a.companyName || "").localeCompare(b.companyName || "")
+    );
+
+    // 3 senast använda/ändrade
+    const byRecent = [...arr].sort((a, b) => {
+      const at = a.updatedAt || a.createdAt || "";
+      const bt = b.updatedAt || b.createdAt || "";
+      return bt.localeCompare(at);
+    });
+
+    const latest = [];
+    const seen = new Set();
+    for (const c of byRecent) {
+      if (!c.id || seen.has(c.id)) continue;
+      latest.push(c);
+      seen.add(c.id);
+      if (latest.length >= 3) break;
+    }
+
+    const rest = byName.filter(c => !seen.has(c.id));
+    return [...latest, ...rest];
   }, [entities, q, cat]);
 
   const openEdit = (c) => {
     setOpenItem(c);
     setDraft({
       id: c.id,
-      companyName: c.companyName||"",
-      orgNo: c.orgNo||"",
-      phone: c.phone||"",
-      email: c.email||"",
-      address: c.address||"",
-      zip: c.zip||"",
-      city: c.city||"",
-      customerCategory: c.customerCategory||"",
+      companyName: c.companyName || "",
+      orgNo: c.orgNo || "",
+      phone: c.phone || "",
+      email: c.email || "",
+      address: c.address || "",
+      zip: c.zip || "",
+      city: c.city || "",
+      customerCategory: c.customerCategory || "",
     });
   };
-  const updateDraft = (k,v)=> setDraft(d=>({ ...d, [k]: v }));
-  const saveDraft = ()=> {
+
+  const updateDraft = (k, v) => setDraft(d => ({ ...d, [k]: v }));
+
+  const saveDraft = () => {
     if (!draft) return;
-    setState(s=>({
+    setState(s => ({
       ...s,
-      entities: (s.entities||[]).map(e => e.id===draft.id ? {
-        ...e,
-        companyName: draft.companyName||"",
-        orgNo: draft.orgNo||"",
-        phone: draft.phone||"",
-        email: draft.email||"",
-        address: draft.address||"",
-        zip: draft.zip||"",
-        city: draft.city||"",
-        customerCategory: draft.customerCategory||"",
-        updatedAt: new Date().toISOString(),
-      } : e)
+      entities: (s.entities || []).map(e =>
+        e.id === draft.id
+          ? {
+              ...e,
+              companyName: draft.companyName || "",
+              orgNo: draft.orgNo || "",
+              phone: draft.phone || "",
+              email: draft.email || "",
+              address: draft.address || "",
+              zip: draft.zip || "",
+              city: draft.city || "",
+              customerCategory: draft.customerCategory || "",
+              updatedAt: new Date().toISOString(),
+            }
+          : e
+      ),
     }));
-    setOpenItem(null); setDraft(null);
+    setOpenItem(null);
+    setDraft(null);
   };
-  const softDelete = (c)=> {
-    if (!window.confirm("Ta bort denna kund? Den hamnar i Arkiv/borttagen data.")) return;
-    setState(s=>({
+
+  const softDelete = (c) => {
+    if (!window.confirm("Ta bort denna kund? Den hamnar i systemet som borttagen men visas inte i listan.")) return;
+    setState(s => ({
       ...s,
-      entities: (s.entities||[]).map(e => e.id===c.id ? { ...e, deletedAt: new Date().toISOString() } : e)
+      entities: (s.entities || []).map(e =>
+        e.id === c.id ? { ...e, deletedAt: new Date().toISOString() } : e
+      ),
     }));
-    if (openItem?.id===c.id){ setOpenItem(null); setDraft(null); }
+    if (openItem?.id === c.id) {
+      setOpenItem(null);
+      setDraft(null);
+    }
   };
 
   return (
@@ -779,12 +821,12 @@ function CustomersPanel({ entities = [], setState }) {
             className="border rounded-xl px-3 py-2"
             placeholder="Sök..."
             value={q}
-            onChange={e=>setQ(e.target.value)}
+            onChange={e => setQ(e.target.value)}
           />
           <select
             className="border rounded-xl px-3 py-2"
             value={cat}
-            onChange={e=>setCat(e.target.value)}
+            onChange={e => setCat(e.target.value)}
           >
             <option value="all">Alla kategorier</option>
             <option value="StålHall">StålHall</option>
@@ -795,19 +837,26 @@ function CustomersPanel({ entities = [], setState }) {
       </div>
 
       <ul className="divide-y">
-        {list.map(c => (
+        {list.map((c, idx) => (
           <li key={c.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
               <button
                 className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
-                onClick={()=>openEdit(c)}
+                onClick={() => openEdit(c)}
                 type="button"
               >
-                <div className="font-medium truncate">
-                  {c.companyName || "(namnlös kund)"}
+                <div className="flex items-center gap-2">
+                  <div className="font-medium truncate">
+                    {c.companyName || "(namnlös kund)"}
+                  </div>
+                  {idx < 3 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                      Senast använd
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {c.city || ""}
+                  {c.city || ""} {c.customerCategory ? `· ${c.customerCategory}` : ""}
                 </div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
@@ -816,7 +865,7 @@ function CustomersPanel({ entities = [], setState }) {
                 </span>
                 <button
                   className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                  onClick={()=>softDelete(c)}
+                  onClick={() => softDelete(c)}
                   type="button"
                 >
                   Ta bort
@@ -825,27 +874,31 @@ function CustomersPanel({ entities = [], setState }) {
             </div>
           </li>
         ))}
-        {list.length===0 && (
-          <li className="py-6 text-sm text-gray-500">
-            Inga kunder.
-          </li>
+        {list.length === 0 && (
+          <li className="py-6 text-sm text-gray-500">Inga kunder.</li>
         )}
       </ul>
 
       {openItem && draft && (
         <div
           className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-          onClick={()=>{ setOpenItem(null); setDraft(null); }}
+          onClick={() => {
+            setOpenItem(null);
+            setDraft(null);
+          }}
         >
           <div
             className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl"
-            onClick={e=>e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-2">
               <div className="font-semibold">Redigera kund</div>
               <button
                 className="text-sm"
-                onClick={()=>{ setOpenItem(null); setDraft(null); }}
+                onClick={() => {
+                  setOpenItem(null);
+                  setDraft(null);
+                }}
                 type="button"
               >
                 Stäng
@@ -858,7 +911,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.companyName}
-                  onChange={e=>updateDraft("companyName", e.target.value)}
+                  onChange={e => updateDraft("companyName", e.target.value)}
                 />
               </div>
               <div>
@@ -866,7 +919,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.orgNo}
-                  onChange={e=>updateDraft("orgNo", e.target.value)}
+                  onChange={e => updateDraft("orgNo", e.target.value)}
                 />
               </div>
               <div>
@@ -874,7 +927,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.phone}
-                  onChange={e=>updateDraft("phone", e.target.value)}
+                  onChange={e => updateDraft("phone", e.target.value)}
                 />
               </div>
               <div>
@@ -882,7 +935,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.email}
-                  onChange={e=>updateDraft("email", e.target.value)}
+                  onChange={e => updateDraft("email", e.target.value)}
                 />
               </div>
               <div>
@@ -890,7 +943,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.address}
-                  onChange={e=>updateDraft("address", e.target.value)}
+                  onChange={e => updateDraft("address", e.target.value)}
                 />
               </div>
               <div>
@@ -898,7 +951,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.zip}
-                  onChange={e=>updateDraft("zip", e.target.value)}
+                  onChange={e => updateDraft("zip", e.target.value)}
                 />
               </div>
               <div>
@@ -906,7 +959,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.city}
-                  onChange={e=>updateDraft("city", e.target.value)}
+                  onChange={e => updateDraft("city", e.target.value)}
                 />
               </div>
               <div>
@@ -914,7 +967,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <select
                   className="w-full border rounded px-3 py-2"
                   value={draft.customerCategory}
-                  onChange={e=>updateDraft("customerCategory", e.target.value)}
+                  onChange={e => updateDraft("customerCategory", e.target.value)}
                 >
                   <option value="">—</option>
                   <option value="StålHall">StålHall</option>
@@ -934,14 +987,17 @@ function CustomersPanel({ entities = [], setState }) {
               </button>
               <button
                 className="px-3 py-2 rounded bg-rose-600 text-white"
-                onClick={()=>softDelete(openItem)}
+                onClick={() => softDelete(openItem)}
                 type="button"
               >
                 Ta bort
               </button>
               <button
                 className="ml-auto px-3 py-2 rounded border"
-                onClick={()=>{ setOpenItem(null); setDraft(null); }}
+                onClick={() => {
+                  setOpenItem(null);
+                  setDraft(null);
+                }}
                 type="button"
               >
                 Avbryt
@@ -986,8 +1042,9 @@ function SuppliersPanel({ entities = [], setState }) {
     }));
   }, [entities, setState]);
 
-  const list = useMemo(() => {
+    const list = useMemo(() => {
     let arr = (entities || []).filter(e => e.type === "supplier");
+
     if (mode === "active") {
       arr = arr.filter(e => !e.deletedAt);
     } else {
@@ -997,16 +1054,39 @@ function SuppliersPanel({ entities = [], setState }) {
     if (q.trim()) {
       const s = q.trim().toLowerCase();
       arr = arr.filter(e =>
-        (e.companyName||"").toLowerCase().includes(s) ||
-        (e.orgNo||"").toLowerCase().includes(s) ||
-        (e.city||"").toLowerCase().includes(s)
+        (e.companyName || "").toLowerCase().includes(s) ||
+        (e.orgNo || "").toLowerCase().includes(s) ||
+        (e.city || "").toLowerCase().includes(s)
       );
     }
+
     if (cat !== "all") {
-      arr = arr.filter(e => (e.supplierCategory||"") === cat);
+      arr = arr.filter(e => (e.supplierCategory || "") === cat);
     }
-    arr.sort((a,b)=> (a.companyName||"").localeCompare(b.companyName||""));
-    return arr;
+
+    // Alfabetiskt
+    const byName = [...arr].sort((a, b) =>
+      (a.companyName || "").localeCompare(b.companyName || "")
+    );
+
+    // 3 senast använda/uppdaterade
+    const byRecent = [...arr].sort((a, b) => {
+      const at = a.updatedAt || a.createdAt || "";
+      const bt = b.updatedAt || b.createdAt || "";
+      return bt.localeCompare(at);
+    });
+
+    const latest = [];
+    const seen = new Set();
+    for (const s of byRecent) {
+      if (!s.id || seen.has(s.id)) continue;
+      latest.push(s);
+      seen.add(s.id);
+      if (latest.length >= 3) break;
+    }
+
+    const rest = byName.filter(s => !seen.has(s.id));
+    return [...latest, ...rest];
   }, [entities, q, cat, mode]);
 
   const openEdit = (s) => {
