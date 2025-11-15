@@ -1,3 +1,4 @@
+// src/panels/OffersPanel.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { pickOneDriveFiles } from "../components/onedrive";
 
@@ -22,20 +23,71 @@ const groupFiles = (list=[]) => {
   const obj = { Ritningar:[], Offerter:[], Kalkyler:[], KMA:[] };
   list.forEach(f=>{
     const cat = FILE_CATS.includes(f.category) ? f.category : "Offerter";
-    obj[cat].push({
-      id:f.id||Math.random().toString(36).slice(0,8),
-      name:f.name||"fil",
-      webUrl:f.webUrl||f.url||"#"
-    });
+    obj[cat].push({ id:f.id||Math.random().toString(36).slice(0,8), name:f.name||"fil", webUrl:f.webUrl||f.url||"#" });
   });
   return obj;
 };
 
+// ---------- skriv ut / maila helpers ----------
+function printOffer(offer) {
+  const w = window.open("", "_blank");
+  if (!w) return;
+
+  const html = `
+    <html>
+      <head>
+        <title>Offert ${offer.title || ""}</title>
+        <style>
+          body { font-family: system-ui, sans-serif; padding: 24px; }
+          h1 { font-size: 20px; margin-bottom: 8px; }
+          .label { font-weight: 600; }
+          p { margin: 4px 0; }
+        </style>
+      </head>
+      <body>
+        <h1>Offert ${offer.title || ""}</h1>
+        <p><span class="label">Kund:</span> ${offer.customerName || ""}</p>
+        <p><span class="label">Värde:</span> ${Number(offer.value||0).toLocaleString("sv-SE")} kr</p>
+        <p><span class="label">Status:</span> ${offer.status || ""}</p>
+        <p><span class="label">Notering:</span></p>
+        <p>${(offer.note || "").replace(/\n/g,"<br />")}</p>
+      </body>
+    </html>
+  `;
+
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  w.print();
+}
+
+function emailOffer(offer) {
+  const subject = encodeURIComponent(`Offert ${offer.title || ""}`);
+  const bodyLines = [
+    "Hej!",
+    "",
+    "Här kommer uppgifter om offert:",
+    "",
+    `Titel: ${offer.title || ""}`,
+    `Kund: ${offer.customerName || ""}`,
+    `Värde: ${Number(offer.value||0).toLocaleString("sv-SE")} kr`,
+    `Status: ${offer.status || ""}`,
+    "",
+    offer.note || "",
+    "",
+    "Med vänlig hälsning,",
+    ""
+  ];
+  const body = encodeURIComponent(bodyLines.join("\n"));
+
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+
+// ---------- Huvudkomponent ----------
 export default function OffersPanel({ offers = [], entities = [], setState }) {
   const [q, setQ] = useState("");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
-  const [showArchive, setShowArchive] = useState(false);
 
   const customers  = useMemo(() => (entities || []).filter(e => e.type === "customer"), [entities]);
   const suppliers  = useMemo(() => (entities || []).filter(e => e.type === "supplier"), [entities]);
@@ -62,9 +114,8 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     }));
   }, [offers, setState]);
 
-  // Aktiva + arkiverade listor
-  const activeOffers = useMemo(() => {
-    let arr = (offers||[]).filter(o => !o.deletedAt);
+  const list = useMemo(() => {
+    let arr = (offers||[]).filter(o=>!o.deletedAt);
     if (q.trim()) {
       const s = q.trim().toLowerCase();
       arr = arr.filter(o => (o.title||"").toLowerCase().includes(s));
@@ -72,18 +123,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     arr.sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
     return arr;
   }, [offers, q]);
-
-  const archivedOffers = useMemo(() => {
-    let arr = (offers||[]).filter(o => !!o.deletedAt);
-    if (q.trim()) {
-      const s = q.trim().toLowerCase();
-      arr = arr.filter(o => (o.title||"").toLowerCase().includes(s));
-    }
-    arr.sort((a,b)=> (b.createdAt||"").localeCompare(a.createdAt||""));
-    return arr;
-  }, [offers, q]);
-
-  const viewList = showArchive ? archivedOffers : activeOffers;
 
   const openEdit = (o)=>{
     const filesList = flattenFiles(o.files);
@@ -107,30 +146,24 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
       return { ...d, filesList: copy };
     });
   };
-
   const addManualFile = () => {
     setDraft(d => ({
       ...d,
-      filesList: [
-        ...(d.filesList||[]),
-        {
-          id: Math.random().toString(36).slice(0,8),
-          name:"Ny fil",
-          webUrl:"#",
-          category:"Offerter"
-        }
-      ]
+      filesList: [...(d.filesList||[]), {
+        id: Math.random().toString(36).slice(0,8),
+        name:"Ny fil",
+        webUrl:"#",
+        category:"Offerter"
+      }]
     }));
   };
-
   const addFilesFromOneDrive = async () => {
     try{
       const picked = await pickOneDriveFiles();
       if (!picked || picked.length===0) return;
       setDraft(d => ({
         ...d,
-        filesList: [
-          ...(d.filesList||[]),
+        filesList: [...(d.filesList||[]),
           ...picked.map(p => ({
             id: p.id || Math.random().toString(36).slice(0,8),
             name: p.name || "fil",
@@ -143,9 +176,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
       alert("Kunde inte hämta filer från OneDrive. Du kan lägga till manuellt med knappen nedan.");
     }
   };
-
   const removeFileRow = (idx) => {
-    if (!window.confirm("Vill du ta bort denna filrad?")) return;
     setDraft(d=>{
       const copy = (d.filesList||[]).slice();
       copy.splice(idx,1);
@@ -161,13 +192,8 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
       return { ...d, supplierIds: Array.from(set) };
     });
   };
-
   const removeSupplierFromOffer = (supplierId)=>{
-    if (!window.confirm("Vill du ta bort denna leverantör från offerten?")) return;
-    setDraft(d=> ({
-      ...d,
-      supplierIds: (d.supplierIds||[]).filter(id=>id!==supplierId)
-    }));
+    setDraft(d=> ({ ...d, supplierIds: (d.supplierIds||[]).filter(id=>id!==supplierId) }));
   };
 
   const saveDraft = ()=>{
@@ -187,35 +213,16 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
         updatedAt:new Date().toISOString()
       } : o)
     }));
-    setOpenItem(null);
-    setDraft(null);
+    setOpenItem(null); setDraft(null);
   };
 
   const softDelete = (o)=>{
-    if (!window.confirm("Vill du arkivera denna offert? Du kan hitta den under Arkiv senare.")) return;
+    if (!window.confirm("Ta bort denna offert? Den hamnar i Arkiv/borttagna och kan tas bort permanent senare.")) return;
     setState(s=>({
       ...s,
-      offers:(s.offers||[]).map(x=>x.id===o.id
-        ? { ...x,deletedAt:new Date().toISOString() }
-        : x
-      )
+      offers:(s.offers||[]).map(x=>x.id===o.id?{...x,deletedAt:new Date().toISOString()}:x)
     }));
-    if(openItem?.id===o.id){
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
-
-  const hardDelete = (o) => {
-    if (!window.confirm("Ta bort denna offert permanent från arkivet? Detta går inte att ångra.")) return;
-    setState(s => ({
-      ...s,
-      offers: (s.offers || []).filter(x => x.id !== o.id)
-    }));
-    if (openItem?.id === o.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
+    if(openItem?.id===o.id){ setOpenItem(null); setDraft(null); }
   };
 
   function createProjectFromOffer() {
@@ -236,13 +243,9 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     setState(s=>({
       ...s,
       projects: [ ...(s.projects||[]), proj ],
-      offers: (s.offers||[]).map(o=>o.id===draft.id
-        ? { ...o, status:"vunnen", updatedAt:new Date().toISOString() }
-        : o
-      )
+      offers: (s.offers||[]).map(o=>o.id===draft.id ? { ...o, status:"vunnen", updatedAt:new Date().toISOString() } : o)
     }));
-    setOpenItem(null);
-    setDraft(null);
+    setOpenItem(null); setDraft(null);
     alert("Projekt skapat från offert (öppnas inte automatiskt).");
   }
 
@@ -250,36 +253,16 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     <div className="bg-white rounded-2xl shadow p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold">Offerter</h2>
-        <div className="flex items-center gap-2">
-          <input
-            className="border rounded-xl px-3 py-2"
-            placeholder="Sök..."
-            value={q}
-            onChange={e=>setQ(e.target.value)}
-          />
-          <button
-            type="button"
-            onClick={()=>setShowArchive(false)}
-            className={`text-xs px-2 py-1 rounded border ${
-              !showArchive ? "bg-gray-200" : "bg-white"
-            }`}
-          >
-            Aktiva
-          </button>
-          <button
-            type="button"
-            onClick={()=>setShowArchive(true)}
-            className={`text-xs px-2 py-1 rounded border ${
-              showArchive ? "bg-gray-200" : "bg-white"
-            }`}
-          >
-            Arkiv
-          </button>
-        </div>
+        <input
+          className="border rounded-xl px-3 py-2"
+          placeholder="Sök..."
+          value={q}
+          onChange={e=>setQ(e.target.value)}
+        />
       </div>
 
       <ul className="divide-y">
-        {viewList.map(o=>(
+        {list.map(o=>(
           <li key={o.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
               <button
@@ -287,50 +270,30 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                 onClick={()=>openEdit(o)}
                 type="button"
               >
-                <div className="font-medium truncate">
-                  {o.title||"Offert"}
-                </div>
+                <div className="font-medium truncate">{o.title||"Offert"}</div>
                 <div className="text-xs text-gray-500">
                   Kund: {customerName(o.customerId)} · {o.status||"utkast"} · {(o.value||0).toLocaleString("sv-SE")} kr
                 </div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
-                {!showArchive && (
-                  <button
-                    className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                    onClick={()=>softDelete(o)}
-                    type="button"
-                  >
-                    Ta bort
-                  </button>
-                )}
-                {showArchive && (
-                  <button
-                    className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
-                    onClick={()=>hardDelete(o)}
-                    type="button"
-                  >
-                    Ta bort permanent
-                  </button>
-                )}
+                <button
+                  className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                  onClick={()=>softDelete(o)}
+                  type="button"
+                >
+                  Ta bort
+                </button>
               </div>
             </div>
           </li>
         ))}
-        {viewList.length===0 && (
-          <li className="py-6 text-sm text-gray-500">
-            {showArchive ? "Inga arkiverade offerter." : "Inga offerter."}
-          </li>
-        )}
+        {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga offerter.</li>}
       </ul>
 
       {openItem && draft && (
         <div
           className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-          onClick={()=>{
-            setOpenItem(null);
-            setDraft(null);
-          }}
+          onClick={()=>{ setOpenItem(null); setDraft(null); }}
         >
           <div
             className="bg-white rounded-2xl shadow p-4 w-full max-w-3xl"
@@ -340,10 +303,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               <div className="font-semibold">Redigera offert</div>
               <button
                 className="text-sm"
-                onClick={()=>{
-                  setOpenItem(null);
-                  setDraft(null);
-                }}
+                onClick={()=>{ setOpenItem(null); setDraft(null); }}
                 type="button"
               >
                 Stäng
@@ -359,7 +319,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                   onChange={e=>setDraft(d=>({...d,title:e.target.value}))}
                 />
               </div>
-
               <div>
                 <label className="text-sm font-medium">Kund</label>
                 <select
@@ -375,7 +334,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="text-sm font-medium">Belopp (kr)</label>
                 <input
@@ -385,7 +343,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                   onChange={e=>setDraft(d=>({...d,value:e.target.value}))}
                 />
               </div>
-
               <div>
                 <label className="text-sm font-medium">Status</label>
                 <select
@@ -399,7 +356,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                   <option value="förlorad">Förlorad</option>
                 </select>
               </div>
-
               <div className="col-span-2">
                 <label className="text-sm font-medium">Anteckning</label>
                 <textarea
@@ -410,6 +366,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               </div>
             </div>
 
+            {/* Leverantörer */}
             <div className="mt-4 border rounded-xl p-3">
               <div className="font-medium mb-2">Kopplade leverantörer</div>
               <div className="flex gap-2 mb-2">
@@ -432,20 +389,15 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                   }
                 </select>
               </div>
-
               {(draft.supplierIds||[]).length===0 ? (
-                <div className="text-xs text-gray-500">
-                  Inga leverantörer kopplade.
-                </div>
+                <div className="text-xs text-gray-500">Inga leverantörer kopplade.</div>
               ) : (
                 <ul className="text-sm space-y-1">
                   {draft.supplierIds.map(id=>{
                     const sup = suppliers.find(s=>s.id===id);
                     return (
                       <li key={id} className="flex items-center justify-between gap-2">
-                        <span className="truncate">
-                          {sup?.companyName || id}
-                        </span>
+                        <span className="truncate">{sup?.companyName || id}</span>
                         <button
                           className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
                           onClick={()=>removeSupplierFromOffer(id)}
@@ -460,6 +412,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               )}
             </div>
 
+            {/* Filer */}
             <div className="mt-4 border rounded-xl p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">Filer</div>
@@ -482,16 +435,11 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               </div>
 
               {(draft.filesList||[]).length===0 ? (
-                <div className="text-xs text-gray-500">
-                  Inga filer tillagda.
-                </div>
+                <div className="text-xs text-gray-500">Inga filer tillagda.</div>
               ) : (
                 <div className="space-y-2">
                   {(draft.filesList||[]).map((f,idx)=>(
-                    <div
-                      key={f.id||idx}
-                      className="grid grid-cols-12 gap-2 items-center"
-                    >
+                    <div key={f.id||idx} className="grid grid-cols-12 gap-2 items-center">
                       <div className="col-span-3">
                         <select
                           className="w-full border rounded px-2 py-1 text-sm"
@@ -499,14 +447,11 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                           onChange={e=>setFileField(idx,"category",e.target.value)}
                         >
                           {FILE_CATS.map(c => (
-                            <option key={c} value={c}>
-                              {c}
-                            </option>
+                            <option key={c} value={c}>{c}</option>
                           ))}
                         </select>
                       </div>
-
-                      <div className="col-span-4">
+                      <div className="col-span-3">
                         <input
                           className="w-full border rounded px-2 py-1 text-sm"
                           value={f.name||""}
@@ -514,7 +459,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                           placeholder="Filnamn"
                         />
                       </div>
-
                       <div className="col-span-4">
                         <input
                           className="w-full border rounded px-2 py-1 text-sm"
@@ -523,18 +467,17 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                           placeholder="Länk (URL)"
                         />
                       </div>
-
-                      <div className="col-span-1 flex flex-col items-end gap-1">
-                        {f.webUrl && (
-                          <a
-                            href={f.webUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs px-2 py-1 rounded border border-blue-300 bg-blue-100 text-blue-700 hover:bg-blue-200 inline-flex items-center justify-center"
-                          >
-                            Öppna
-                          </a>
-                        )}
+                      <div className="col-span-1 text-center">
+                        <a
+                          href={f.webUrl || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex justify-center text-xs px-3 py-2 rounded bg-blue-600 text-white"
+                        >
+                          Öppna
+                        </a>
+                      </div>
+                      <div className="col-span-1 text-right">
                         <button
                           className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
                           onClick={()=>removeFileRow(idx)}
@@ -549,13 +492,46 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               )}
             </div>
 
-            <div className="mt-4 flex gap-2">
+            {/* knapprad */}
+            <div className="mt-4 flex gap-2 flex-wrap">
               <button
                 className="px-3 py-2 rounded bg-green-600 text-white"
                 onClick={saveDraft}
                 type="button"
               >
                 Spara
+              </button>
+
+              <button
+                className="px-3 py-2 rounded border"
+                type="button"
+                onClick={()=>{
+                  const customer = customers.find(c=>c.id===draft.customerId);
+                  const merged = {
+                    ...openItem,
+                    ...draft,
+                    customerName: customer?.companyName || ""
+                  };
+                  printOffer(merged);
+                }}
+              >
+                Skriv ut
+              </button>
+
+              <button
+                className="px-3 py-2 rounded border"
+                type="button"
+                onClick={()=>{
+                  const customer = customers.find(c=>c.id===draft.customerId);
+                  const merged = {
+                    ...openItem,
+                    ...draft,
+                    customerName: customer?.companyName || ""
+                  };
+                  emailOffer(merged);
+                }}
+              >
+                Maila
               </button>
 
               {draft.status==="vunnen" && (
@@ -578,10 +554,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
 
               <button
                 className="ml-auto px-3 py-2 rounded border"
-                onClick={()=>{
-                  setOpenItem(null);
-                  setDraft(null);
-                }}
+                onClick={()=>{ setOpenItem(null); setDraft(null); }}
                 type="button"
               >
                 Avbryt
