@@ -113,6 +113,7 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       filesList: flattenFiles(p.files),
       originatingOfferId: p.originatingOfferId || "",
       supplierIds: Array.isArray(p.supplierIds) ? p.supplierIds.slice() : [],
+      projectType: p.projectType || "",
     });
     setState(s => ({
       ...s,
