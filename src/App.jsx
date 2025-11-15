@@ -1097,6 +1097,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 function SuppliersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
+  const [mode, setMode] = useState("active"); // "active" | "archive"
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
@@ -1110,11 +1111,20 @@ function SuppliersPanel({ entities = [], setState }) {
       email:s.email||"", address:s.address||"", zip:s.zip||"", city:s.city||"",
       supplierCategory:s.supplierCategory||""
     });
-    setState(st=>({...st, entities:(st.entities||[]).map(e=> e.id===s.id? {...e,_shouldOpen:undefined}:e)}));
+    setState(st=>({
+      ...st,
+      entities:(st.entities||[]).map(e=> e.id===s.id? {...e,_shouldOpen:undefined}:e)
+    }));
   }, [entities, setState]);
 
   const list = useMemo(() => {
-    let arr = (entities || []).filter(e => e.type === "supplier" && !e.deletedAt);
+    let arr = (entities || []).filter(e => e.type === "supplier");
+    if (mode === "active") {
+      arr = arr.filter(e => !e.deletedAt);
+    } else {
+      arr = arr.filter(e => !!e.deletedAt);
+    }
+
     if (q.trim()) {
       const s = q.trim().toLowerCase();
       arr = arr.filter(e =>
@@ -1128,7 +1138,7 @@ function SuppliersPanel({ entities = [], setState }) {
     }
     arr.sort((a,b)=> (a.companyName||"").localeCompare(b.companyName||""));
     return arr;
-  }, [entities, q, cat]);
+  }, [entities, q, cat, mode]);
 
   const openEdit = (s) => {
     setOpenItem(s);
@@ -1164,18 +1174,46 @@ function SuppliersPanel({ entities = [], setState }) {
     }));
     setOpenItem(null); setDraft(null);
   };
-  const softDelete = (s)=>{
+  const softDelete = (sup)=>{
+    if (!window.confirm("Ta bort denna leverantör? Den hamnar i Arkiv och kan tas bort permanent därifrån.")) return;
     setState(s0=>({
       ...s0,
-      entities: (s0.entities||[]).map(e => e.id===s.id ? { ...e, deletedAt: new Date().toISOString() } : e)
+      entities: (s0.entities||[]).map(e => e.id===sup.id ? { ...e, deletedAt: new Date().toISOString() } : e)
     }));
-    if (openItem?.id===s.id){ setOpenItem(null); setDraft(null); }
+    if (openItem?.id===sup.id){ setOpenItem(null); setDraft(null); }
+  };
+  const hardDelete = (sup)=>{
+    if (!window.confirm("Ta bort denna leverantör PERMANENT? Detta går inte att ångra.")) return;
+    setState(s0=>({
+      ...s0,
+      entities: (s0.entities||[]).filter(e => e.id!==sup.id)
+    }));
+    if (openItem?.id===sup.id){ setOpenItem(null); setDraft(null); }
   };
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold">Leverantörer</h2>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="font-semibold">Leverantörer</h2>
+          <div className="flex rounded-xl overflow-hidden border">
+            <button
+              type="button"
+              className={`px-3 py-1 text-sm ${mode==="active" ? "bg-black text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              onClick={()=>setMode("active")}
+            >
+              Aktiva
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1 text-sm ${mode==="archive" ? "bg-black text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+              onClick={()=>setMode("archive")}
+            >
+              Arkiv
+            </button>
+          </div>
+        </div>
+
         <div className="flex gap-2">
           <input className="border rounded-xl px-3 py-2" placeholder="Sök..." value={q} onChange={e=>setQ(e.target.value)} />
           <select className="border rounded-xl px-3 py-2" value={cat} onChange={e=>setCat(e.target.value)}>
@@ -1192,21 +1230,41 @@ function SuppliersPanel({ entities = [], setState }) {
       <ul className="divide-y">
         {list.map(sup => (
           <li key={sup.id} className="py-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify_between gap-3">
               <button className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1" onClick={()=>openEdit(sup)} type="button">
-                <div className="font-medium truncate">{sup.companyName || "(namnlös leverantör)"}</div>
+                <div className="font-medium truncate">
+                  {sup.companyName || "(namnlös leverantör)"}{mode==="archive" ? " (Arkiv)" : ""}
+                </div>
                 <div className="text-xs text-gray-500">{sup.city || ""}</div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{sup.supplierCategory || "—"}</span>
-                <button className="text-xs px-2 py-1 rounded bg-rose-500 text-white" onClick={()=>softDelete(sup)} type="button">
-                  Ta bort
-                </button>
+                {mode==="active" ? (
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                    onClick={()=>softDelete(sup)}
+                    type="button"
+                  >
+                    Ta bort
+                  </button>
+                ) : (
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
+                    onClick={()=>hardDelete(sup)}
+                    type="button"
+                  >
+                    Ta bort permanent
+                  </button>
+                )}
               </div>
             </div>
           </li>
         ))}
-        {list.length===0 && <li className="py-6 text-sm text-gray-500">Inga leverantörer.</li>}
+        {list.length===0 && (
+          <li className="py-6 text-sm text-gray-500">
+            {mode==="active" ? "Inga leverantörer." : "Inga arkiverade leverantörer."}
+          </li>
+        )}
       </ul>
 
       {openItem && draft && (
