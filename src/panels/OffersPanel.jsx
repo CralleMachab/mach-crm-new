@@ -1,8 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-/**
- * Hjälpare för att hitta kundnamn
- */
 function getCustomerName(entities, customerId) {
   if (!customerId) return "";
   const c = (entities || []).find(
@@ -11,9 +8,6 @@ function getCustomerName(entities, customerId) {
   return c?.companyName || c?.name || "";
 }
 
-/**
- * Badges
- */
 function statusClass(status) {
   const base = "text-xs px-2 py-1 rounded";
   switch (status) {
@@ -55,18 +49,14 @@ function typeBadge(isEntreprenad, isTurbovex) {
   return out;
 }
 
-/* ======================================
-   Offerter — lista + popup + Arkiv/Återställ
-   ====================================== */
-
 export default function OffersPanel({ offers = [], entities = [], setState }) {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [mode, setMode] = useState("active"); // "active" | "archive"
+  const [mode, setMode] = useState("active"); // active | archive
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
-  // Öppna direkt om _shouldOpen är satt
+  // Öppna direkt om _shouldOpen
   useEffect(() => {
     const o = (offers || []).find((x) => x?._shouldOpen);
     if (!o) return;
@@ -121,7 +111,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     arr.sort((a, b) => {
       const ad = a.createdAt || "";
       const bd = b.createdAt || "";
-      return bd.localeCompare(ad); // senaste först
+      return bd.localeCompare(ad);
     });
 
     return arr;
@@ -161,7 +151,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
           : o
       ),
     }));
-    // Stäng popup när vi sparar
     setOpenItem(null);
     setDraft(null);
   };
@@ -220,28 +209,78 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
 
   const handlePrint = () => {
     if (!draft) return;
-    window.print();
+    const customerName = getCustomerName(entities, draft.customerId);
+    const types = [];
+    if (draft.isEntreprenad) types.push("Entreprenad");
+    if (draft.isTurbovex) types.push("Turbovex");
+
+    const safeNote = (draft.note || "").replace(/</g, "&lt;");
+
+    const html = `
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<title>Offert ${draft.title || ""}</title>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  td { padding: 4px 8px; vertical-align: top; }
+  .label { font-weight: 600; width: 140px; }
+  .note { white-space: pre-wrap; margin-top: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; }
+</style>
+</head>
+<body>
+  <h1>Offert ${draft.title || ""}</h1>
+  <div>Datum: ${new Date().toLocaleDateString("sv-SE")}</div>
+  <table>
+    <tbody>
+      <tr><td class="label">Kund</td><td>${customerName || "-"}</td></tr>
+      <tr><td class="label">Belopp</td><td>${draft.value ? Number(draft.value).toLocaleString("sv-SE") + " kr" : "-"}</td></tr>
+      <tr><td class="label">Status</td><td>${draft.status || "-"}</td></tr>
+      <tr><td class="label">Typ</td><td>${types.length ? types.join(", ") : "-"}</td></tr>
+    </tbody>
+  </table>
+  ${
+    safeNote
+      ? `<h2>Notering</h2><div class="note">${safeNote}</div>`
+      : ""
+  }
+</body>
+</html>
+`;
+
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
   };
 
   const handleMail = () => {
     if (!draft) return;
     const customerName = getCustomerName(entities, draft.customerId);
-    const subject = encodeURIComponent(
-      `Offert ${draft.title || ""}`.trim()
-    );
-    const lines = [];
+    const types = [];
+    if (draft.isEntreprenad) types.push("Entreprenad");
+    if (draft.isTurbovex) types.push("Turbovex");
 
+    const lines = [];
     if (customerName) lines.push(`Kund: ${customerName}`);
     if (draft.value) lines.push(`Belopp: ${draft.value} kr`);
-    if (draft.isEntreprenad) lines.push(`Typ: Entreprenad`);
-    if (draft.isTurbovex) lines.push(`Typ: Turbovex`);
     if (draft.status) lines.push(`Status: ${draft.status}`);
+    if (types.length) lines.push(`Typ: ${types.join(", ")}`);
     if (draft.note) {
       lines.push("");
       lines.push("Notering:");
       lines.push(draft.note);
     }
 
+    const subject = encodeURIComponent(
+      `Offert ${draft.title || ""}`.trim()
+    );
     const body = encodeURIComponent(lines.join("\n"));
     window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
@@ -318,7 +357,9 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     {custName && <span>{custName}</span>}
                     {o.value ? (
-                      <span>{Number(o.value).toLocaleString("sv-SE")} kr</span>
+                      <span>
+                        {Number(o.value).toLocaleString("sv-SE")} kr
+                      </span>
                     ) : null}
                   </div>
                 </button>
