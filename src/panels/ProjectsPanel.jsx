@@ -1,4 +1,3 @@
-// src/panels/ProjectsPanel.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { pickOneDriveFiles } from "../components/onedrive";
 
@@ -34,8 +33,14 @@ const groupFiles = (list = []) => {
   return obj;
 };
 
-export default function ProjectsPanel({ projects = [], setState, entities = [], offers = [] }) {
+export default function ProjectsPanel({
+  projects = [],
+  setState,
+  entities = [],
+  offers = [],
+}) {
   const [q, setQ] = useState("");
+  const [mode, setMode] = useState("active"); // active | archive
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
@@ -49,9 +54,9 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
   );
 
   const customerName = (id) =>
-    customers.find((c) => c.id === id)?.companyName || "—";
+    (customers.find((c) => c.id === id)?.companyName) || "—";
 
-  // Öppna direkt om _shouldOpen är satt
+  // öppna direkt om _shouldOpen
   useEffect(() => {
     const p = (projects || []).find((x) => x?._shouldOpen);
     if (!p) return;
@@ -61,7 +66,6 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       name: p.name || "",
       customerId: p.customerId || "",
       status: p.status || "pågående",
-      projectType: p.projectType || "", // <-- NYCKELRAD
       budget: p.budget ?? 0,
       startDate: p.startDate || "",
       endDate: p.endDate || "",
@@ -76,17 +80,26 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
         x.id === p.id ? { ...x, _shouldOpen: undefined } : x
       ),
     }));
-  }, [projects, setState]);
+  }, [projects, setState, entities]);
 
   const list = useMemo(() => {
-    let arr = (projects || []).filter((p) => !p.deletedAt);
+    let arr = (projects || []).slice();
+    if (mode === "active") {
+      arr = arr.filter((p) => !p.deletedAt);
+    } else {
+      arr = arr.filter((p) => !!p.deletedAt);
+    }
+
     if (q.trim()) {
       const s = q.trim().toLowerCase();
-      arr = arr.filter((p) => (p.name || "").toLowerCase().includes(s));
+      arr = arr.filter((p) =>
+        (p.name || "").toLowerCase().includes(s)
+      );
     }
+
     arr.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
     return arr;
-  }, [projects, q]);
+  }, [projects, q, mode]);
 
   const openEdit = (p) => {
     setOpenItem(p);
@@ -95,7 +108,6 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       name: p.name || "",
       customerId: p.customerId || "",
       status: p.status || "pågående",
-      projectType: p.projectType || "", // <-- NYCKELRAD
       budget: p.budget ?? 0,
       startDate: p.startDate || "",
       endDate: p.endDate || "",
@@ -114,7 +126,6 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       return { ...d, filesList: copy };
     });
   };
-
   const addManualFile = () => {
     setDraft((d) => ({
       ...d,
@@ -129,7 +140,6 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       ],
     }));
   };
-
   const addFilesFromOneDrive = async () => {
     try {
       const picked = await pickOneDriveFiles();
@@ -152,7 +162,6 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       );
     }
   };
-
   const removeFileRow = (idx) => {
     setDraft((d) => {
       const copy = (d.filesList || []).slice();
@@ -170,7 +179,6 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       return { ...d, supplierIds: Array.from(set) };
     });
   };
-
   const removeSupplierFromProject = (supplierId) => {
     setDraft((d) => ({
       ...d,
@@ -189,7 +197,6 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
               name: draft.name || "",
               customerId: draft.customerId || "",
               status: draft.status || "pågående",
-              projectType: draft.projectType || "", // <-- NYCKELRAD
               budget: Number(draft.budget) || 0,
               startDate: draft.startDate || "",
               endDate: draft.endDate || "",
@@ -211,7 +218,7 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
   const softDelete = (p) => {
     if (
       !window.confirm(
-        "Ta bort detta projekt? Det markeras som borttaget (kan synas i Arkiv/översikt)."
+        "Ta bort detta projekt? Det hamnar i Arkiv och kan tas bort permanent därifrån."
       )
     )
       return;
@@ -220,6 +227,37 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
       projects: (s.projects || []).map((x) =>
         x.id === p.id ? { ...x, deletedAt: new Date().toISOString() } : x
       ),
+    }));
+    if (openItem?.id === p.id) {
+      setOpenItem(null);
+      setDraft(null);
+    }
+  };
+
+  const restoreProject = (p) => {
+    if (!window.confirm("Återställa detta projekt till Aktiva?")) return;
+    setState((s) => ({
+      ...s,
+      projects: (s.projects || []).map((x) =>
+        x.id === p.id ? { ...x, deletedAt: undefined } : x
+      ),
+    }));
+    if (openItem?.id === p.id) {
+      setOpenItem(null);
+      setDraft(null);
+    }
+  };
+
+  const hardDelete = (p) => {
+    if (
+      !window.confirm(
+        "Ta bort detta projekt PERMANENT? Detta går inte att ångra."
+      )
+    )
+      return;
+    setState((s) => ({
+      ...s,
+      projects: (s.projects || []).filter((x) => x.id !== p.id),
     }));
     if (openItem?.id === p.id) {
       setOpenItem(null);
@@ -243,10 +281,163 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
     }
   };
 
+  const handlePrintProject = () => {
+    if (!draft) return;
+    const cust = customerName(draft.customerId);
+    const safeNote = (draft.note || "").replace(/</g, "&lt;");
+    const files = draft.filesList || [];
+
+    let filesHtml = "";
+    if (files.length) {
+      const grouped = {};
+      FILE_CATS.forEach((c) => {
+        grouped[c] = [];
+      });
+      files.forEach((f) => {
+        const cat = FILE_CATS.includes(f.category) ? f.category : "Övrigt";
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(f);
+      });
+      filesHtml += "<h2>Filer</h2>";
+      Object.keys(grouped).forEach((cat) => {
+        if (!grouped[cat] || grouped[cat].length === 0) return;
+        filesHtml += `<h3>${cat}</h3><ul>`;
+        grouped[cat].forEach((f) => {
+          const n = f.name || "fil";
+          const url = f.webUrl || "";
+          if (url) {
+            filesHtml += `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${n}</a></li>`;
+          } else {
+            filesHtml += `<li>${n}</li>`;
+          }
+        });
+        filesHtml += "</ul>";
+      });
+    }
+
+    const supNames = (draft.supplierIds || [])
+      .map((id) => suppliers.find((s) => s.id === id)?.companyName || id)
+      .filter(Boolean);
+
+    const html = `
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<title>Projekt ${draft.name || ""}</title>
+<style>
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
+  h1 { font-size: 24px; margin-bottom: 4px; }
+  h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
+  h3 { font-size: 16px; margin-top: 16px; margin-bottom: 4px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  td { padding: 4px 8px; vertical-align: top; }
+  .label { font-weight: 600; width: 140px; }
+  .note { white-space: pre-wrap; margin-top: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; }
+  ul { margin: 4px 0 8px 20px; }
+</style>
+</head>
+<body>
+  <h1>Projekt ${draft.name || ""}</h1>
+  <div>Datum: ${new Date().toLocaleDateString("sv-SE")}</div>
+  <table>
+    <tbody>
+      <tr><td class="label">Kund</td><td>${cust || "-"}</td></tr>
+      <tr><td class="label">Status</td><td>${draft.status || "-"}</td></tr>
+      <tr><td class="label">Budget</td><td>${
+        draft.budget
+          ? Number(draft.budget).toLocaleString("sv-SE") + " kr"
+          : "-"
+      }</td></tr>
+      <tr><td class="label">Start</td><td>${draft.startDate || "-"}</td></tr>
+      <tr><td class="label">Slut</td><td>${draft.endDate || "-"}</td></tr>
+      <tr><td class="label">Leverantörer</td><td>${
+        supNames.length ? supNames.join(", ") : "-"
+      }</td></tr>
+    </tbody>
+  </table>
+  ${
+    safeNote
+      ? `<h2>Anteckning</h2><div class="note">${safeNote}</div>`
+      : ""
+  }
+  ${filesHtml}
+</body>
+</html>
+`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    w.print();
+  };
+
+  const handleMailProject = () => {
+    if (!draft) return;
+    const cust = customerName(draft.customerId);
+    const lines = [];
+    if (cust) lines.push(`Kund: ${cust}`);
+    lines.push(`Status: ${draft.status || "-"}`);
+    if (draft.budget) lines.push(`Budget: ${draft.budget} kr`);
+    if (draft.startDate || draft.endDate) {
+      lines.push(
+        `Period: ${draft.startDate || "-"} – ${draft.endDate || "-"}`
+      );
+    }
+    if (draft.note) {
+      lines.push("");
+      lines.push("Anteckning:");
+      lines.push(draft.note);
+    }
+    const files = draft.filesList || [];
+    if (files.length) {
+      lines.push("");
+      lines.push("Filer:");
+      files.forEach((f) => {
+        const name = f.name || "fil";
+        const url = f.webUrl || "";
+        lines.push(`- ${name}${url ? " – " + url : ""}`);
+      });
+    }
+
+    const subject = encodeURIComponent(
+      `Projekt ${draft.name || ""}`.trim()
+    );
+    const body = encodeURIComponent(lines.join("\n"));
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold">Projekt</h2>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <h2 className="font-semibold">Projekt</h2>
+          <div className="flex rounded-xl overflow-hidden border">
+            <button
+              type="button"
+              className={`px-3 py-1 text-sm ${
+                mode === "active"
+                  ? "bg-black text-white"
+                  : "bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+              onClick={() => setMode("active")}
+            >
+              Aktiva
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1 text-sm ${
+                mode === "archive"
+                  ? "bg-black text-white"
+                  : "bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+              onClick={() => setMode("archive")}
+            >
+              Arkiv
+            </button>
+          </div>
+        </div>
         <input
           className="border rounded-xl px-3 py-2"
           placeholder="Sök..."
@@ -272,50 +463,61 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                 >
                   <div className="font-medium truncate">
                     {p.name || "Projekt"}
+                    {mode === "archive" ? " (Arkiv)" : ""}
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    <span>
-                      Kund: {customerName(p.customerId)} ·{" "}
-                      <span className={projectStatusBadge(p.status)}>
-                        {p.status || "pågående"}
-                      </span>
-                      {wonOffer ? (
-                        <span className="ml-2 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">
-                          Vunnen offert
-                        </span>
-                      ) : null}
+                  <div className="text-xs text-gray-500 flex flex-wrap gap-2 items-center">
+                    <span>Kund: {customerName(p.customerId)}</span>
+                    <span className={projectStatusBadge(p.status)}>
+                      {p.status || "pågående"}
                     </span>
-
-                    {p.projectType === "entreprenad" && (
-                      <span className="px-2 py-1 rounded bg-orange-200 text-orange-900">
-                        Entreprenad
+                    {wonOffer ? (
+                      <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">
+                        Vunnen offert
                       </span>
-                    )}
-                    {p.projectType === "turbovex" && (
-                      <span className="px-2 py-1 rounded bg-sky-200 text-sky-900">
-                        Turbovex
-                      </span>
-                    )}
+                    ) : null}
                   </div>
                 </button>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
                     {(p.budget || 0).toLocaleString("sv-SE")} kr
                   </span>
-                  <button
-                    className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                    onClick={() => softDelete(p)}
-                    type="button"
-                  >
-                    Ta bort
-                  </button>
+                  {mode === "active" ? (
+                    <button
+                      className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                      onClick={() => softDelete(p)}
+                      type="button"
+                    >
+                      Ta bort
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        className="text-xs px-2 py-1 rounded bg-emerald-500 text-white"
+                        onClick={() => restoreProject(p)}
+                        type="button"
+                      >
+                        Återställ
+                      </button>
+                      <button
+                        className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
+                        onClick={() => hardDelete(p)}
+                        type="button"
+                      >
+                        Ta bort permanent
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </li>
           );
         })}
         {list.length === 0 && (
-          <li className="py-6 text-sm text-gray-500">Inga projekt.</li>
+          <li className="py-6 text-sm text-gray-500">
+            {mode === "active"
+              ? "Inga projekt."
+              : "Inga arkiverade projekt."}
+          </li>
         )}
       </ul>
 
@@ -362,7 +564,10 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                   className="w-full border rounded px-3 py-2"
                   value={draft.customerId}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, customerId: e.target.value }))
+                    setDraft((d) => ({
+                      ...d,
+                      customerId: e.target.value,
+                    }))
                   }
                 >
                   <option value="">—</option>
@@ -379,7 +584,10 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                   className="w-full border rounded px-3 py-2"
                   value={draft.status}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, status: e.target.value }))
+                    setDraft((d) => ({
+                      ...d,
+                      status: e.target.value,
+                    }))
                   }
                 >
                   <option value="pågående">pågående</option>
@@ -388,22 +596,6 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                   <option value="förlorad">förlorad</option>
                 </select>
               </div>
-
-              <div>
-                <label className="text-sm font-medium">Typ</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.projectType || ""}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, projectType: e.target.value }))
-                  }
-                >
-                  <option value="">—</option>
-                  <option value="entreprenad">Entreprenad</option>
-                  <option value="turbovex">Turbovex</option>
-                </select>
-              </div>
-
               <div>
                 <label className="text-sm font-medium">Budget (kr)</label>
                 <input
@@ -411,7 +603,10 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                   className="w-full border rounded px-3 py-2"
                   value={draft.budget}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, budget: e.target.value }))
+                    setDraft((d) => ({
+                      ...d,
+                      budget: e.target.value,
+                    }))
                   }
                 />
               </div>
@@ -422,7 +617,10 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                   className="w-full border rounded px-3 py-2"
                   value={draft.startDate}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, startDate: e.target.value }))
+                    setDraft((d) => ({
+                      ...d,
+                      startDate: e.target.value,
+                    }))
                   }
                 />
               </div>
@@ -433,7 +631,10 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                   className="w-full border rounded px-3 py-2"
                   value={draft.endDate}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, endDate: e.target.value }))
+                    setDraft((d) => ({
+                      ...d,
+                      endDate: e.target.value,
+                    }))
                   }
                 />
               </div>
@@ -443,7 +644,10 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                   className="w-full border rounded px-3 py-2 min-h-[80px]"
                   value={draft.note}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, note: e.target.value }))
+                    setDraft((d) => ({
+                      ...d,
+                      note: e.target.value,
+                    }))
                   }
                 />
               </div>
@@ -530,7 +734,9 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
               </div>
 
               {(draft.filesList || []).length === 0 ? (
-                <div className="text-xs text-gray-500">Inga filer tillagda.</div>
+                <div className="text-xs text-gray-500">
+                  Inga filer tillagda.
+                </div>
               ) : (
                 <div className="space-y-2">
                   {(draft.filesList || []).map((f, idx) => (
@@ -553,7 +759,7 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                           ))}
                         </select>
                       </div>
-                      <div className="col-span-3">
+                      <div className="col-span-4">
                         <input
                           className="w-full border rounded px-2 py-1 text-sm"
                           value={f.name || ""}
@@ -573,16 +779,6 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
                           placeholder="Länk (URL)"
                         />
                       </div>
-                      <div className="col-span-1">
-                        <a
-                          href={f.webUrl || "#"}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block text-xs px-3 py-2 rounded bg-blue-600 text-white text-center"
-                        >
-                          Öppna
-                        </a>
-                      </div>
                       <div className="col-span-1 text-right">
                         <button
                           className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
@@ -598,7 +794,7 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
               )}
             </div>
 
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <button
                 className="px-3 py-2 rounded bg-green-600 text-white"
                 onClick={saveDraft}
@@ -606,6 +802,23 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
               >
                 Spara
               </button>
+
+              <button
+                className="px-3 py-2 rounded border"
+                onClick={handlePrintProject}
+                type="button"
+              >
+                Skriv ut
+              </button>
+
+              <button
+                className="px-3 py-2 rounded border"
+                onClick={handleMailProject}
+                type="button"
+              >
+                Maila projekt
+              </button>
+
               <button
                 className="px-3 py-2 rounded bg-rose-600 text-white"
                 onClick={() => softDelete(openItem)}
@@ -613,6 +826,7 @@ export default function ProjectsPanel({ projects = [], setState, entities = [], 
               >
                 Ta bort
               </button>
+
               <button
                 className="ml-auto px-3 py-2 rounded border"
                 onClick={() => {
