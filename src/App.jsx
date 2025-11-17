@@ -70,6 +70,43 @@ function useStore() {
   return [state, setState];
 }
 
+/* ======================================
+   Färghelpers för kategorier
+   ====================================== */
+function customerCategoryBadge(cat) {
+  const base = "text-xs px-2 py-1 rounded text-white";
+  switch (cat) {
+    case "StålHall":
+    case "Stålhall":
+      return `${base} bg-gray-500`;          // Grå
+    case "Totalentreprenad":
+    case "TotalEntreprenad":
+      return `${base} bg-orange-500`;        // Orange
+    case "Turbovex":
+      return `${base} bg-blue-500`;          // Blå
+    default:
+      return "text-xs px-2 py-1 rounded bg-gray-100 text-gray-700";
+  }
+}
+
+function supplierCategoryBadge(cat) {
+  const base = "text-xs px-2 py-1 rounded text-white";
+  switch (cat) {
+    case "Stålhalls leverantör":
+      return `${base} bg-gray-500`;          // Grå
+    case "Mark företag":
+      return `${base} bg-amber-800`;         // Brun-ish
+    case "EL leverantör":
+      return `${base} bg-red-500`;           // Röd
+    case "VVS Leverantör":
+      return `${base} bg-purple-500`;        // Lila
+    case "Vent Leverantör":
+      return `${base} bg-blue-500`;          // Blå
+    default:
+      return "text-xs px-2 py-1 rounded bg-gray-100 text-gray-700";
+  }
+}
+
 /* ==========================================================
    Aktiviteter — lista + arkiv-läge
    ========================================================== */
@@ -222,7 +259,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const softDelete = (a) => {
     if (
       !window.confirm(
-        "Ta bort denna aktivitet? Den hamnar i Arkiv och kan tas bort permanent därifrån."
+        "Ta bort denna aktivitet? Den hamnar i Arkiv och kan tas bort permanent därifrån (Inställningar)."
       )
     )
       return;
@@ -921,7 +958,7 @@ function CustomersPanel({ entities = [], setState }) {
             onChange={(e) => setCat(e.target.value)}
           >
             <option value="all">Alla kategorier</option>
-            <option value="StålHall">StålHall</option>
+            <option value="StålHall">Stålhall</option>
             <option value="Totalentreprenad">Totalentreprenad</option>
             <option value="Turbovex">Turbovex</option>
           </select>
@@ -943,7 +980,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <div className="text-xs text-gray-500">{c.city || ""}</div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
+                <span className={customerCategoryBadge(c.customerCategory)}>
                   {c.customerCategory || "—"}
                 </span>
                 <button
@@ -1055,7 +1092,7 @@ function CustomersPanel({ entities = [], setState }) {
                   }
                 >
                   <option value="">—</option>
-                  <option value="StålHall">StålHall</option>
+                  <option value="StålHall">Stålhall</option>
                   <option value="Totalentreprenad">Totalentreprenad</option>
                   <option value="Turbovex">Turbovex</option>
                 </select>
@@ -1150,14 +1187,12 @@ function SuppliersPanel({ entities = [], setState }) {
       arr = arr.filter((e) => (e.supplierCategory || "") === cat);
     }
 
-    // sen alfabetiskt
     arr.sort((a, b) => (a.companyName || "").localeCompare(b.companyName || ""));
 
     return arr;
   }, [entities, q, cat, mode]);
 
   const openEdit = (s) => {
-    // lastUsedAt om man vill använda senare
     setState((st) => ({
       ...st,
       entities: (st.entities || []).map((e) =>
@@ -1300,7 +1335,7 @@ function SuppliersPanel({ entities = [], setState }) {
                 <div className="text-xs text-gray-500">{sup.city || ""}</div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
+                <span className={supplierCategoryBadge(sup.supplierCategory)}>
                   {sup.supplierCategory || "—"}
                 </span>
                 {mode === "active" ? (
@@ -1473,7 +1508,7 @@ function SuppliersPanel({ entities = [], setState }) {
    =========================== */
 export default function App() {
   const [state, setState] = useStore();
-  const [view, setView] = useState("activities"); 
+  const [view, setView] = useState("activities");
   // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
 
   const newId = () =>
