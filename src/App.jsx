@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { loadState, saveState } from "./lib/storage";
 import { fetchRemoteState, pushRemoteState } from "./lib/cloud";
+
 import OffersPanel from "./panels/OffersPanel.jsx";
 import ProjectsPanel from "./panels/ProjectsPanel.jsx";
 import ActivitiesCalendarPanel from "./panels/ActivitiesCalendarPanel.jsx";
+import SettingsPanel from "./panels/SettingsPanel.jsx";
 
 /* ===========================
    useStore — lokal + SharePoint
@@ -14,13 +16,7 @@ function useStore() {
   const [state, setState] = useState(() => {
     const s = loadState();
     if (s && typeof s === "object") return s;
-    return {
-      activities: [],
-      entities: [],
-      offers: [],
-      projects: [],
-      _lastSavedAt: "",
-    };
+    return { activities: [], entities: [], offers: [], projects: [], _lastSavedAt: "" };
   });
 
   // Lokalt
@@ -69,7 +65,7 @@ function useStore() {
     return () => {
       stopped = true;
     };
-  }, []);
+  }, []); // bara första gången
 
   return [state, setState];
 }
@@ -78,14 +74,14 @@ function useStore() {
    Aktiviteter — lista + arkiv-läge
    ========================================================== */
 function ActivitiesPanel({ activities = [], entities = [], setState }) {
-  const [respFilter, setRespFilter] = useState("all");
+  const [respFilter, setRespFilter]   = useState("all");
   const [rangeFilter, setRangeFilter] = useState("7");
-  const [dateFilter, setDateFilter] = useState("");
+  const [dateFilter, setDateFilter]   = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [mode, setMode] = useState("active"); // "active" | "archive"
 
   const [openItem, setOpenItem] = useState(null);
-  const [draft, setDraft] = useState(null);
+  const [draft, setDraft]       = useState(null);
 
   const customers = useMemo(
     () => (entities || []).filter((e) => e?.type === "customer"),
@@ -121,8 +117,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
     return d >= now && d <= end7;
   };
-  const isSameDay = (dateStr, ymd) =>
-    !!dateStr && dateStr.slice(0, 10) === ymd;
+  const isSameDay = (dateStr, ymd) => !!dateStr && dateStr.slice(0, 10) === ymd;
 
   const prBadge = (p) => {
     const base = "text-xs px-2 py-1 rounded";
@@ -222,14 +217,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       return ad.localeCompare(bd);
     });
     return arr;
-  }, [
-    activities,
-    respFilter,
-    rangeFilter,
-    dateFilter,
-    statusFilter,
-    mode,
-  ]);
+  }, [activities, respFilter, rangeFilter, dateFilter, statusFilter, mode]);
 
   const softDelete = (a) => {
     if (
@@ -241,9 +229,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     const upd = { ...a, deletedAt: new Date().toISOString() };
     setState((s) => ({
       ...s,
-      activities: (s.activities || []).map((x) =>
-        x.id === a.id ? upd : x
-      ),
+      activities: (s.activities || []).map((x) => (x.id === a.id ? upd : x)),
     }));
     if (openItem?.id === a.id) {
       setOpenItem(null);
@@ -805,9 +791,7 @@ function CustomersPanel({ entities = [], setState }) {
 
   // Öppna direkt om _shouldOpen är satt
   useEffect(() => {
-    const c = (entities || []).find(
-      (e) => e.type === "customer" && e._shouldOpen
-    );
+    const c = (entities || []).find((e) => e.type === "customer" && e._shouldOpen);
     if (!c) return;
     setOpenItem(c);
     setDraft({
@@ -820,7 +804,6 @@ function CustomersPanel({ entities = [], setState }) {
       zip: c.zip || "",
       city: c.city || "",
       customerCategory: c.customerCategory || "",
-      contactName: c.contactName || "",
     });
     setState((s) => ({
       ...s,
@@ -831,9 +814,8 @@ function CustomersPanel({ entities = [], setState }) {
   }, [entities, setState]);
 
   const list = useMemo(() => {
-    let arr = (entities || []).filter(
-      (e) => e.type === "customer" && !e.deletedAt
-    );
+    let arr = (entities || []).filter((e) => e.type === "customer" && !e.deletedAt);
+
     if (q.trim()) {
       const s = q.trim().toLowerCase();
       arr = arr.filter(
@@ -847,23 +829,26 @@ function CustomersPanel({ entities = [], setState }) {
       arr = arr.filter((e) => (e.customerCategory || "") === cat);
     }
 
-    // sortera: 3 senast uppdaterade överst, övriga alfabetiskt under
-    const withLastOpen = arr
-      .map((e) => ({
-        ...e,
-        _ts: new Date(e.updatedAt || e.createdAt || 0).getTime(),
-      }))
-      .sort((a, b) => b._ts - a._ts);
+    // Sortering: 3 senaste med lastUsedAt först, sedan resten alfabetiskt
+    const withUsed = arr.filter((e) => !!e.lastUsedAt);
+    withUsed.sort((a, b) => (b.lastUsedAt || "").localeCompare(a.lastUsedAt || ""));
+    const top3 = withUsed.slice(0, 3).map((e) => e.id);
 
-    const latest3 = withLastOpen.slice(0, 3);
-    const rest = withLastOpen.slice(3).sort((a, b) =>
-      (a.companyName || "").localeCompare(b.companyName || "")
-    );
+    const topList = arr.filter((e) => top3.includes(e.id));
+    const rest = arr.filter((e) => !top3.includes(e.id));
+    rest.sort((a, b) => (a.companyName || "").localeCompare(b.companyName || ""));
 
-    return [...latest3, ...rest];
+    return [...topList, ...rest];
   }, [entities, q, cat]);
 
   const openEdit = (c) => {
+    // uppdatera lastUsedAt
+    setState((s) => ({
+      ...s,
+      entities: (s.entities || []).map((e) =>
+        e.id === c.id ? { ...e, lastUsedAt: new Date().toISOString() } : e
+      ),
+    }));
     setOpenItem(c);
     setDraft({
       id: c.id,
@@ -875,14 +860,11 @@ function CustomersPanel({ entities = [], setState }) {
       zip: c.zip || "",
       city: c.city || "",
       customerCategory: c.customerCategory || "",
-      contactName: c.contactName || "",
     });
   };
-  const updateDraft = (k, v) =>
-    setDraft((d) => ({
-      ...d,
-      [k]: v,
-    }));
+
+  const updateDraft = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+
   const saveDraft = () => {
     if (!draft) return;
     setState((s) => ({
@@ -899,7 +881,6 @@ function CustomersPanel({ entities = [], setState }) {
               zip: draft.zip || "",
               city: draft.city || "",
               customerCategory: draft.customerCategory || "",
-              contactName: draft.contactName || "",
               updatedAt: new Date().toISOString(),
             }
           : e
@@ -908,9 +889,9 @@ function CustomersPanel({ entities = [], setState }) {
     setOpenItem(null);
     setDraft(null);
   };
+
   const softDelete = (c) => {
-    if (!window.confirm("Ta bort denna kund? Den sparas dolt (arkiverad)."))
-      return;
+    if (!window.confirm("Ta bort denna kund? Den hamnar i arkiv (kan återställas via Inställningar).")) return;
     setState((s) => ({
       ...s,
       entities: (s.entities || []).map((e) =>
@@ -948,7 +929,7 @@ function CustomersPanel({ entities = [], setState }) {
       </div>
 
       <ul className="divide-y">
-        {list.map((c, idx) => (
+        {list.map((c) => (
           <li key={c.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
               <button
@@ -957,12 +938,9 @@ function CustomersPanel({ entities = [], setState }) {
                 type="button"
               >
                 <div className="font-medium truncate">
-                  {idx < 3 ? "⭐ " : ""}
                   {c.companyName || "(namnlös kund)"}
                 </div>
-                <div className="text-xs text-gray-500">
-                  {c.city || ""} {c.contactName ? `· ${c.contactName}` : ""}
-                </div>
+                <div className="text-xs text-gray-500">{c.city || ""}</div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
@@ -1016,9 +994,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.companyName}
-                  onChange={(e) =>
-                    updateDraft("companyName", e.target.value)
-                  }
+                  onChange={(e) => updateDraft("companyName", e.target.value)}
                 />
               </div>
               <div>
@@ -1084,16 +1060,6 @@ function CustomersPanel({ entities = [], setState }) {
                   <option value="Turbovex">Turbovex</option>
                 </select>
               </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Kontaktperson</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.contactName || ""}
-                  onChange={(e) =>
-                    updateDraft("contactName", e.target.value)
-                  }
-                />
-              </div>
             </div>
 
             <div className="mt-4 flex gap-2">
@@ -1130,20 +1096,18 @@ function CustomersPanel({ entities = [], setState }) {
 }
 
 /* ======================================
-   Leverantörer — med Arkiv-läge
+   Leverantörer
    ====================================== */
 function SuppliersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
-  const [mode, setMode] = useState("active"); // "active" | "archive"
+  const [mode, setMode] = useState("active"); // active | archive
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
   // Öppna direkt om _shouldOpen är satt
   useEffect(() => {
-    const s = (entities || []).find(
-      (e) => e.type === "supplier" && e._shouldOpen
-    );
+    const s = (entities || []).find((e) => e.type === "supplier" && e._shouldOpen);
     if (!s) return;
     setOpenItem(s);
     setDraft({
@@ -1185,13 +1149,21 @@ function SuppliersPanel({ entities = [], setState }) {
     if (cat !== "all") {
       arr = arr.filter((e) => (e.supplierCategory || "") === cat);
     }
-    arr.sort((a, b) =>
-      (a.companyName || "").localeCompare(b.companyName || "")
-    );
+
+    // sen alfabetiskt
+    arr.sort((a, b) => (a.companyName || "").localeCompare(b.companyName || ""));
+
     return arr;
   }, [entities, q, cat, mode]);
 
   const openEdit = (s) => {
+    // lastUsedAt om man vill använda senare
+    setState((st) => ({
+      ...st,
+      entities: (st.entities || []).map((e) =>
+        e.id === s.id ? { ...e, lastUsedAt: new Date().toISOString() } : e
+      ),
+    }));
     setOpenItem(s);
     setDraft({
       id: s.id,
@@ -1205,11 +1177,9 @@ function SuppliersPanel({ entities = [], setState }) {
       supplierCategory: s.supplierCategory || "",
     });
   };
-  const updateDraft = (k, v) =>
-    setDraft((d) => ({
-      ...d,
-      [k]: v,
-    }));
+
+  const updateDraft = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+
   const saveDraft = () => {
     if (!draft) return;
     setState((s) => ({
@@ -1234,13 +1204,9 @@ function SuppliersPanel({ entities = [], setState }) {
     setOpenItem(null);
     setDraft(null);
   };
+
   const softDelete = (sup) => {
-    if (
-      !window.confirm(
-        "Ta bort denna leverantör? Den hamnar i Arkiv och kan tas bort permanent därifrån."
-      )
-    )
-      return;
+    if (!window.confirm("Ta bort denna leverantör? Den hamnar i arkiv (kan återställas via Inställningar).")) return;
     setState((s0) => ({
       ...s0,
       entities: (s0.entities || []).map((e) =>
@@ -1252,13 +1218,9 @@ function SuppliersPanel({ entities = [], setState }) {
       setDraft(null);
     }
   };
+
   const hardDelete = (sup) => {
-    if (
-      !window.confirm(
-        "Ta bort denna leverantör PERMANENT? Detta går inte att ångra."
-      )
-    )
-      return;
+    if (!window.confirm("Ta bort denna leverantör PERMANENT? Detta går inte att ångra.")) return;
     setState((s0) => ({
       ...s0,
       entities: (s0.entities || []).filter((e) => e.id !== sup.id),
@@ -1364,9 +1326,7 @@ function SuppliersPanel({ entities = [], setState }) {
         ))}
         {list.length === 0 && (
           <li className="py-6 text-sm text-gray-500">
-            {mode === "active"
-              ? "Inga leverantörer."
-              : "Inga arkiverade leverantörer."}
+            {mode === "active" ? "Inga leverantörer." : "Inga arkiverade leverantörer."}
           </li>
         )}
       </ul>
@@ -1466,9 +1426,7 @@ function SuppliersPanel({ entities = [], setState }) {
                   }
                 >
                   <option value="">—</option>
-                  <option value="Stålhalls leverantör">
-                    Stålhalls leverantör
-                  </option>
+                  <option value="Stålhalls leverantör">Stålhalls leverantör</option>
                   <option value="Mark företag">Mark företag</option>
                   <option value="EL leverantör">EL leverantör</option>
                   <option value="VVS Leverantör">VVS Leverantör</option>
@@ -1510,310 +1468,16 @@ function SuppliersPanel({ entities = [], setState }) {
   );
 }
 
-/* ======================================
-   Arkiv — förlorade + borttagna
-   ====================================== */
-function ArchivePanel({ offers = [], projects = [] }) {
-  const lostOffers = useMemo(
-    () => (offers || []).filter((o) => o.status === "förlorad" && !o.deletedAt),
-    [offers]
-  );
-  const lostProjects = useMemo(
-    () =>
-      (projects || []).filter(
-        (p) => p.status === "förlorad" && !p.deletedAt
-      ),
-    [projects]
-  );
-  const deletedOffers = useMemo(
-    () => (offers || []).filter((o) => o.deletedAt),
-    [offers]
-  );
-  const deletedProjects = useMemo(
-    () => (projects || []).filter((p) => p.deletedAt),
-    [projects]
-  );
-
-  return (
-    <div className="bg-white rounded-2xl shadow p-4 space-y-6">
-      <section>
-        <h3 className="font-semibold mb-2">Förlorade offerter</h3>
-        <ul className="text-sm list-disc pl-5">
-          {lostOffers.map((o) => (
-            <li key={o.id}>{o.title || o.id}</li>
-          ))}
-          {lostOffers.length === 0 && (
-            <li className="text-gray-500">Inga förlorade offerter.</li>
-          )}
-        </ul>
-      </section>
-
-      <section>
-        <h3 className="font-semibold mb-2">Förlorade projekt</h3>
-        <ul className="text-sm list-disc pl-5">
-          {lostProjects.map((p) => (
-            <li key={p.id}>{p.name || p.id}</li>
-          ))}
-          {lostProjects.length === 0 && (
-            <li className="text-gray-500">Inga förlorade projekt.</li>
-          )}
-        </ul>
-      </section>
-
-      <section>
-        <h3 className="font-semibold mb-2">Borttagna offerter</h3>
-        <ul className="text-sm list-disc pl-5">
-          {deletedOffers.map((o) => (
-            <li key={o.id}>{o.title || o.id}</li>
-          ))}
-          {deletedOffers.length === 0 && (
-            <li className="text-gray-500">Inga borttagna offerter.</li>
-          )}
-        </ul>
-      </section>
-
-      <section>
-        <h3 className="font-semibold mb-2">Borttagna projekt</h3>
-        <ul className="text-sm list-disc pl-5">
-          {deletedProjects.map((p) => (
-            <li key={p.id}>{p.name || p.id}</li>
-          ))}
-          {deletedProjects.length === 0 && (
-            <li className="text-gray-500">Inga borttagna projekt.</li>
-          )}
-        </ul>
-      </section>
-    </div>
-  );
-}
-
-/* ======================================
-   Inställningar — Outlook-import
-   ====================================== */
-function SettingsModal({ state, setState, onClose }) {
-  const [importType, setImportType] = useState("customer"); // customer | supplier
-  const [message, setMessage] = useState("");
-
-  const handleOutlookFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setMessage("Läser in fil...");
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const text = reader.result?.toString() || "";
-        const lines = text
-          .split(/\r?\n/)
-          .filter((line) => line.trim() !== "");
-        if (lines.length < 2) {
-          setMessage("Filen verkar vara tom eller saknar data.");
-          return;
-        }
-
-        const firstLine = lines[0];
-        const delim = firstLine.includes(";") ? ";" : ",";
-        const headers = firstLine
-          .split(delim)
-          .map((h) => h.trim().toLowerCase());
-
-        const findCol = (...names) => {
-          const lowerNames = names.map((n) => n.toLowerCase());
-          return headers.findIndex((h) => lowerNames.includes(h));
-        };
-
-        const idxCompany = findCol(
-          "company",
-          "company name",
-          "företag",
-          "organisation",
-          "business",
-          "firmanamn"
-        );
-        const idxName = findCol(
-          "name",
-          "full name",
-          "display name",
-          "namn"
-        );
-        const idxEmail = findCol(
-          "email",
-          "email address",
-          "e-mail address",
-          "e-post"
-        );
-        const idxPhone = findCol(
-          "business phone",
-          "mobile phone",
-          "telefon",
-          "telefon (arbets)",
-          "phone"
-        );
-        const idxStreet = findCol(
-          "business street",
-          "street",
-          "gata",
-          "adress"
-        );
-        const idxCity = findCol(
-          "business city",
-          "city",
-          "stad",
-          "ort"
-        );
-        const idxZip = findCol(
-          "business postal code",
-          "postal code",
-          "postnr",
-          "postnummer"
-        );
-
-        const imported = [];
-        for (let i = 1; i < lines.length; i++) {
-          const row = lines[i].split(delim);
-          if (row.length === 1 && row[0].trim() === "") continue;
-
-          const companyNameRaw = idxCompany >= 0 ? row[idxCompany] : "";
-          const nameRaw = idxName >= 0 ? row[idxName] : "";
-          const companyName =
-            (companyNameRaw || "").trim() || (nameRaw || "").trim();
-
-          if (!companyName) continue;
-
-          imported.push({
-            id:
-              crypto?.randomUUID
-                ? crypto.randomUUID()
-                : Math.random().toString(36).slice(2),
-            type: importType === "supplier" ? "supplier" : "customer",
-            companyName,
-            contactName: (nameRaw || "").trim(),
-            email: idxEmail >= 0 ? (row[idxEmail] || "").trim() : "",
-            phone: idxPhone >= 0 ? (row[idxPhone] || "").trim() : "",
-            address: idxStreet >= 0 ? (row[idxStreet] || "").trim() : "",
-            city: idxCity >= 0 ? (row[idxCity] || "").trim() : "",
-            zip: idxZip >= 0 ? (row[idxZip] || "").trim() : "",
-            createdAt: new Date().toISOString(),
-          });
-        }
-
-        if (!imported.length) {
-          setMessage(
-            "Hittade inga kontakter att importera. Kontrollera att du exporterat rätt fält från Outlook (CSV)."
-          );
-          return;
-        }
-
-        setState((s) => ({
-          ...s,
-          entities: [...(s.entities || []), ...imported],
-        }));
-
-        setMessage(
-          `Importerade ${imported.length} kontakter som ${
-            importType === "supplier" ? "leverantörer" : "kunder"
-          }.`
-        );
-      } catch (err) {
-        console.error(err);
-        setMessage(
-          "Något gick fel vid importen. Är filen en giltig CSV från Outlook?"
-        );
-      }
-    };
-    reader.readAsText(file, "utf-8");
-
-    // så man kan välja samma fil igen
-    e.target.value = "";
-  };
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow p-4 w-full max-w-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold">Inställningar</h2>
-          <button
-            className="text-sm"
-            type="button"
-            onClick={onClose}
-          >
-            Stäng
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          <section className="border rounded-xl p-3">
-            <h3 className="font-medium mb-1">
-              Importera kontakter från Outlook (CSV)
-            </h3>
-            <p className="text-xs text-gray-600 mb-2">
-              1. I Outlook: exportera kontakter som CSV-fil. <br />
-              2. Välj om de ska bli kunder eller leverantörer. <br />
-              3. Välj filen här nedan.
-            </p>
-
-            <div className="flex items-center gap-2 mb-2">
-              <label className="text-sm">Importera som:</label>
-              <select
-                className="border rounded px-2 py-1 text-sm"
-                value={importType}
-                onChange={(e) => setImportType(e.target.value)}
-              >
-                <option value="customer">Kunder</option>
-                <option value="supplier">Leverantörer</option>
-              </select>
-            </div>
-
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              className="text-sm"
-              onChange={handleOutlookFileChange}
-            />
-
-            {message && (
-              <div className="mt-2 text-xs text-gray-700 whitespace-pre-line">
-                {message}
-              </div>
-            )}
-          </section>
-
-          {/* Här kan du senare lägga till export/import av hela databasen, OneDrive-inställningar, osv. */}
-        </div>
-
-        <div className="mt-4 flex justify-end">
-          <button
-            className="px-3 py-2 rounded border text-sm"
-            type="button"
-            onClick={onClose}
-          >
-            Stäng
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ===========================
    App — layout + sidomeny
    =========================== */
 export default function App() {
   const [state, setState] = useStore();
-  const [view, setView] = useState("activities"); // activities | calendar | customers | suppliers | offers | projects | archive
-  const [showSettings, setShowSettings] = useState(false);
+  const [view, setView] = useState("activities"); 
+  // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
 
   const newId = () =>
-    crypto?.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
+    crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
 
   function createActivity() {
     const id = newId();
@@ -1834,7 +1498,7 @@ export default function App() {
       isLunch: false,
       isMeeting: false,
       createdAt: new Date().toISOString(),
-      _shouldOpen: true, // popup direkt
+      _shouldOpen: true,
     };
     setState((s) => ({ ...s, activities: [...(s.activities || []), a] }));
     setView("activities");
@@ -1851,9 +1515,8 @@ export default function App() {
       note: "",
       files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
       supplierIds: [],
-      kind: "", // "entreprenad" | "turbovex" | ""
       createdAt: new Date().toISOString(),
-      _shouldOpen: true, // popup direkt
+      _shouldOpen: true,
     };
     setState((s) => ({ ...s, offers: [...(s.offers || []), o] }));
     setView("offers");
@@ -1871,9 +1534,8 @@ export default function App() {
       endDate: "",
       note: "",
       files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
-      kind: "", // "entreprenad" | "turbovex" | ""
       createdAt: new Date().toISOString(),
-      _shouldOpen: true, // popup direkt
+      _shouldOpen: true,
     };
     setState((s) => ({ ...s, projects: [...(s.projects || []), p] }));
     setView("projects");
@@ -1909,7 +1571,7 @@ export default function App() {
 
   return (
     <div className="mx-auto max-w-7xl p-4">
-      {/* HEADER med färgade knappar + inställningsikon */}
+      {/* HEADER */}
       <header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
         <h1 className="text-xl font-semibold">Mach CRM</h1>
         <div className="flex items-center gap-2">
@@ -1954,10 +1616,10 @@ export default function App() {
             + Ny leverantör
           </button>
 
-          {/* Inställningar som ikon */}
+          {/* Inställningar-knapp */}
           <button
             className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
-            onClick={() => setShowSettings(true)}
+            onClick={() => setView("settings")}
             title="Inställningar"
             type="button"
           >
@@ -1968,17 +1630,17 @@ export default function App() {
 
       {/* LAYOUT: vänster sidomeny + höger innehåll */}
       <div className="grid grid-cols-12 gap-4">
-        {/* SIDOMENY (vänster) */}
+        {/* SIDOMENY */}
         <aside className="col-span-12 md:col-span-3 lg:col-span-2">
           <div className="bg-white rounded-2xl shadow p-3 space-y-2">
             {[
               ["activities", "Aktiviteter"],
-              ["calendar", "Kalender"],
+              ["activitiesCalendar", "Kalender"],
               ["customers", "Kunder"],
               ["suppliers", "Leverantörer"],
               ["offers", "Offerter"],
               ["projects", "Projekt"],
-              ["archive", "Arkiv"],
+              ["settings", "Inställningar"],
             ].map(([k, label]) => (
               <button
                 key={k}
@@ -1996,7 +1658,7 @@ export default function App() {
           </div>
         </aside>
 
-        {/* INNEHÅLL (höger) */}
+        {/* INNEHÅLL */}
         <main className="col-span-12 md:col-span-9 lg:col-span-10">
           {view === "activities" && (
             <ActivitiesPanel
@@ -2006,7 +1668,7 @@ export default function App() {
             />
           )}
 
-          {view === "calendar" && (
+          {view === "activitiesCalendar" && (
             <ActivitiesCalendarPanel
               activities={state.activities || []}
               entities={state.entities || []}
@@ -2015,17 +1677,11 @@ export default function App() {
           )}
 
           {view === "customers" && (
-            <CustomersPanel
-              entities={state.entities || []}
-              setState={setState}
-            />
+            <CustomersPanel entities={state.entities || []} setState={setState} />
           )}
 
           {view === "suppliers" && (
-            <SuppliersPanel
-              entities={state.entities || []}
-              setState={setState}
-            />
+            <SuppliersPanel entities={state.entities || []} setState={setState} />
           )}
 
           {view === "offers" && (
@@ -2045,22 +1701,17 @@ export default function App() {
             />
           )}
 
-          {view === "archive" && (
-            <ArchivePanel
+          {view === "settings" && (
+            <SettingsPanel
+              entities={state.entities || []}
               offers={state.offers || []}
               projects={state.projects || []}
+              activities={state.activities || []}
+              setState={setState}
             />
           )}
         </main>
       </div>
-
-      {showSettings && (
-        <SettingsModal
-          state={state}
-          setState={setState}
-          onClose={() => setShowSettings(false)}
-        />
-      )}
     </div>
   );
 }
