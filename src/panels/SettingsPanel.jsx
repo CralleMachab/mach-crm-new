@@ -183,33 +183,55 @@ export default function SettingsPanel({
       const newEntities = rows
         .map((row) => {
           // Försök hitta företagsnamn / namn
-          const companyName =
+          const rawName =
             row["Company"] ||
             row["Company Name"] ||
             row["CompanyName"] ||
             row["Företag"] ||
             row["Full Name"] ||
+            row["Name"] ||
             row["Namn"] ||
             "";
-          if (!companyName) return null;
+          const companyName = (rawName || "").trim();
+
+          // Filtrera bort skräprader typ "SMTP" eller "SMTP:namn@..."
+          if (
+            !companyName ||
+            companyName.toUpperCase() === "SMTP" ||
+            companyName.toUpperCase().startsWith("SMTP:")
+          ) {
+            return null;
+          }
 
           const phone =
             row["Business Phone"] ||
             row["Home Phone"] ||
+            row["Mobile Phone"] ||
             row["Telephone"] ||
             row["Telefon"] ||
             "";
           const email =
-            row["E-mail Address"] || row["Email"] || row["E-post"] || "";
+            row["E-mail Address"] ||
+            row["E-mail 2 Address"] ||
+            row["E-mail 3 Address"] ||
+            row["Email"] ||
+            row["E-post"] ||
+            "";
           const address =
-            row["Business Street"] || row["Street"] || row["Adress"] || "";
+            row["Business Street"] ||
+            row["Street"] ||
+            row["Adress"] ||
+            "";
           const zip =
             row["Business Postal Code"] ||
             row["Postal Code"] ||
             row["Postnr"] ||
             "";
           const city =
-            row["Business City"] || row["City"] || row["Ort"] || "";
+            row["Business City"] ||
+            row["City"] ||
+            row["Ort"] ||
+            "";
 
           const entType = importType === "supplier" ? "supplier" : "customer";
 
@@ -230,7 +252,7 @@ export default function SettingsPanel({
 
       if (!newEntities.length) {
         setImportInfo(
-          "CSV-läste ok, men hittade inga rader med företagsnamn. Kontrollera filen."
+          "CSV-läste ok, men hittade inga rader med giltiga namn (många Outlook-CSV från adressböcker innehåller bara SMTP-rader). Testa att exportera från din riktiga kontaktmapp."
         );
         return;
       }
@@ -667,8 +689,8 @@ export default function SettingsPanel({
 
         <p className="text-xs text-gray-500 mt-2">
           Tips: Om du bara vill importera vissa kontakter kan du i Outlook först
-          markera de kontakterna och göra export från just den vyn/listan, så blir
-          CSV-filen redan filtrerad.
+          markera de kontakterna och göra export från just den vyn/listan, eller
+          exportera alla och rensa bort rader i Excel innan du importerar här.
         </p>
       </section>
 
