@@ -3,8 +3,8 @@ import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 
-const newId = () =>
-  crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+// Enkel id-generator utan crypto (för att undvika problem i vissa miljöer)
+const newId = () => Math.random().toString(36).slice(2);
 
 export default function ActivitiesCalendarPanel({ activities = [], setState }) {
   const [selected, setSelected] = useState(null); // valt aktivitet-objekt
@@ -168,7 +168,6 @@ export default function ActivitiesCalendarPanel({ activities = [], setState }) {
           <FullCalendar
             plugins={[dayGridPlugin, interactionPlugin]}
             initialView="dayGridMonth"
-            locale="sv"
             height="auto"
             events={events}
             editable={true}
