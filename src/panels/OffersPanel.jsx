@@ -1,75 +1,71 @@
+// src/panels/OffersPanel.jsx
 import React, { useEffect, useMemo, useState } from "react";
+import { pickOneDriveFiles } from "../components/onedrive";
 
-function getCustomerName(entities, customerId) {
-  if (!customerId) return "";
-  const c = (entities || []).find(
-    (e) => e.type === "customer" && e.id === customerId
-  );
-  return c?.companyName || c?.name || "";
-}
+const FILE_CATS = ["Ritningar", "Offerter", "Kalkyler", "KMA"];
 
-function statusClass(status) {
-  const base = "text-xs px-2 py-1 rounded";
-  switch (status) {
-    case "utkast":
-      return `${base} bg-gray-100 text-gray-700`;
-    case "skickad":
-      return `${base} bg-blue-100 text-blue-700`;
-    case "vunnet":
-      return `${base} bg-green-100 text-green-700`;
-    case "förlorad":
-      return `${base} bg-rose-100 text-rose-700`;
-    default:
-      return `${base} bg-gray-100 text-gray-700`;
-  }
-}
-
-function typeBadge(isEntreprenad, isTurbovex) {
+const flattenFiles = (obj) => {
+  if (!obj || typeof obj !== "object") return [];
   const out = [];
-  if (isEntreprenad) {
-    out.push(
-      <span
-        key="e"
-        className="text-xs px-2 py-1 rounded bg-orange-200 text-orange-900"
-      >
-        Entreprenad
-      </span>
+  FILE_CATS.forEach((cat) => {
+    const arr = Array.isArray(obj[cat]) ? obj[cat] : [];
+    arr.forEach((f) =>
+      out.push({
+        id: f.id || Math.random().toString(36).slice(0, 8),
+        name: f.name || "fil",
+        webUrl: f.webUrl || f.url || "#",
+        category: cat,
+      })
     );
-  }
-  if (isTurbovex) {
-    out.push(
-      <span
-        key="t"
-        className="text-xs px-2 py-1 rounded bg-sky-200 text-sky-900"
-      >
-        Turbovex
-      </span>
-    );
-  }
+  });
   return out;
-}
+};
+
+const groupFiles = (list = []) => {
+  const obj = { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] };
+  list.forEach((f) => {
+    const cat = FILE_CATS.includes(f.category) ? f.category : "Offerter";
+    obj[cat].push({
+      id: f.id || Math.random().toString(36).slice(0, 8),
+      name: f.name || "fil",
+      webUrl: f.webUrl || f.url || "#",
+    });
+  });
+  return obj;
+};
 
 export default function OffersPanel({ offers = [], entities = [], setState }) {
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [mode, setMode] = useState("active"); // active | archive
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
-  // Öppna direkt om _shouldOpen
+  const customers = useMemo(
+    () => (entities || []).filter((e) => e.type === "customer"),
+    [entities]
+  );
+  const suppliers = useMemo(
+    () => (entities || []).filter((e) => e.type === "supplier"),
+    [entities]
+  );
+  const customerName = (id) =>
+    customers.find((c) => c.id === id)?.companyName || "—";
+
+  // Öppna direkt om _shouldOpen är satt
   useEffect(() => {
     const o = (offers || []).find((x) => x?._shouldOpen);
     if (!o) return;
+    const filesList = flattenFiles(o.files);
     setOpenItem(o);
     setDraft({
       id: o.id,
       title: o.title || "",
       customerId: o.customerId || "",
-      value: o.value || 0,
+      value: o.value ?? 0,
       status: o.status || "utkast",
       note: o.note || "",
-      isEntreprenad: !!o.isEntreprenad,
-      isTurbovex: !!o.isTurbovex,
+      filesList,
+      supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
+      kind: o.kind || "", // Entreprenad / Turbovex (om du vill använda det senare)
     });
     setState((s) => ({
       ...s,
@@ -79,60 +75,105 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     }));
   }, [offers, setState]);
 
-  const customers = useMemo(
-    () => (entities || []).filter((e) => e.type === "customer"),
-    [entities]
-  );
-
   const list = useMemo(() => {
-    let arr = Array.isArray(offers) ? offers.slice() : [];
-
-    if (mode === "active") {
-      arr = arr.filter((o) => !o.deletedAt);
-    } else {
-      arr = arr.filter((o) => !!o.deletedAt);
-    }
-
-    if (statusFilter !== "all") {
-      arr = arr.filter(
-        (o) => (o.status || "utkast") === statusFilter
-      );
-    }
-
+    let arr = (offers || []).filter((o) => !o.deletedAt);
     if (q.trim()) {
       const s = q.trim().toLowerCase();
-      arr = arr.filter((o) => {
-        const title = (o.title || "").toLowerCase();
-        const custName = getCustomerName(entities, o.customerId).toLowerCase();
-        return title.includes(s) || custName.includes(s);
-      });
+      arr = arr.filter((o) => (o.title || "").toLowerCase().includes(s));
     }
-
-    arr.sort((a, b) => {
-      const ad = a.createdAt || "";
-      const bd = b.createdAt || "";
-      return bd.localeCompare(ad);
-    });
-
+    arr.sort((a, b) =>
+      (b.createdAt || "").localeCompare(a.createdAt || "")
+    );
     return arr;
-  }, [offers, entities, q, statusFilter, mode]);
+  }, [offers, q]);
 
   const openEdit = (o) => {
+    const filesList = flattenFiles(o.files);
     setOpenItem(o);
     setDraft({
       id: o.id,
       title: o.title || "",
       customerId: o.customerId || "",
-      value: o.value || 0,
+      value: o.value ?? 0,
       status: o.status || "utkast",
       note: o.note || "",
-      isEntreprenad: !!o.isEntreprenad,
-      isTurbovex: !!o.isTurbovex,
+      filesList,
+      supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
+      kind: o.kind || "",
     });
+  };
+
+  // ==== filer ====
+  const setFileField = (idx, field, value) => {
+    setDraft((d) => {
+      const copy = (d.filesList || []).slice();
+      copy[idx] = { ...copy[idx], [field]: value };
+      return { ...d, filesList: copy };
+    });
+  };
+  const addManualFile = () => {
+    setDraft((d) => ({
+      ...d,
+      filesList: [
+        ...(d.filesList || []),
+        {
+          id: Math.random().toString(36).slice(0, 8),
+          name: "Ny fil",
+          webUrl: "#",
+          category: "Offerter",
+        },
+      ],
+    }));
+  };
+  const addFilesFromOneDrive = async () => {
+    try {
+      const picked = await pickOneDriveFiles();
+      if (!picked || picked.length === 0) return;
+      setDraft((d) => ({
+        ...d,
+        filesList: [
+          ...(d.filesList || []),
+          ...picked.map((p) => ({
+            id: p.id || Math.random().toString(36).slice(0, 8),
+            name: p.name || "fil",
+            webUrl: p.webUrl || p.url || "#",
+            category: "Offerter",
+          })),
+        ],
+      }));
+    } catch (e) {
+      alert(
+        "Kunde inte hämta filer från OneDrive. Du kan lägga till manuellt med knappen nedan."
+      );
+    }
+  };
+  const removeFileRow = (idx) => {
+    setDraft((d) => {
+      const copy = (d.filesList || []).slice();
+      copy.splice(idx, 1);
+      return { ...d, filesList: copy };
+    });
+  };
+
+  // ==== leverantörer ====
+  const addSupplierToOffer = (supplierId) => {
+    if (!supplierId) return;
+    setDraft((d) => {
+      const set = new Set(d.supplierIds || []);
+      set.add(supplierId);
+      return { ...d, supplierIds: Array.from(set) };
+    });
+  };
+  const removeSupplierFromOffer = (supplierId) => {
+    setDraft((d) => ({
+      ...d,
+      supplierIds: (d.supplierIds || []).filter((id) => id !== supplierId),
+    }));
   };
 
   const saveDraft = () => {
     if (!draft) return;
+    const files = groupFiles(draft.filesList || []);
     setState((s) => ({
       ...s,
       offers: (s.offers || []).map((o) =>
@@ -144,8 +185,11 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               value: Number(draft.value) || 0,
               status: draft.status || "utkast",
               note: draft.note || "",
-              isEntreprenad: !!draft.isEntreprenad,
-              isTurbovex: !!draft.isTurbovex,
+              files,
+              supplierIds: Array.isArray(draft.supplierIds)
+                ? draft.supplierIds.slice()
+                : [],
+              kind: draft.kind || "",
               updatedAt: new Date().toISOString(),
             }
           : o
@@ -155,7 +199,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     setDraft(null);
   };
 
-  const softDelete = (offer) => {
+  const softDelete = (o) => {
     if (
       !window.confirm(
         "Ta bort denna offert? Den hamnar i Arkiv och kan tas bort permanent därifrån."
@@ -164,253 +208,197 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
       return;
     setState((s) => ({
       ...s,
+      offers: (s.offers || []).map((x) =>
+        x.id === o.id ? { ...x, deletedAt: new Date().toISOString() } : x
+      ),
+    }));
+    if (openItem?.id === o.id) {
+      setOpenItem(null);
+      setDraft(null);
+    }
+  };
+
+  function createProjectFromOffer() {
+    if (!draft) return;
+    const files = groupFiles(draft.filesList || []);
+    const proj = {
+      id:
+        (typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(0, 8)),
+      name: draft.title || "Projekt",
+      customerId: draft.customerId || "",
+      status: "pågående",
+      budget: Number(draft.value) || 0,
+      note: draft.note || "",
+      files,
+      originatingOfferId: draft.id,
+      supplierIds: Array.isArray(draft.supplierIds)
+        ? draft.supplierIds.slice()
+        : [],
+      kind: draft.kind || "",
+      createdAt: new Date().toISOString(),
+    };
+    setState((s) => ({
+      ...s,
+      projects: [...(s.projects || []), proj],
       offers: (s.offers || []).map((o) =>
-        o.id === offer.id
-          ? { ...o, deletedAt: new Date().toISOString() }
+        o.id === draft.id
+          ? { ...o, status: "vunnen", updatedAt: new Date().toISOString() }
           : o
       ),
     }));
-    if (openItem?.id === offer.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
+    setOpenItem(null);
+    setDraft(null);
+    alert("Projekt skapat från offert (öppnas inte automatiskt).");
+  }
 
-  const restoreOffer = (offer) => {
-    if (!window.confirm("Återställa denna offert till Aktiva?")) return;
-    setState((s) => ({
-      ...s,
-      offers: (s.offers || []).map((o) =>
-        o.id === offer.id ? { ...o, deletedAt: undefined } : o
-      ),
-    }));
-    if (openItem?.id === offer.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
-
-  const hardDelete = (offer) => {
-    if (
-      !window.confirm(
-        "Ta bort denna offert PERMANENT? Detta går inte att ångra."
-      )
-    )
-      return;
-    setState((s) => ({
-      ...s,
-      offers: (s.offers || []).filter((o) => o.id !== offer.id),
-    }));
-    if (openItem?.id === offer.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
-
-  const handlePrint = () => {
+  const printOffer = () => {
     if (!draft) return;
-    const customerName = getCustomerName(entities, draft.customerId);
-    const types = [];
-    if (draft.isEntreprenad) types.push("Entreprenad");
-    if (draft.isTurbovex) types.push("Turbovex");
+    const customer =
+      customers.find((c) => c.id === draft.customerId) || null;
+    const files = groupFiles(draft.filesList || []);
+    const fileLines = FILE_CATS.map((cat) => {
+      const arr = files[cat] || [];
+      if (!arr.length) return "";
+      const items = arr
+        .map(
+          (f) =>
+            `<li>${(f.name || "fil")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")} – ${
+              f.webUrl ? `<a href="${f.webUrl}">${f.webUrl}</a>` : ""
+            }</li>`
+        )
+        .join("");
+      return `<h4>${cat}</h4><ul>${items}</ul>`;
+    }).join("");
 
-    const safeNote = (draft.note || "").replace(/</g, "&lt;");
-
-    const html = `
-<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="sv">
 <head>
-<meta charset="utf-8" />
-<title>Offert ${draft.title || ""}</title>
-<style>
-  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
-  h1 { font-size: 24px; margin-bottom: 4px; }
-  h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
-  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
-  td { padding: 4px 8px; vertical-align: top; }
-  .label { font-weight: 600; width: 140px; }
-  .note { white-space: pre-wrap; margin-top: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; }
-</style>
+  <meta charset="utf-8" />
+  <title>Offert – ${draft.title || ""}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
+    h3 { font-size: 16px; margin-top: 16px; margin-bottom: 4px; }
+    h4 { font-size: 14px; margin-top: 8px; margin-bottom: 4px; }
+    .meta { margin-bottom: 16px; font-size: 14px; }
+    .box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 8px; }
+    ul { margin-top: 4px; }
+    @media print {
+      button { display:none; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Offert ${draft.title || ""}</h1>
-  <div>Datum: ${new Date().toLocaleDateString("sv-SE")}</div>
-  <table>
-    <tbody>
-      <tr><td class="label">Kund</td><td>${customerName || "-"}</td></tr>
-      <tr><td class="label">Belopp</td><td>${draft.value ? Number(draft.value).toLocaleString("sv-SE") + " kr" : "-"}</td></tr>
-      <tr><td class="label">Status</td><td>${draft.status || "-"}</td></tr>
-      <tr><td class="label">Typ</td><td>${types.length ? types.join(", ") : "-"}</td></tr>
-    </tbody>
-  </table>
-  ${
-    safeNote
-      ? `<h2>Notering</h2><div class="note">${safeNote}</div>`
-      : ""
-  }
+  <h1>Offert</h1>
+  <div class="meta">
+    <div><strong>Titel:</strong> ${draft.title || ""}</div>
+    <div><strong>Kund:</strong> ${
+      customer?.companyName || customer?.name || "—"
+    }</div>
+    <div><strong>Belopp:</strong> ${(
+      Number(draft.value) || 0
+    ).toLocaleString("sv-SE")} kr</div>
+    <div><strong>Status:</strong> ${draft.status || "utkast"}</div>
+    ${
+      draft.kind
+        ? `<div><strong>Typ:</strong> ${draft.kind}</div>`
+        : ""
+    }
+  </div>
+
+  <h2>Beskrivning / anteckning</h2>
+  <div class="box">
+    <p>${(draft.note || "")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br/>")}</p>
+  </div>
+
+  <h2>Filer</h2>
+  <div class="box">
+    ${fileLines || "<p>Inga filer kopplade.</p>"}
+  </div>
+
+  <button onclick="window.print()">Skriv ut</button>
 </body>
-</html>
-`;
+</html>`;
 
     const w = window.open("", "_blank");
-    if (!w) return;
+    if (!w) {
+      alert("Tillåt popup-fönster för att kunna skriva ut offerten.");
+      return;
+    }
     w.document.write(html);
     w.document.close();
     w.focus();
-    w.print();
-  };
-
-  const handleMail = () => {
-    if (!draft) return;
-    const customerName = getCustomerName(entities, draft.customerId);
-    const types = [];
-    if (draft.isEntreprenad) types.push("Entreprenad");
-    if (draft.isTurbovex) types.push("Turbovex");
-
-    const lines = [];
-    if (customerName) lines.push(`Kund: ${customerName}`);
-    if (draft.value) lines.push(`Belopp: ${draft.value} kr`);
-    if (draft.status) lines.push(`Status: ${draft.status}`);
-    if (types.length) lines.push(`Typ: ${types.join(", ")}`);
-    if (draft.note) {
-      lines.push("");
-      lines.push("Notering:");
-      lines.push(draft.note);
-    }
-
-    const subject = encodeURIComponent(
-      `Offert ${draft.title || ""}`.trim()
-    );
-    const body = encodeURIComponent(lines.join("\n"));
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      {/* Header + filter */}
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h2 className="font-semibold">Offerter</h2>
-          <div className="flex rounded-xl overflow-hidden border">
-            <button
-              type="button"
-              className={`px-3 py-1 text-sm ${
-                mode === "active"
-                  ? "bg-black text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-              onClick={() => setMode("active")}
-            >
-              Aktiva
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1 text-sm ${
-                mode === "archive"
-                  ? "bg-black text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-              onClick={() => setMode("archive")}
-            >
-              Arkiv
-            </button>
-          </div>
-        </div>
-
-        <div className="flex gap-2 flex-wrap">
-          <input
-            className="border rounded-xl px-3 py-2"
-            placeholder="Sök på titel eller kund..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <select
-            className="border rounded-xl px-3 py-2"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="all">Alla statusar</option>
-            <option value="utkast">Utkast</option>
-            <option value="skickad">Skickad</option>
-            <option value="vunnet">Vunnet</option>
-            <option value="förlorad">Förlorad</option>
-          </select>
-        </div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold">Offerter</h2>
+        <input
+          className="border rounded-xl px-3 py-2"
+          placeholder="Sök..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
       </div>
 
-      {/* Lista */}
       <ul className="divide-y">
-        {list.map((o) => {
-          const custName = getCustomerName(entities, o.customerId);
-          return (
-            <li key={o.id} className="py-3">
-              <div className="flex items-center justify-between gap-3">
+        {list.map((o) => (
+          <li key={o.id} className="py-3">
+            <div className="flex items-center justify-between gap-3">
+              <button
+                className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
+                onClick={() => openEdit(o)}
+                type="button"
+              >
+                <div className="font-medium truncate">
+                  {o.title || "Offert"}
+                </div>
+                <div className="text-xs text-gray-500">
+                  Kund: {customerName(o.customerId)} ·{" "}
+                  {o.status || "utkast"} ·{" "}
+                  {(o.value || 0).toLocaleString("sv-SE")} kr
+                </div>
+              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {o.kind && (
+                  <span
+                    className={
+                      "text-xs px-2 py-1 rounded " +
+                      (o.kind === "Entreprenad"
+                        ? "bg-orange-200 text-orange-800"
+                        : o.kind === "Turbovex"
+                        ? "bg-blue-200 text-blue-800"
+                        : "bg-gray-100 text-gray-700")
+                    }
+                  >
+                    {o.kind}
+                  </span>
+                )}
                 <button
-                  className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
-                  onClick={() => openEdit(o)}
+                  className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                  onClick={() => softDelete(o)}
                   type="button"
                 >
-                  <div className="font-medium truncate">
-                    {o.title || "(namnlös offert)"}
-                    {mode === "archive" ? " (Arkiv)" : ""}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-gray-500">
-                    {custName && <span>{custName}</span>}
-                    {o.value ? (
-                      <span>
-                        {Number(o.value).toLocaleString("sv-SE")} kr
-                      </span>
-                    ) : null}
-                  </div>
+                  Ta bort
                 </button>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  {typeBadge(o.isEntreprenad, o.isTurbovex)}
-                  <span className={statusClass(o.status || "utkast")}>
-                    {o.status || "utkast"}
-                  </span>
-
-                  {mode === "active" ? (
-                    <button
-                      className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                      onClick={() => softDelete(o)}
-                      type="button"
-                    >
-                      Ta bort
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        className="text-xs px-2 py-1 rounded bg-emerald-500 text-white"
-                        onClick={() => restoreOffer(o)}
-                        type="button"
-                      >
-                        Återställ
-                      </button>
-                      <button
-                        className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
-                        onClick={() => hardDelete(o)}
-                        type="button"
-                      >
-                        Ta bort permanent
-                      </button>
-                    </>
-                  )}
-                </div>
               </div>
-            </li>
-          );
-        })}
-        {list.length === 0 && (
-          <li className="py-6 text-sm text-gray-500">
-            {mode === "active"
-              ? "Inga offerter."
-              : "Inga arkiverade offerter."}
+            </div>
           </li>
+        ))}
+        {list.length === 0 && (
+          <li className="py-6 text-sm text-gray-500">Inga offerter.</li>
         )}
       </ul>
 
-      {/* Popup */}
       {openItem && draft && (
         <div
           className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
@@ -420,7 +408,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
           }}
         >
           <div
-            className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl"
+            className="bg-white rounded-2xl shadow p-4 w-full max-w-3xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-2">
@@ -448,28 +436,23 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                   }
                 />
               </div>
-
               <div>
                 <label className="text-sm font-medium">Kund</label>
                 <select
                   className="w-full border rounded px-3 py-2"
                   value={draft.customerId}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      customerId: e.target.value,
-                    }))
+                    setDraft((d) => ({ ...d, customerId: e.target.value }))
                   }
                 >
                   <option value="">—</option>
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.companyName || c.name || c.id}
+                      {c.companyName || c.id}
                     </option>
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="text-sm font-medium">Belopp (kr)</label>
                 <input
@@ -477,83 +460,212 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                   className="w-full border rounded px-3 py-2"
                   value={draft.value}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      value: e.target.value,
-                    }))
+                    setDraft((d) => ({ ...d, value: e.target.value }))
                   }
                 />
               </div>
-
               <div>
                 <label className="text-sm font-medium">Status</label>
                 <select
                   className="w-full border rounded px-3 py-2"
                   value={draft.status}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      status: e.target.value,
-                    }))
+                    setDraft((d) => ({ ...d, status: e.target.value }))
                   }
                 >
                   <option value="utkast">Utkast</option>
-                  <option value="skickad">Skickad</option>
-                  <option value="vunnet">Vunnet</option>
+                  <option value="inskickad">Inskickad</option>
+                  <option value="vunnen">Vunnen</option>
                   <option value="förlorad">Förlorad</option>
                 </select>
               </div>
-
-              <div className="col-span-2">
-                <div className="text-sm font-medium mb-1">
-                  Typ (visas som färgad ikon)
-                </div>
-                <div className="flex flex-wrap gap-4 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!draft.isEntreprenad}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          isEntreprenad: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>Entreprenad (orange ikon)</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!draft.isTurbovex}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          isTurbovex: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>Turbovex (ljusblå ikon)</span>
-                  </label>
-                </div>
+              <div>
+                <label className="text-sm font-medium">Typ</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.kind || ""}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, kind: e.target.value }))
+                  }
+                >
+                  <option value="">—</option>
+                  <option value="Entreprenad">Entreprenad</option>
+                  <option value="Turbovex">Turbovex</option>
+                </select>
               </div>
-
               <div className="col-span-2">
-                <label className="text-sm font-medium">Notering</label>
+                <label className="text-sm font-medium">Anteckning</label>
                 <textarea
-                  className="w-full border rounded px-3 py-2 min-h-[100px]"
+                  className="w-full border rounded px-3 py-2 min-h-[80px]"
                   value={draft.note}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      note: e.target.value,
-                    }))
+                    setDraft((d) => ({ ...d, note: e.target.value }))
                   }
                 />
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            {/* Leverantörer */}
+            <div className="mt-4 border rounded-xl p-3">
+              <div className="font-medium mb-2">Kopplade leverantörer</div>
+              <div className="flex gap-2 mb-2">
+                <select
+                  className="border rounded px-2 py-1"
+                  onChange={(e) => {
+                    addSupplierToOffer(e.target.value);
+                    e.target.value = "";
+                  }}
+                >
+                  <option value="">+ Lägg till leverantör…</option>
+                  {suppliers
+                    .filter(
+                      (s) => !(draft.supplierIds || []).includes(s.id)
+                    )
+                    .sort((a, b) =>
+                      (a.companyName || "").localeCompare(
+                        b.companyName || ""
+                      )
+                    )
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.companyName || s.id}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              {(draft.supplierIds || []).length === 0 ? (
+                <div className="text-xs text-gray-500">
+                  Inga leverantörer kopplade.
+                </div>
+              ) : (
+                <ul className="text-sm space-y-1">
+                  {draft.supplierIds.map((id) => {
+                    const sup = suppliers.find((s) => s.id === id);
+                    return (
+                      <li
+                        key={id}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="truncate">
+                          {sup?.companyName || id}
+                        </span>
+                        <button
+                          className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                          onClick={() => removeSupplierFromOffer(id)}
+                          type="button"
+                        >
+                          Ta bort
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Filer */}
+            <div className="mt-4 border rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium">Filer</div>
+                <div className="flex gap-2">
+                  <button
+                    className="text-xs px-2 py-1 rounded border"
+                    onClick={addFilesFromOneDrive}
+                    type="button"
+                  >
+                    + Lägg till från OneDrive
+                  </button>
+                  <button
+                    className="text-xs px-2 py-1 rounded border"
+                    onClick={addManualFile}
+                    type="button"
+                  >
+                    + Lägg till länk manuellt
+                  </button>
+                </div>
+              </div>
+
+              {(draft.filesList || []).length === 0 ? (
+                <div className="text-xs text-gray-500">
+                  Inga filer tillagda.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {(draft.filesList || []).map((f, idx) => (
+                    <div
+                      key={f.id || idx}
+                      className="grid grid-cols-12 gap-2 items-center"
+                    >
+                      <div className="col-span-3">
+                        <select
+                          className="w-full border rounded px-2 py-1 text-sm"
+                          value={f.category || "Offerter"}
+                          onChange={(e) =>
+                            setFileField(
+                              idx,
+                              "category",
+                              e.target.value
+                            )
+                          }
+                        >
+                          {FILE_CATS.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-4">
+                        <input
+                          className="w-full border rounded px-2 py-1 text-sm"
+                          value={f.name || ""}
+                          onChange={(e) =>
+                            setFileField(idx, "name", e.target.value)
+                          }
+                          placeholder="Filnamn"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          className="w-full border rounded px-2 py-1 text-sm"
+                          value={f.webUrl || ""}
+                          onChange={(e) =>
+                            setFileField(idx, "webUrl", e.target.value)
+                          }
+                          placeholder="Länk (URL)"
+                        />
+                      </div>
+                      <div className="col-span-2 flex flex-col gap-1 items-end">
+                        <button
+                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white w-full"
+                          type="button"
+                          onClick={() => {
+                            if (f.webUrl) {
+                              window.open(f.webUrl, "_blank", "noopener");
+                            } else {
+                              alert(
+                                "Ingen länk angiven för denna fil."
+                              );
+                            }
+                          }}
+                        >
+                          Öppna
+                        </button>
+                        <button
+                          className="text-xs px-2 py-1 rounded bg-rose-500 text-white w-full"
+                          onClick={() => removeFileRow(idx)}
+                          type="button"
+                        >
+                          Ta bort
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 flex gap-2 flex-wrap">
               <button
                 className="px-3 py-2 rounded bg-green-600 text-white"
                 onClick={saveDraft}
@@ -562,20 +674,22 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                 Spara
               </button>
 
-              <button
-                className="px-3 py-2 rounded border"
-                onClick={handlePrint}
-                type="button"
-              >
-                Skriv ut
-              </button>
+              {draft.status === "vunnen" && (
+                <button
+                  className="px-3 py-2 rounded bg-blue-600 text-white"
+                  onClick={createProjectFromOffer}
+                  type="button"
+                >
+                  Skapa projekt från offert (ärver filer & leverantörer)
+                </button>
+              )}
 
               <button
-                className="px-3 py-2 rounded border"
-                onClick={handleMail}
+                className="px-3 py-2 rounded bg-slate-600 text-white"
+                onClick={printOffer}
                 type="button"
               >
-                Maila offert
+                Skriv ut offert
               </button>
 
               <button
