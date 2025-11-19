@@ -1,3 +1,4 @@
+// src/panels/ProjectsPanel.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { pickOneDriveFiles } from "../components/onedrive";
 
@@ -40,7 +41,6 @@ export default function ProjectsPanel({
   offers = [],
 }) {
   const [q, setQ] = useState("");
-  const [mode, setMode] = useState("active"); // active | archive
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
@@ -52,11 +52,9 @@ export default function ProjectsPanel({
     () => (entities || []).filter((e) => e.type === "supplier"),
     [entities]
   );
-
   const customerName = (id) =>
-    (customers.find((c) => c.id === id)?.companyName) || "—";
+    customers.find((c) => c.id === id)?.companyName || "—";
 
-  // öppna direkt om _shouldOpen
   useEffect(() => {
     const p = (projects || []).find((x) => x?._shouldOpen);
     if (!p) return;
@@ -73,6 +71,7 @@ export default function ProjectsPanel({
       filesList: flattenFiles(p.files),
       originatingOfferId: p.originatingOfferId || "",
       supplierIds: Array.isArray(p.supplierIds) ? p.supplierIds.slice() : [],
+      kind: p.kind || "",
     });
     setState((s) => ({
       ...s,
@@ -80,26 +79,19 @@ export default function ProjectsPanel({
         x.id === p.id ? { ...x, _shouldOpen: undefined } : x
       ),
     }));
-  }, [projects, setState, entities]);
+  }, [projects, setState]);
 
   const list = useMemo(() => {
-    let arr = (projects || []).slice();
-    if (mode === "active") {
-      arr = arr.filter((p) => !p.deletedAt);
-    } else {
-      arr = arr.filter((p) => !!p.deletedAt);
-    }
-
+    let arr = (projects || []).filter((p) => !p.deletedAt);
     if (q.trim()) {
       const s = q.trim().toLowerCase();
-      arr = arr.filter((p) =>
-        (p.name || "").toLowerCase().includes(s)
-      );
+      arr = arr.filter((p) => (p.name || "").toLowerCase().includes(s));
     }
-
-    arr.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    arr.sort((a, b) =>
+      (b.createdAt || "").localeCompare(a.createdAt || "")
+    );
     return arr;
-  }, [projects, q, mode]);
+  }, [projects, q]);
 
   const openEdit = (p) => {
     setOpenItem(p);
@@ -115,6 +107,7 @@ export default function ProjectsPanel({
       filesList: flattenFiles(p.files),
       originatingOfferId: p.originatingOfferId || "",
       supplierIds: Array.isArray(p.supplierIds) ? p.supplierIds.slice() : [],
+      kind: p.kind || "",
     });
   };
 
@@ -206,6 +199,7 @@ export default function ProjectsPanel({
               supplierIds: Array.isArray(draft.supplierIds)
                 ? draft.supplierIds.slice()
                 : [],
+              kind: draft.kind || "",
               updatedAt: new Date().toISOString(),
             }
           : p
@@ -234,37 +228,6 @@ export default function ProjectsPanel({
     }
   };
 
-  const restoreProject = (p) => {
-    if (!window.confirm("Återställa detta projekt till Aktiva?")) return;
-    setState((s) => ({
-      ...s,
-      projects: (s.projects || []).map((x) =>
-        x.id === p.id ? { ...x, deletedAt: undefined } : x
-      ),
-    }));
-    if (openItem?.id === p.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
-
-  const hardDelete = (p) => {
-    if (
-      !window.confirm(
-        "Ta bort detta projekt PERMANENT? Detta går inte att ångra."
-      )
-    )
-      return;
-    setState((s) => ({
-      ...s,
-      projects: (s.projects || []).filter((x) => x.id !== p.id),
-    }));
-    if (openItem?.id === p.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
-
   const projectStatusBadge = (status) => {
     const base = "text-xs px-2 py-1 rounded";
     switch (status) {
@@ -281,163 +244,105 @@ export default function ProjectsPanel({
     }
   };
 
-  const handlePrintProject = () => {
+  const printProject = () => {
     if (!draft) return;
-    const cust = customerName(draft.customerId);
-    const safeNote = (draft.note || "").replace(/</g, "&lt;");
-    const files = draft.filesList || [];
+    const customer =
+      customers.find((c) => c.id === draft.customerId) || null;
+    const files = groupFiles(draft.filesList || []);
+    const fileLines = FILE_CATS.map((cat) => {
+      const arr = files[cat] || [];
+      if (!arr.length) return "";
+      const items = arr
+        .map(
+          (f) =>
+            `<li>${(f.name || "fil")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")} – ${
+              f.webUrl ? `<a href="${f.webUrl}">${f.webUrl}</a>` : ""
+            }</li>`
+        )
+        .join("");
+      return `<h4>${cat}</h4><ul>${items}</ul>`;
+    }).join("");
 
-    let filesHtml = "";
-    if (files.length) {
-      const grouped = {};
-      FILE_CATS.forEach((c) => {
-        grouped[c] = [];
-      });
-      files.forEach((f) => {
-        const cat = FILE_CATS.includes(f.category) ? f.category : "Övrigt";
-        if (!grouped[cat]) grouped[cat] = [];
-        grouped[cat].push(f);
-      });
-      filesHtml += "<h2>Filer</h2>";
-      Object.keys(grouped).forEach((cat) => {
-        if (!grouped[cat] || grouped[cat].length === 0) return;
-        filesHtml += `<h3>${cat}</h3><ul>`;
-        grouped[cat].forEach((f) => {
-          const n = f.name || "fil";
-          const url = f.webUrl || "";
-          if (url) {
-            filesHtml += `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${n}</a></li>`;
-          } else {
-            filesHtml += `<li>${n}</li>`;
-          }
-        });
-        filesHtml += "</ul>";
-      });
-    }
-
-    const supNames = (draft.supplierIds || [])
-      .map((id) => suppliers.find((s) => s.id === id)?.companyName || id)
-      .filter(Boolean);
-
-    const html = `
-<!DOCTYPE html>
+    const html = `<!DOCTYPE html>
 <html lang="sv">
 <head>
-<meta charset="utf-8" />
-<title>Projekt ${draft.name || ""}</title>
-<style>
-  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
-  h1 { font-size: 24px; margin-bottom: 4px; }
-  h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
-  h3 { font-size: 16px; margin-top: 16px; margin-bottom: 4px; }
-  table { border-collapse: collapse; width: 100%; margin-top: 12px; }
-  td { padding: 4px 8px; vertical-align: top; }
-  .label { font-weight: 600; width: 140px; }
-  .note { white-space: pre-wrap; margin-top: 8px; padding: 8px; border: 1px solid #ddd; border-radius: 8px; }
-  ul { margin: 4px 0 8px 20px; }
-</style>
+  <meta charset="utf-8" />
+  <title>Projekt – ${draft.name || ""}</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
+    h1 { font-size: 24px; margin-bottom: 4px; }
+    h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
+    h3 { font-size: 16px; margin-top: 16px; margin-bottom: 4px; }
+    h4 { font-size: 14px; margin-top: 8px; margin-bottom: 4px; }
+    .meta { margin-bottom: 16px; font-size: 14px; }
+    .box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 8px; }
+    ul { margin-top: 4px; }
+    @media print {
+      button { display:none; }
+    }
+  </style>
 </head>
 <body>
-  <h1>Projekt ${draft.name || ""}</h1>
-  <div>Datum: ${new Date().toLocaleDateString("sv-SE")}</div>
-  <table>
-    <tbody>
-      <tr><td class="label">Kund</td><td>${cust || "-"}</td></tr>
-      <tr><td class="label">Status</td><td>${draft.status || "-"}</td></tr>
-      <tr><td class="label">Budget</td><td>${
-        draft.budget
-          ? Number(draft.budget).toLocaleString("sv-SE") + " kr"
-          : "-"
-      }</td></tr>
-      <tr><td class="label">Start</td><td>${draft.startDate || "-"}</td></tr>
-      <tr><td class="label">Slut</td><td>${draft.endDate || "-"}</td></tr>
-      <tr><td class="label">Leverantörer</td><td>${
-        supNames.length ? supNames.join(", ") : "-"
-      }</td></tr>
-    </tbody>
-  </table>
-  ${
-    safeNote
-      ? `<h2>Anteckning</h2><div class="note">${safeNote}</div>`
-      : ""
-  }
-  ${filesHtml}
+  <h1>Projekt</h1>
+  <div class="meta">
+    <div><strong>Namn:</strong> ${draft.name || ""}</div>
+    <div><strong>Kund:</strong> ${
+      customer?.companyName || customer?.name || "—"
+    }</div>
+    <div><strong>Budget:</strong> ${(
+      Number(draft.budget) || 0
+    ).toLocaleString("sv-SE")} kr</div>
+    <div><strong>Status:</strong> ${draft.status || "pågående"}</div>
+    ${
+      draft.startDate
+        ? `<div><strong>Start:</strong> ${draft.startDate}</div>`
+        : ""
+    }
+    ${
+      draft.endDate
+        ? `<div><strong>Slut:</strong> ${draft.endDate}</div>`
+        : ""
+    }
+    ${
+      draft.kind
+        ? `<div><strong>Typ:</strong> ${draft.kind}</div>`
+        : ""
+    }
+  </div>
+
+  <h2>Beskrivning / anteckning</h2>
+  <div class="box">
+    <p>${(draft.note || "")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\n/g, "<br/>")}</p>
+  </div>
+
+  <h2>Filer</h2>
+  <div class="box">
+    ${fileLines || "<p>Inga filer kopplade.</p>"}
+  </div>
+
+  <button onclick="window.print()">Skriv ut</button>
 </body>
-</html>
-`;
+</html>`;
+
     const w = window.open("", "_blank");
-    if (!w) return;
+    if (!w) {
+      alert("Tillåt popup-fönster för att kunna skriva ut projektet.");
+      return;
+    }
     w.document.write(html);
     w.document.close();
     w.focus();
-    w.print();
-  };
-
-  const handleMailProject = () => {
-    if (!draft) return;
-    const cust = customerName(draft.customerId);
-    const lines = [];
-    if (cust) lines.push(`Kund: ${cust}`);
-    lines.push(`Status: ${draft.status || "-"}`);
-    if (draft.budget) lines.push(`Budget: ${draft.budget} kr`);
-    if (draft.startDate || draft.endDate) {
-      lines.push(
-        `Period: ${draft.startDate || "-"} – ${draft.endDate || "-"}`
-      );
-    }
-    if (draft.note) {
-      lines.push("");
-      lines.push("Anteckning:");
-      lines.push(draft.note);
-    }
-    const files = draft.filesList || [];
-    if (files.length) {
-      lines.push("");
-      lines.push("Filer:");
-      files.forEach((f) => {
-        const name = f.name || "fil";
-        const url = f.webUrl || "";
-        lines.push(`- ${name}${url ? " – " + url : ""}`);
-      });
-    }
-
-    const subject = encodeURIComponent(
-      `Projekt ${draft.name || ""}`.trim()
-    );
-    const body = encodeURIComponent(lines.join("\n"));
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   };
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="font-semibold">Projekt</h2>
-          <div className="flex rounded-xl overflow-hidden border">
-            <button
-              type="button"
-              className={`px-3 py-1 text-sm ${
-                mode === "active"
-                  ? "bg-black text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-              onClick={() => setMode("active")}
-            >
-              Aktiva
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1 text-sm ${
-                mode === "archive"
-                  ? "bg-black text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-              onClick={() => setMode("archive")}
-            >
-              Arkiv
-            </button>
-          </div>
-        </div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold">Projekt</h2>
         <input
           className="border rounded-xl px-3 py-2"
           placeholder="Sök..."
@@ -463,9 +368,8 @@ export default function ProjectsPanel({
                 >
                   <div className="font-medium truncate">
                     {p.name || "Projekt"}
-                    {mode === "archive" ? " (Arkiv)" : ""}
                   </div>
-                  <div className="text-xs text-gray-500 flex flex-wrap gap-2 items-center">
+                  <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
                     <span>Kund: {customerName(p.customerId)}</span>
                     <span className={projectStatusBadge(p.status)}>
                       {p.status || "pågående"}
@@ -475,49 +379,40 @@ export default function ProjectsPanel({
                         Vunnen offert
                       </span>
                     ) : null}
+                    {p.kind && (
+                      <span
+                        className={
+                          "text-xs px-2 py-1 rounded " +
+                          (p.kind === "Entreprenad"
+                            ? "bg-orange-200 text-orange-800"
+                            : p.kind === "Turbovex"
+                            ? "bg-blue-200 text-blue-800"
+                            : "bg-gray-100 text-gray-700")
+                        }
+                      >
+                        {p.kind}
+                      </span>
+                    )}
                   </div>
                 </button>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
                     {(p.budget || 0).toLocaleString("sv-SE")} kr
                   </span>
-                  {mode === "active" ? (
-                    <button
-                      className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                      onClick={() => softDelete(p)}
-                      type="button"
-                    >
-                      Ta bort
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        className="text-xs px-2 py-1 rounded bg-emerald-500 text-white"
-                        onClick={() => restoreProject(p)}
-                        type="button"
-                      >
-                        Återställ
-                      </button>
-                      <button
-                        className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
-                        onClick={() => hardDelete(p)}
-                        type="button"
-                      >
-                        Ta bort permanent
-                      </button>
-                    </>
-                  )}
+                  <button
+                    className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                    onClick={() => softDelete(p)}
+                    type="button"
+                  >
+                    Ta bort
+                  </button>
                 </div>
               </div>
             </li>
           );
         })}
         {list.length === 0 && (
-          <li className="py-6 text-sm text-gray-500">
-            {mode === "active"
-              ? "Inga projekt."
-              : "Inga arkiverade projekt."}
-          </li>
+          <li className="py-6 text-sm text-gray-500">Inga projekt.</li>
         )}
       </ul>
 
@@ -584,10 +479,7 @@ export default function ProjectsPanel({
                   className="w-full border rounded px-3 py-2"
                   value={draft.status}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      status: e.target.value,
-                    }))
+                    setDraft((d) => ({ ...d, status: e.target.value }))
                   }
                 >
                   <option value="pågående">pågående</option>
@@ -603,10 +495,7 @@ export default function ProjectsPanel({
                   className="w-full border rounded px-3 py-2"
                   value={draft.budget}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      budget: e.target.value,
-                    }))
+                    setDraft((d) => ({ ...d, budget: e.target.value }))
                   }
                 />
               </div>
@@ -631,12 +520,23 @@ export default function ProjectsPanel({
                   className="w-full border rounded px-3 py-2"
                   value={draft.endDate}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      endDate: e.target.value,
-                    }))
+                    setDraft((d) => ({ ...d, endDate: e.target.value }))
                   }
                 />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Typ</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.kind || ""}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, kind: e.target.value }))
+                  }
+                >
+                  <option value="">—</option>
+                  <option value="Entreprenad">Entreprenad</option>
+                  <option value="Turbovex">Turbovex</option>
+                </select>
               </div>
               <div className="col-span-2">
                 <label className="text-sm font-medium">Anteckning</label>
@@ -644,10 +544,7 @@ export default function ProjectsPanel({
                   className="w-full border rounded px-3 py-2 min-h-[80px]"
                   value={draft.note}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      note: e.target.value,
-                    }))
+                    setDraft((d) => ({ ...d, note: e.target.value }))
                   }
                 />
               </div>
@@ -749,7 +646,11 @@ export default function ProjectsPanel({
                           className="w-full border rounded px-2 py-1 text-sm"
                           value={f.category || "Offerter"}
                           onChange={(e) =>
-                            setFileField(idx, "category", e.target.value)
+                            setFileField(
+                              idx,
+                              "category",
+                              e.target.value
+                            )
                           }
                         >
                           {FILE_CATS.map((c) => (
@@ -769,7 +670,7 @@ export default function ProjectsPanel({
                           placeholder="Filnamn"
                         />
                       </div>
-                      <div className="col-span-4">
+                      <div className="col-span-3">
                         <input
                           className="w-full border rounded px-2 py-1 text-sm"
                           value={f.webUrl || ""}
@@ -779,9 +680,24 @@ export default function ProjectsPanel({
                           placeholder="Länk (URL)"
                         />
                       </div>
-                      <div className="col-span-1 text-right">
+                      <div className="col-span-2 flex flex-col gap-1 items-end">
                         <button
-                          className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white w-full"
+                          type="button"
+                          onClick={() => {
+                            if (f.webUrl) {
+                              window.open(f.webUrl, "_blank", "noopener");
+                            } else {
+                              alert(
+                                "Ingen länk angiven för denna fil."
+                              );
+                            }
+                          }}
+                        >
+                          Öppna
+                        </button>
+                        <button
+                          className="text-xs px-2 py-1 rounded bg-rose-500 text-white w-full"
                           onClick={() => removeFileRow(idx)}
                           type="button"
                         >
@@ -794,7 +710,7 @@ export default function ProjectsPanel({
               )}
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex gap-2 flex-wrap">
               <button
                 className="px-3 py-2 rounded bg-green-600 text-white"
                 onClick={saveDraft}
@@ -802,23 +718,13 @@ export default function ProjectsPanel({
               >
                 Spara
               </button>
-
               <button
-                className="px-3 py-2 rounded border"
-                onClick={handlePrintProject}
+                className="px-3 py-2 rounded bg-slate-600 text-white"
+                onClick={printProject}
                 type="button"
               >
-                Skriv ut
+                Skriv ut projekt
               </button>
-
-              <button
-                className="px-3 py-2 rounded border"
-                onClick={handleMailProject}
-                type="button"
-              >
-                Maila projekt
-              </button>
-
               <button
                 className="px-3 py-2 rounded bg-rose-600 text-white"
                 onClick={() => softDelete(openItem)}
@@ -826,7 +732,6 @@ export default function ProjectsPanel({
               >
                 Ta bort
               </button>
-
               <button
                 className="ml-auto px-3 py-2 rounded border"
                 onClick={() => {
