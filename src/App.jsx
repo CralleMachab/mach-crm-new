@@ -1704,12 +1704,12 @@ export default function App() {
           )}
 
           {view === "activitiesCalendar" && (
-            <ActivitiesCalendarPanel
-              activities={state.activities || []}
-              entities={state.entities || []}
-              setState={setState}
-            />
-          )}
+  <ActivitiesCalendarPanel
+    activities={state.activities || []}
+    setState={setState}
+    setView={setView}
+  />
+)}
 
           {view === "customers" && (
             <CustomersPanel entities={state.entities || []} setState={setState} />
