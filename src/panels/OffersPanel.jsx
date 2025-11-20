@@ -87,20 +87,21 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     return arr;
   }, [offers, q]);
 
-  const openEdit = (o) => {
-    const filesList = flattenFiles(o.files);
-    setOpenItem(o);
-    setDraft({
-      id: o.id,
-      title: o.title || "",
-      customerId: o.customerId || "",
-      value: o.value ?? 0,
-      status: o.status || "utkast",
-      note: o.note || "",
-      filesList,
-      supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
-      kind: o.kind || "",
-    });
+const openEdit = (o) => {
+  const filesList = flattenFiles(o.files);
+  setOpenItem(o);
+  setDraft({
+    id: o.id,
+    title: o.title || "",
+    customerId: o.customerId || "",
+    value: o.value ?? 0,
+    status: o.status || "utkast",
+    note: o.note || "",
+    nextActionDate: o.nextActionDate || "",   // 👈 NY RAD
+    filesList,
+    supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
+    kind: o.kind || "", // Entreprenad / Turbovex (om du vill använda det senare)
+  });
   };
 
   // ==== filer ====
@@ -174,6 +175,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
   const saveDraft = () => {
     if (!draft) return;
     const files = groupFiles(draft.filesList || []);
+
     setState((s) => ({
       ...s,
       offers: (s.offers || []).map((o) =>
@@ -185,6 +187,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               value: Number(draft.value) || 0,
               status: draft.status || "utkast",
               note: draft.note || "",
+              nextActionDate: draft.nextActionDate || "",   // 👈 NYTT FÄLT
               files,
               supplierIds: Array.isArray(draft.supplierIds)
                 ? draft.supplierIds.slice()
@@ -195,6 +198,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
           : o
       ),
     }));
+
     setOpenItem(null);
     setDraft(null);
   };
