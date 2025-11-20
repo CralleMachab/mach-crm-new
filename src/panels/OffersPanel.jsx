@@ -47,10 +47,16 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     () => (entities || []).filter((e) => e.type === "supplier"),
     [entities]
   );
+
   const customerName = (id) =>
     customers.find((c) => c.id === id)?.companyName || "—";
 
-  // Öppna direkt om _shouldOpen är satt
+  // används för att se om "Nästa händelse"-datum är passerat
+  const todayYmd = new Date().toISOString().slice(0, 10);
+  const isNextActionOverdue = (offer) =>
+    offer.nextActionDate && offer.nextActionDate < todayYmd;
+
+  // Öppna direkt om _shouldOpen är satt (när ny offert skapas)
   useEffect(() => {
     const o = (offers || []).find((x) => x?._shouldOpen);
     if (!o) return;
@@ -63,9 +69,10 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
       value: o.value ?? 0,
       status: o.status || "utkast",
       note: o.note || "",
+      nextActionDate: o.nextActionDate || "",
       filesList,
       supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
-      kind: o.kind || "", // Entreprenad / Turbovex (om du vill använda det senare)
+      kind: o.kind || "", // Entreprenad / Turbovex
     });
     setState((s) => ({
       ...s,
@@ -87,21 +94,21 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     return arr;
   }, [offers, q]);
 
-const openEdit = (o) => {
-  const filesList = flattenFiles(o.files);
-  setOpenItem(o);
-  setDraft({
-    id: o.id,
-    title: o.title || "",
-    customerId: o.customerId || "",
-    value: o.value ?? 0,
-    status: o.status || "utkast",
-    note: o.note || "",
-    nextActionDate: o.nextActionDate || "",   // 👈 NY RAD
-    filesList,
-    supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
-    kind: o.kind || "", // Entreprenad / Turbovex (om du vill använda det senare)
-  });
+  const openEdit = (o) => {
+    const filesList = flattenFiles(o.files);
+    setOpenItem(o);
+    setDraft({
+      id: o.id,
+      title: o.title || "",
+      customerId: o.customerId || "",
+      value: o.value ?? 0,
+      status: o.status || "utkast",
+      note: o.note || "",
+      nextActionDate: o.nextActionDate || "",
+      filesList,
+      supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
+      kind: o.kind || "", // Entreprenad / Turbovex
+    });
   };
 
   // ==== filer ====
@@ -112,6 +119,7 @@ const openEdit = (o) => {
       return { ...d, filesList: copy };
     });
   };
+
   const addManualFile = () => {
     setDraft((d) => ({
       ...d,
@@ -126,6 +134,7 @@ const openEdit = (o) => {
       ],
     }));
   };
+
   const addFilesFromOneDrive = async () => {
     try {
       const picked = await pickOneDriveFiles();
@@ -148,6 +157,7 @@ const openEdit = (o) => {
       );
     }
   };
+
   const removeFileRow = (idx) => {
     setDraft((d) => {
       const copy = (d.filesList || []).slice();
@@ -165,6 +175,7 @@ const openEdit = (o) => {
       return { ...d, supplierIds: Array.from(set) };
     });
   };
+
   const removeSupplierFromOffer = (supplierId) => {
     setDraft((d) => ({
       ...d,
@@ -187,7 +198,7 @@ const openEdit = (o) => {
               value: Number(draft.value) || 0,
               status: draft.status || "utkast",
               note: draft.note || "",
-              nextActionDate: draft.nextActionDate || "",   // 👈 NYTT FÄLT
+              nextActionDate: draft.nextActionDate || "",
               files,
               supplierIds: Array.isArray(draft.supplierIds)
                 ? draft.supplierIds.slice()
@@ -257,11 +268,70 @@ const openEdit = (o) => {
     alert("Projekt skapat från offert (öppnas inte automatiskt).");
   }
 
+  const emailOffer = () => {
+    if (!draft) return;
+
+    const customer =
+      customers.find((c) => c.id === draft.customerId) || null;
+    const files = groupFiles(draft.filesList || []);
+
+    const lines = [];
+
+    lines.push(`Offert: ${draft.title || ""}`);
+    if (customer) {
+      lines.push(
+        `Kund: ${customer.companyName || customer.name || ""}`
+      );
+    }
+    lines.push(
+      `Belopp: ${(Number(draft.value) || 0).toLocaleString(
+        "sv-SE"
+      )} kr`
+    );
+    lines.push(`Status: ${draft.status || "utkast"}`);
+    if (draft.kind) lines.push(`Typ: ${draft.kind}`);
+    if (draft.nextActionDate) {
+      lines.push(`Nästa händelse: ${draft.nextActionDate}`);
+    }
+
+    lines.push("");
+
+    if (draft.note) {
+      lines.push("Anteckning:");
+      lines.push(draft.note);
+      lines.push("");
+    }
+
+    FILE_CATS.forEach((cat) => {
+      const arr = files[cat] || [];
+      if (!arr.length) return;
+      lines.push(`${cat}:`);
+      arr.forEach((f) => {
+        lines.push(
+          `- ${(f.name || "fil")}${
+            f.webUrl ? " – " + f.webUrl : ""
+          }`
+        );
+      });
+      lines.push("");
+    });
+
+    const subject = `Offert – ${draft.title || ""}`;
+    const body = lines.join("\n");
+
+    const mailto = `mailto:?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+
+    window.location.href = mailto;
+  };
+
   const printOffer = () => {
     if (!draft) return;
     const customer =
       customers.find((c) => c.id === draft.customerId) || null;
     const files = groupFiles(draft.filesList || []);
+
     const fileLines = FILE_CATS.map((cat) => {
       const arr = files[cat] || [];
       if (!arr.length) return "";
@@ -270,13 +340,17 @@ const openEdit = (o) => {
           (f) =>
             `<li>${(f.name || "fil")
               .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;")} – ${
-              f.webUrl ? `<a href="${f.webUrl}">${f.webUrl}</a>` : ""
+              .replace(/>/g, "&gt;")}${
+              f.webUrl
+                ? ` – <a href="${f.webUrl}">${f.webUrl}</a>`
+                : ""
             }</li>`
         )
         .join("");
       return `<h4>${cat}</h4><ul>${items}</ul>`;
     }).join("");
+
+    const todayStr = new Date().toLocaleDateString("sv-SE");
 
     const html = `<!DOCTYPE html>
 <html lang="sv">
@@ -284,51 +358,188 @@ const openEdit = (o) => {
   <meta charset="utf-8" />
   <title>Offert – ${draft.title || ""}</title>
   <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
-    h1 { font-size: 24px; margin-bottom: 4px; }
-    h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
-    h3 { font-size: 16px; margin-top: 16px; margin-bottom: 4px; }
-    h4 { font-size: 14px; margin-top: 8px; margin-bottom: 4px; }
-    .meta { margin-bottom: 16px; font-size: 14px; }
-    .box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 8px; }
-    ul { margin-top: 4px; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: #f3f4f6;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 32px 40px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    .title-block h1 {
+      margin: 0 0 4px 0;
+      font-size: 26px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .title-block .subtitle {
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .company-block {
+      text-align: right;
+      font-size: 13px;
+      color: #4b5563;
+    }
+    .company-block img {
+      height: 56px;
+      margin-bottom: 4px;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 24px;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .label {
+      font-weight: 600;
+      color: #374151;
+    }
+    .value {
+      color: #111827;
+    }
+    .section-title {
+      margin-top: 24px;
+      margin-bottom: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .box {
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: #111827;
+    }
+    ul {
+      margin: 4px 0 0 18px;
+      padding: 0;
+    }
+    li {
+      margin-bottom: 4px;
+    }
+    .footer-actions {
+      margin-top: 24px;
+      text-align: right;
+    }
+    .btn-print {
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      padding: 8px 16px;
+      font-size: 14px;
+      background: #111827;
+      color: #f9fafb;
+      cursor: pointer;
+    }
+    .btn-print:hover {
+      background: #020617;
+    }
     @media print {
-      button { display:none; }
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      .page {
+        box-shadow: none;
+        border-radius: 0;
+        margin: 0;
+        max-width: none;
+      }
+      .footer-actions {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Offert</h1>
-  <div class="meta">
-    <div><strong>Titel:</strong> ${draft.title || ""}</div>
-    <div><strong>Kund:</strong> ${
-      customer?.companyName || customer?.name || "—"
-    }</div>
-    <div><strong>Belopp:</strong> ${(
-      Number(draft.value) || 0
-    ).toLocaleString("sv-SE")} kr</div>
-    <div><strong>Status:</strong> ${draft.status || "utkast"}</div>
-    ${
-      draft.kind
-        ? `<div><strong>Typ:</strong> ${draft.kind}</div>`
-        : ""
-    }
-  </div>
+  <div class="page">
+    <div class="header">
+      <div class="title-block">
+        <h1>Offert</h1>
+        <div class="subtitle">Datum: ${todayStr}</div>
+      </div>
+      <div class="company-block">
+        <img src="/logo.png" alt="Mach Entreprenad AB" />
+        <div>Mach Entreprenad AB</div>
+      </div>
+    </div>
 
-  <h2>Beskrivning / anteckning</h2>
-  <div class="box">
-    <p>${(draft.note || "")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "<br/>")}</p>
-  </div>
+    <div class="meta-grid">
+      <div>
+        <span class="label">Titel:</span>
+        <span class="value"> ${draft.title || ""}</span>
+      </div>
+      <div>
+        <span class="label">Kund:</span>
+        <span class="value">
+          ${
+            customer
+              ? customer.companyName || customer.name || "—"
+              : "—"
+          }
+        </span>
+      </div>
+      <div>
+        <span class="label">Belopp:</span>
+        <span class="value">
+          ${(Number(draft.value) || 0).toLocaleString("sv-SE")} kr
+        </span>
+      </div>
+      <div>
+        <span class="label">Status:</span>
+        <span class="value">${draft.status || "utkast"}</span>
+      </div>
+      ${
+        draft.kind
+          ? `<div><span class="label">Typ:</span> <span class="value">${draft.kind}</span></div>`
+          : ""
+      }
+      ${
+        draft.nextActionDate
+          ? `<div><span class="label">Nästa händelse:</span> <span class="value">${draft.nextActionDate}</span></div>`
+          : ""
+      }
+    </div>
 
-  <h2>Filer</h2>
-  <div class="box">
-    ${fileLines || "<p>Inga filer kopplade.</p>"}
-  </div>
+    <div class="section">
+      <div class="section-title">Beskrivning / anteckning</div>
+      <div class="box">
+        <p>${
+          (draft.note || "")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\n/g, "<br/>") || "Ingen anteckning."
+        }</p>
+      </div>
+    </div>
 
-  <button onclick="window.print()">Skriv ut</button>
+    <div class="section">
+      <div class="section-title">Filer</div>
+      <div class="box">
+        ${fileLines || "<p>Inga filer kopplade.</p>"}
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <button class="btn-print" onclick="window.print()">Skriv ut</button>
+    </div>
+  </div>
 </body>
 </html>`;
 
@@ -366,25 +577,25 @@ const openEdit = (o) => {
                 <div className="font-medium truncate">
                   {o.title || "Offert"}
                 </div>
-<div className="text-xs text-gray-500">
-  Kund: {customerName(o.customerId)} ·{" "}
-  {(o.value || 0).toLocaleString("sv-SE")} kr ·{" "}
-  {o.status || "utkast"}
-</div>
+                <div className="text-xs text-gray-500">
+                  Kund: {customerName(o.customerId)} ·{" "}
+                  {(o.value || 0).toLocaleString("sv-SE")} kr ·{" "}
+                  {o.status || "utkast"}
+                </div>
 
-{o.nextActionDate && (
-  <div
-    className={
-      "text-xs mt-0.5 " +
-      (isNextActionOverdue(o)
-        ? "text-red-600 font-semibold"
-        : "text-gray-500")
-    }
-  >
-    Nästa händelse: {o.nextActionDate}
-    {isNextActionOverdue(o) && " (passert, följ upp)"}
-  </div>
-)}
+                {o.nextActionDate && (
+                  <div
+                    className={
+                      "text-xs mt-0.5 " +
+                      (isNextActionOverdue(o)
+                        ? "text-red-600 font-semibold"
+                        : "text-gray-500")
+                    }
+                  >
+                    Nästa händelse: {o.nextActionDate}
+                    {isNextActionOverdue(o) && " (passert, följ upp)"}
+                  </div>
+                )}
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 {o.kind && (
@@ -510,6 +721,20 @@ const openEdit = (o) => {
                   <option value="Entreprenad">Entreprenad</option>
                   <option value="Turbovex">Turbovex</option>
                 </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Nästa händelse</label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.nextActionDate || ""}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      nextActionDate: e.target.value,
+                    }))
+                  }
+                />
               </div>
               <div className="col-span-2">
                 <label className="text-sm font-medium">Anteckning</label>
@@ -659,7 +884,11 @@ const openEdit = (o) => {
                           type="button"
                           onClick={() => {
                             if (f.webUrl) {
-                              window.open(f.webUrl, "_blank", "noopener");
+                              window.open(
+                                f.webUrl,
+                                "_blank",
+                                "noopener"
+                              );
                             } else {
                               alert(
                                 "Ingen länk angiven för denna fil."
@@ -701,6 +930,14 @@ const openEdit = (o) => {
                   Skapa projekt från offert (ärver filer & leverantörer)
                 </button>
               )}
+
+              <button
+                className="px-3 py-2 rounded bg-indigo-600 text-white"
+                onClick={emailOffer}
+                type="button"
+              >
+                Maila offert
+              </button>
 
               <button
                 className="px-3 py-2 rounded bg-slate-600 text-white"
