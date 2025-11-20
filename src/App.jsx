@@ -1564,11 +1564,14 @@ export default function App() {
       value: 0,
       status: "utkast",
       note: "",
+      // nytt fält: datum för nästa händelse
+      nextActionDate: "", 
       files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
       supplierIds: [],
       createdAt: new Date().toISOString(),
       _shouldOpen: true,
     };
+
     setState((s) => ({ ...s, offers: [...(s.offers || []), o] }));
     setView("offers");
   }
