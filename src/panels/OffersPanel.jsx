@@ -366,11 +366,25 @@ const openEdit = (o) => {
                 <div className="font-medium truncate">
                   {o.title || "Offert"}
                 </div>
-                <div className="text-xs text-gray-500">
-                  Kund: {customerName(o.customerId)} ·{" "}
-                  {o.status || "utkast"} ·{" "}
-                  {(o.value || 0).toLocaleString("sv-SE")} kr
-                </div>
+<div className="text-xs text-gray-500">
+  Kund: {customerName(o.customerId)} ·{" "}
+  {(o.value || 0).toLocaleString("sv-SE")} kr ·{" "}
+  {o.status || "utkast"}
+</div>
+
+{o.nextActionDate && (
+  <div
+    className={
+      "text-xs mt-0.5 " +
+      (isNextActionOverdue(o)
+        ? "text-red-600 font-semibold"
+        : "text-gray-500")
+    }
+  >
+    Nästa händelse: {o.nextActionDate}
+    {isNextActionOverdue(o) && " (passert, följ upp)"}
+  </div>
+)}
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 {o.kind && (
