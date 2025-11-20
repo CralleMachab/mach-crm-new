@@ -2,6 +2,7 @@
 import React, { useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
+import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 
 const newId = () => Math.random().toString(36).slice(2);
@@ -115,16 +116,21 @@ export default function ActivitiesCalendarPanel({
         </p>
       </div>
 
-      <FullCalendar
-        plugins={[dayGridPlugin, interactionPlugin]}
-        initialView="dayGridMonth"
-        height="auto"
-        events={events}
-        editable={true}
-        eventDrop={handleEventDrop}
-        eventClick={handleEventClick}
-        dateClick={handleDateClick}
-      />
+<FullCalendar
+  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+  initialView="dayGridMonth"
+  headerToolbar={{
+    left: "prev,next today",
+    center: "title",
+    right: "dayGridMonth,timeGridWeek", // 👈 knappar för Månad / Vecka
+  }}
+  height="auto"
+  events={events}
+  editable={true}
+  eventDrop={handleEventDrop}
+  eventClick={handleEventClick}
+  dateClick={handleDateClick}
+/>
     </div>
   );
 }
