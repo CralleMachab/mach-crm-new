@@ -147,13 +147,29 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     const day = `${d.getDate()}`.padStart(2, "0");
     return `${d.getFullYear()}-${m}-${day}`;
   };
-  const inNext7 = (dateStr, timeStr) => {
-    if (!dateStr) return true;
-    const now = new Date();
-    const end7 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7);
-    const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
-    return d >= now && d <= end7;
-  };
+const inNext7 = (dateStr, timeStr) => {
+  if (!dateStr) return true;
+
+  // Start: idag kl 00:00
+  const today = new Date();
+  const start = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+
+  // Slut: 6 dagar framåt = totalt 7 datum (idag + 6)
+  const end = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + 6
+  );
+
+  const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
+
+  return d >= start && d <= end;
+};
+
   const isSameDay = (dateStr, ymd) => !!dateStr && dateStr.slice(0, 10) === ymd;
 
   const prBadge = (p) => {
