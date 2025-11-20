@@ -52,6 +52,7 @@ export default function ProjectsPanel({
     () => (entities || []).filter((e) => e.type === "supplier"),
     [entities]
   );
+
   const customerName = (id) =>
     customers.find((c) => c.id === id)?.companyName || "—";
 
@@ -69,6 +70,7 @@ export default function ProjectsPanel({
       endDate: p.endDate || "",
       note: p.note || "",
       filesList: flattenFiles(p.files),
+      internalId: p.internalId || "",
       originatingOfferId: p.originatingOfferId || "",
       supplierIds: Array.isArray(p.supplierIds) ? p.supplierIds.slice() : [],
       kind: p.kind || "",
@@ -85,11 +87,11 @@ export default function ProjectsPanel({
     let arr = (projects || []).filter((p) => !p.deletedAt);
     if (q.trim()) {
       const s = q.trim().toLowerCase();
-      arr = arr.filter((p) => (p.name || "").toLowerCase().includes(s));
+      arr = arr.filter((p) =>
+        (p.name || "").toLowerCase().includes(s)
+      );
     }
-    arr.sort((a, b) =>
-      (b.createdAt || "").localeCompare(a.createdAt || "")
-    );
+    arr.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
     return arr;
   }, [projects, q]);
 
@@ -105,13 +107,29 @@ export default function ProjectsPanel({
       endDate: p.endDate || "",
       note: p.note || "",
       filesList: flattenFiles(p.files),
+      internalId: p.internalId || "",
       originatingOfferId: p.originatingOfferId || "",
       supplierIds: Array.isArray(p.supplierIds) ? p.supplierIds.slice() : [],
       kind: p.kind || "",
     });
   };
 
-  // filer
+  const projectStatusBadge = (status) => {
+    const base = "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium";
+    switch (status) {
+      case "pågående":
+        return `${base} bg-blue-100 text-blue-700`;
+      case "avslutat":
+        return `${base} bg-green-100 text-green-700`;
+      case "paus":
+        return `${base} bg-yellow-100 text-yellow-700`;
+      case "inställt":
+        return `${base} bg-rose-100 text-rose-700`;
+      default:
+        return `${base} bg-gray-100 text-gray-700`;
+    }
+  };
+
   const setFileField = (idx, field, value) => {
     setDraft((d) => {
       const copy = (d.filesList || []).slice();
@@ -119,6 +137,7 @@ export default function ProjectsPanel({
       return { ...d, filesList: copy };
     });
   };
+
   const addManualFile = () => {
     setDraft((d) => ({
       ...d,
@@ -133,6 +152,7 @@ export default function ProjectsPanel({
       ],
     }));
   };
+
   const addFilesFromOneDrive = async () => {
     try {
       const picked = await pickOneDriveFiles();
@@ -155,6 +175,7 @@ export default function ProjectsPanel({
       );
     }
   };
+
   const removeFileRow = (idx) => {
     setDraft((d) => {
       const copy = (d.filesList || []).slice();
@@ -163,7 +184,6 @@ export default function ProjectsPanel({
     });
   };
 
-  // leverantörer
   const addSupplierToProject = (supplierId) => {
     if (!supplierId) return;
     setDraft((d) => {
@@ -172,6 +192,7 @@ export default function ProjectsPanel({
       return { ...d, supplierIds: Array.from(set) };
     });
   };
+
   const removeSupplierFromProject = (supplierId) => {
     setDraft((d) => ({
       ...d,
@@ -181,6 +202,7 @@ export default function ProjectsPanel({
 
   const saveDraft = () => {
     if (!draft) return;
+    const files = groupFiles(draft.filesList || []);
     setState((s) => ({
       ...s,
       projects: (s.projects || []).map((p) =>
@@ -194,7 +216,8 @@ export default function ProjectsPanel({
               startDate: draft.startDate || "",
               endDate: draft.endDate || "",
               note: draft.note || "",
-              files: groupFiles(draft.filesList || []),
+              files,
+              internalId: draft.internalId || "",
               originatingOfferId: draft.originatingOfferId || "",
               supplierIds: Array.isArray(draft.supplierIds)
                 ? draft.supplierIds.slice()
@@ -228,20 +251,67 @@ export default function ProjectsPanel({
     }
   };
 
-  const projectStatusBadge = (status) => {
-    const base = "text-xs px-2 py-1 rounded";
-    switch (status) {
-      case "pågående":
-        return `${base} bg-blue-100 text-blue-700`;
-      case "klar":
-        return `${base} bg-green-100 text-green-700`;
-      case "pausad":
-        return `${base} bg-yellow-100 text-yellow-700`;
-      case "förlorad":
-        return `${base} bg-rose-100 text-rose-700`;
-      default:
-        return `${base} bg-gray-100 text-gray-700`;
+  const emailProject = () => {
+    if (!draft) return;
+
+    const customer =
+      customers.find((c) => c.id === draft.customerId) || null;
+    const files = groupFiles(draft.filesList || []);
+
+    const lines = [];
+
+    lines.push(`Projekt: ${draft.name || ""}`);
+    if (customer) {
+      lines.push(
+        `Kund: ${customer.companyName || customer.name || ""}`
+      );
     }
+    if (draft.internalId) {
+      lines.push(`Projektnr: ${draft.internalId}`);
+    }
+    if (draft.status) {
+      lines.push(`Status: ${draft.status}`);
+    }
+    if (draft.startDate) {
+      lines.push(`Start: ${draft.startDate}`);
+    }
+    if (draft.endDate) {
+      lines.push(`Slut: ${draft.endDate}`);
+    }
+    if (draft.kind) {
+      lines.push(`Typ: ${draft.kind}`);
+    }
+
+    lines.push("");
+
+    if (draft.note) {
+      lines.push("Anteckning:");
+      lines.push(draft.note);
+      lines.push("");
+    }
+
+    FILE_CATS.forEach((cat) => {
+      const arr = files[cat] || [];
+      if (!arr.length) return;
+      lines.push(`${cat}:`);
+      arr.forEach((f) => {
+        lines.push(
+          `- ${(f.name || "fil")}${
+            f.webUrl ? " – " + f.webUrl : ""
+          }`
+        );
+      });
+      lines.push("");
+    });
+
+    const subject = `Projekt – ${draft.name || ""}`;
+    const body = lines.join("\n");
+
+    const mailto = `mailto:?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+
+    window.location.href = mailto;
   };
 
   const printProject = () => {
@@ -257,13 +327,17 @@ export default function ProjectsPanel({
           (f) =>
             `<li>${(f.name || "fil")
               .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;")} – ${
-              f.webUrl ? `<a href="${f.webUrl}">${f.webUrl}</a>` : ""
+              .replace(/>/g, "&gt;")}${
+              f.webUrl
+                ? ` – <a href="${f.webUrl}">${f.webUrl}</a>`
+                : ""
             }</li>`
         )
         .join("");
       return `<h4>${cat}</h4><ul>${items}</ul>`;
     }).join("");
+
+    const todayStr = new Date().toLocaleDateString("sv-SE");
 
     const html = `<!DOCTYPE html>
 <html lang="sv">
@@ -271,61 +345,199 @@ export default function ProjectsPanel({
   <meta charset="utf-8" />
   <title>Projekt – ${draft.name || ""}</title>
   <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; padding: 24px; }
-    h1 { font-size: 24px; margin-bottom: 4px; }
-    h2 { font-size: 18px; margin-top: 24px; margin-bottom: 8px; }
-    h3 { font-size: 16px; margin-top: 16px; margin-bottom: 4px; }
-    h4 { font-size: 14px; margin-top: 8px; margin-bottom: 4px; }
-    .meta { margin-bottom: 16px; font-size: 14px; }
-    .box { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin-top: 8px; }
-    ul { margin-top: 4px; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px;
+      background: #f3f4f6;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .page {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 32px 40px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 24px;
+    }
+    .title-block h1 {
+      margin: 0 0 4px 0;
+      font-size: 26px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .title-block .subtitle {
+      font-size: 14px;
+      color: #6b7280;
+    }
+    .company-block {
+      text-align: right;
+      font-size: 13px;
+      color: #4b5563;
+    }
+    .company-block img {
+      height: 56px;
+      margin-bottom: 4px;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 24px;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    .label {
+      font-weight: 600;
+      color: #374151;
+    }
+    .value {
+      color: #111827;
+    }
+    .section-title {
+      margin-top: 24px;
+      margin-bottom: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .box {
+      border-radius: 12px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: #111827;
+    }
+    ul {
+      margin: 4px 0 0 18px;
+      padding: 0;
+    }
+    li {
+      margin-bottom: 4px;
+    }
+    .footer-actions {
+      margin-top: 24px;
+      text-align: right;
+    }
+    .btn-print {
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      padding: 8px 16px;
+      font-size: 14px;
+      background: #111827;
+      color: #f9fafb;
+      cursor: pointer;
+    }
+    .btn-print:hover {
+      background: #020617;
+    }
     @media print {
-      button { display:none; }
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      .page {
+        box-shadow: none;
+        border-radius: 0;
+        margin: 0;
+        max-width: none;
+      }
+      .footer-actions {
+        display: none;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>Projekt</h1>
-  <div class="meta">
-    <div><strong>Namn:</strong> ${draft.name || ""}</div>
-    <div><strong>Kund:</strong> ${
-      customer?.companyName || customer?.name || "—"
-    }</div>
-    <div><strong>Budget:</strong> ${(
-      Number(draft.budget) || 0
-    ).toLocaleString("sv-SE")} kr</div>
-    <div><strong>Status:</strong> ${draft.status || "pågående"}</div>
-    ${
-      draft.startDate
-        ? `<div><strong>Start:</strong> ${draft.startDate}</div>`
-        : ""
-    }
-    ${
-      draft.endDate
-        ? `<div><strong>Slut:</strong> ${draft.endDate}</div>`
-        : ""
-    }
-    ${
-      draft.kind
-        ? `<div><strong>Typ:</strong> ${draft.kind}</div>`
-        : ""
-    }
-  </div>
+  <div class="page">
+    <div class="header">
+      <div class="title-block">
+        <h1>Projekt</h1>
+        <div class="subtitle">Datum: ${todayStr}</div>
+      </div>
+      <div class="company-block">
+        <img src="/logo.png" alt="Mach Entreprenad AB" />
+        <div>Mach Entreprenad AB</div>
+      </div>
+    </div>
 
-  <h2>Beskrivning / anteckning</h2>
-  <div class="box">
-    <p>${(draft.note || "")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\n/g, "<br/>")}</p>
-  </div>
+    <div class="meta-grid">
+      <div>
+        <span class="label">Namn:</span>
+        <span class="value"> ${draft.name || ""}</span>
+      </div>
+      <div>
+        <span class="label">Kund:</span>
+        <span class="value">
+          ${
+            customer
+              ? customer.companyName || customer.name || "—"
+              : "—"
+          }
+        </span>
+      </div>
+      ${
+        draft.internalId
+          ? `<div><span class="label">Projektnr:</span> <span class="value">${draft.internalId}</span></div>`
+          : ""
+      }
+      <div>
+        <span class="label">Budget:</span>
+        <span class="value">
+          ${(Number(draft.budget) || 0).toLocaleString("sv-SE")} kr
+        </span>
+      </div>
+      ${
+        draft.status
+          ? `<div><span class="label">Status:</span> <span class="value">${draft.status}</span></div>`
+          : ""
+      }
+      ${
+        draft.startDate
+          ? `<div><span class="label">Start:</span> <span class="value">${draft.startDate}</span></div>`
+          : ""
+      }
+      ${
+        draft.endDate
+          ? `<div><span class="label">Slut:</span> <span class="value">${draft.endDate}</span></div>`
+          : ""
+      }
+      ${
+        draft.kind
+          ? `<div><span class="label">Typ:</span> <span class="value">${draft.kind}</span></div>`
+          : ""
+      }
+    </div>
 
-  <h2>Filer</h2>
-  <div class="box">
-    ${fileLines || "<p>Inga filer kopplade.</p>"}
-  </div>
+    <div class="section">
+      <div class="section-title">Beskrivning / anteckning</div>
+      <div class="box">
+        <p>${
+          (draft.note || "")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\\n/g, "<br/>") || "Ingen anteckning."
+        }</p>
+      </div>
+    </div>
 
-  <button onclick="window.print()">Skriv ut</button>
+    <div class="section">
+      <div class="section-title">Filer</div>
+      <div class="box">
+        ${fileLines || "<p>Inga filer kopplade.</p>"}
+      </div>
+    </div>
+
+    <div class="footer-actions">
+      <button class="btn-print" onclick="window.print()">Skriv ut</button>
+    </div>
+  </div>
 </body>
 </html>`;
 
@@ -374,15 +586,21 @@ export default function ProjectsPanel({
                     <span className={projectStatusBadge(p.status)}>
                       {p.status || "pågående"}
                     </span>
-                    {wonOffer ? (
-                      <span className="text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-700">
-                        Vunnen offert
+                    {p.startDate && (
+                      <span>Start: {p.startDate}</span>
+                    )}
+                    {p.endDate && (
+                      <span>Slut: {p.endDate}</span>
+                    )}
+                    {wonOffer && (
+                      <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                        Från offert: {wonOffer.title || wonOffer.id}
                       </span>
-                    ) : null}
+                    )}
                     {p.kind && (
                       <span
                         className={
-                          "text-xs px-2 py-1 rounded " +
+                          "text-[11px] px-2 py-0.5 rounded " +
                           (p.kind === "Entreprenad"
                             ? "bg-orange-200 text-orange-800"
                             : p.kind === "Turbovex"
@@ -474,6 +692,20 @@ export default function ProjectsPanel({
                 </select>
               </div>
               <div>
+                <label className="text-sm font-medium">Budget (kr)</label>
+                <input
+                  type="number"
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.budget}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      budget: e.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <div>
                 <label className="text-sm font-medium">Status</label>
                 <select
                   className="w-full border rounded px-3 py-2"
@@ -482,29 +714,31 @@ export default function ProjectsPanel({
                     setDraft((d) => ({ ...d, status: e.target.value }))
                   }
                 >
-                  <option value="pågående">pågående</option>
-                  <option value="klar">klar</option>
-                  <option value="pausad">pausad</option>
-                  <option value="förlorad">förlorad</option>
+                  <option value="pågående">Pågående</option>
+                  <option value="avslutat">Avslutat</option>
+                  <option value="paus">Paus</option>
+                  <option value="inställt">Inställt</option>
                 </select>
               </div>
               <div>
-                <label className="text-sm font-medium">Budget (kr)</label>
+                <label className="text-sm font-medium">Projektnr</label>
                 <input
-                  type="number"
                   className="w-full border rounded px-3 py-2"
-                  value={draft.budget}
+                  value={draft.internalId || ""}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, budget: e.target.value }))
+                    setDraft((d) => ({
+                      ...d,
+                      internalId: e.target.value,
+                    }))
                   }
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Start</label>
+                <label className="text-sm font-medium">Startdatum</label>
                 <input
                   type="date"
                   className="w-full border rounded px-3 py-2"
-                  value={draft.startDate}
+                  value={draft.startDate || ""}
                   onChange={(e) =>
                     setDraft((d) => ({
                       ...d,
@@ -514,13 +748,16 @@ export default function ProjectsPanel({
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Slut</label>
+                <label className="text-sm font-medium">Slutdatum</label>
                 <input
                   type="date"
                   className="w-full border rounded px-3 py-2"
-                  value={draft.endDate}
+                  value={draft.endDate || ""}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, endDate: e.target.value }))
+                    setDraft((d) => ({
+                      ...d,
+                      endDate: e.target.value,
+                    }))
                   }
                 />
               </div>
@@ -646,11 +883,7 @@ export default function ProjectsPanel({
                           className="w-full border rounded px-2 py-1 text-sm"
                           value={f.category || "Offerter"}
                           onChange={(e) =>
-                            setFileField(
-                              idx,
-                              "category",
-                              e.target.value
-                            )
+                            setFileField(idx, "category", e.target.value)
                           }
                         >
                           {FILE_CATS.map((c) => (
@@ -686,7 +919,11 @@ export default function ProjectsPanel({
                           type="button"
                           onClick={() => {
                             if (f.webUrl) {
-                              window.open(f.webUrl, "_blank", "noopener");
+                              window.open(
+                                f.webUrl,
+                                "_blank",
+                                "noopener"
+                              );
                             } else {
                               alert(
                                 "Ingen länk angiven för denna fil."
@@ -717,6 +954,13 @@ export default function ProjectsPanel({
                 type="button"
               >
                 Spara
+              </button>
+              <button
+                className="px-3 py-2 rounded bg-indigo-600 text-white"
+                onClick={emailProject}
+                type="button"
+              >
+                Maila projekt
               </button>
               <button
                 className="px-3 py-2 rounded bg-slate-600 text-white"
