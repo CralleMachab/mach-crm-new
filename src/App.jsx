@@ -1527,6 +1527,23 @@ export default function App() {
   const [state, setState] = useStore();
   const [view, setView] = useState("activities");
   // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
+   
+     // Engångs-import av kunder från importedCustomers.js
+  useEffect(() => {
+    // Om inget state ännu, eller om vi redan importerat -> gör inget
+    if (!state || state._importedCustomersV1) return;
+
+    const existing = Array.isArray(state.entities) ? state.entities : [];
+
+    // Lägg bara till importerade kunder en gång
+    const merged = [...existing, ...importedCustomers];
+
+    setState((s) => ({
+      ...s,
+      entities: merged,
+      _importedCustomersV1: true, // flagga så vi inte gör om importen
+    }));
+  }, [state, setState]);
 
   const newId = () =>
     crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
