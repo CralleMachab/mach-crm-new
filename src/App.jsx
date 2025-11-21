@@ -1006,6 +1006,7 @@ function CustomersPanel({ entities = [], setState }) {
             <option value="StålHall">Stålhall</option>
             <option value="Totalentreprenad">Totalentreprenad</option>
             <option value="Turbovex">Turbovex</option>
+                    <option value="Övrigt">Övrigt</option>
           </select>
         </div>
       </div>
@@ -1141,6 +1142,7 @@ function CustomersPanel({ entities = [], setState }) {
                     <option value="StålHall">Stålhall</option>
                     <option value="Totalentreprenad">Totalentreprenad</option>
                     <option value="Turbovex">Turbovex</option>
+                    <option value="Övrigt">Övrigt</option>
                   </select>
                 </div>
                 <button
@@ -1398,6 +1400,9 @@ function SuppliersPanel({ entities = [], setState }) {
             <option value="EL leverantör">EL leverantör</option>
             <option value="VVS Leverantör">VVS Leverantör</option>
             <option value="Vent Leverantör">Vent Leverantör</option>
+                    <option value="Bygg">Bygg</option>
+                    <option value="Projektering">Projektering</option>
+                    <option value="Övrigt">Övrigt</option>
           </select>
         </div>
       </div>
@@ -1550,6 +1555,9 @@ function SuppliersPanel({ entities = [], setState }) {
                     <option value="EL leverantör">EL leverantör</option>
                     <option value="VVS Leverantör">VVS Leverantör</option>
                     <option value="Vent Leverantör">Vent Leverantör</option>
+                    <option value="Bygg">Bygg</option>
+                    <option value="Projektering">Projektering</option>
+                    <option value="Övrigt">Övrigt</option>
                   </select>
                 </div>
                 <button
@@ -1611,7 +1619,7 @@ export default function App() {
     const a = {
       id,
       title: "",
-      responsible: "Övrig",
+      responsible: "Cralle",
       priority: "medium",
       status: "",
       dueDate: "",
