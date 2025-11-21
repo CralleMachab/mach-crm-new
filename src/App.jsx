@@ -6,6 +6,7 @@ import OffersPanel from "./panels/OffersPanel.jsx";
 import ProjectsPanel from "./panels/ProjectsPanel.jsx";
 import ActivitiesCalendarPanel from "./panels/ActivitiesCalendarPanel.jsx";
 import SettingsPanel from "./panels/SettingsPanel.jsx";
+import importedCustomers from "./data/importedCustomers";
 
 /* ===========================
    useStore — lokal + SharePoint
