@@ -6,7 +6,6 @@ import OffersPanel from "./panels/OffersPanel.jsx";
 import ProjectsPanel from "./panels/ProjectsPanel.jsx";
 import ActivitiesCalendarPanel from "./panels/ActivitiesCalendarPanel.jsx";
 import SettingsPanel from "./panels/SettingsPanel.jsx";
-import importedCustomers from "./data/importedCustomers";
 
 /* ===========================
    useStore — lokal + SharePoint
@@ -919,6 +918,35 @@ function CustomersPanel({ entities = [], setState }) {
 
   const updateDraft = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
 
+  const createSupplierFromCustomer = () => {
+    if (!draft) return;
+    const id =
+      crypto?.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+
+    const sup = {
+      id,
+      type: "supplier",
+      companyName: draft.companyName || "",
+      orgNo: draft.orgNo || "",
+      phone: draft.phone || "",
+      email: draft.email || "",
+      address: draft.address || "",
+      zip: draft.zip || "",
+      city: draft.city || "",
+      supplierCategory: draft.customerCategory || "",
+      createdAt: new Date().toISOString(),
+    };
+
+    setState((s) => ({
+      ...s,
+      entities: [...(s.entities || []), sup],
+    }));
+
+    alert("Leverantör skapad från kunden.");
+  };
+
   const saveDraft = () => {
     if (!draft) return;
     setState((s) => ({
@@ -1099,20 +1127,29 @@ function CustomersPanel({ entities = [], setState }) {
                   onChange={(e) => updateDraft("city", e.target.value)}
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium">Kategori</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.customerCategory}
-                  onChange={(e) =>
-                    updateDraft("customerCategory", e.target.value)
-                  }
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="text-sm font-medium">Kategori</label>
+                  <select
+                    className="w-full border rounded px-3 py-2"
+                    value={draft.customerCategory}
+                    onChange={(e) =>
+                      updateDraft("customerCategory", e.target.value)
+                    }
+                  >
+                    <option value="">—</option>
+                    <option value="StålHall">Stålhall</option>
+                    <option value="Totalentreprenad">Totalentreprenad</option>
+                    <option value="Turbovex">Turbovex</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs px-2 py-2 rounded bg-slate-600 text-white whitespace-nowrap"
+                  onClick={createSupplierFromCustomer}
                 >
-                  <option value="">—</option>
-                  <option value="StålHall">Stålhall</option>
-                  <option value="Totalentreprenad">Totalentreprenad</option>
-                  <option value="Turbovex">Turbovex</option>
-                </select>
+                  Gör till leverantör
+                </button>
               </div>
             </div>
 
@@ -1231,6 +1268,35 @@ function SuppliersPanel({ entities = [], setState }) {
   };
 
   const updateDraft = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
+
+  const createCustomerFromSupplier = () => {
+    if (!draft) return;
+    const id =
+      crypto?.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+
+    const c = {
+      id,
+      type: "customer",
+      companyName: draft.companyName || "",
+      orgNo: draft.orgNo || "",
+      phone: draft.phone || "",
+      email: draft.email || "",
+      address: draft.address || "",
+      zip: draft.zip || "",
+      city: draft.city || "",
+      customerCategory: draft.supplierCategory || "",
+      createdAt: new Date().toISOString(),
+    };
+
+    setState((s) => ({
+      ...s,
+      entities: [...(s.entities || []), c],
+    }));
+
+    alert("Kund skapad från leverantören.");
+  };
 
   const saveDraft = () => {
     if (!draft) return;
@@ -1468,22 +1534,31 @@ function SuppliersPanel({ entities = [], setState }) {
                   onChange={(e) => updateDraft("city", e.target.value)}
                 />
               </div>
-              <div>
-                <label className="text-sm font-medium">Kategori</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.supplierCategory}
-                  onChange={(e) =>
-                    updateDraft("supplierCategory", e.target.value)
-                  }
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="text-sm font-medium">Kategori</label>
+                  <select
+                    className="w-full border rounded px-3 py-2"
+                    value={draft.supplierCategory}
+                    onChange={(e) =>
+                      updateDraft("supplierCategory", e.target.value)
+                    }
+                  >
+                    <option value="">—</option>
+                    <option value="Stålhalls leverantör">Stålhalls leverantör</option>
+                    <option value="Mark företag">Mark företag</option>
+                    <option value="EL leverantör">EL leverantör</option>
+                    <option value="VVS Leverantör">VVS Leverantör</option>
+                    <option value="Vent Leverantör">Vent Leverantör</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  className="text-xs px-2 py-2 rounded bg-slate-600 text-white whitespace-nowrap"
+                  onClick={createCustomerFromSupplier}
                 >
-                  <option value="">—</option>
-                  <option value="Stålhalls leverantör">Stålhalls leverantör</option>
-                  <option value="Mark företag">Mark företag</option>
-                  <option value="EL leverantör">EL leverantör</option>
-                  <option value="VVS Leverantör">VVS Leverantör</option>
-                  <option value="Vent Leverantör">Vent Leverantör</option>
-                </select>
+                  Gör till kund
+                </button>
               </div>
             </div>
 
@@ -1527,23 +1602,6 @@ export default function App() {
   const [state, setState] = useStore();
   const [view, setView] = useState("activities");
   // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
-   
-     // Engångs-import av kunder från importedCustomers.js
-  useEffect(() => {
-    // Om inget state ännu, eller om vi redan importerat -> gör inget
-    if (!state || state._importedCustomersV1) return;
-
-    const existing = Array.isArray(state.entities) ? state.entities : [];
-
-    // Lägg bara till importerade kunder en gång
-    const merged = [...existing, ...importedCustomers];
-
-    setState((s) => ({
-      ...s,
-      entities: merged,
-      _importedCustomersV1: true, // flagga så vi inte gör om importen
-    }));
-  }, [state, setState]);
 
   const newId = () =>
     crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
