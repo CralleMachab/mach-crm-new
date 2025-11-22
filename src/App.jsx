@@ -74,7 +74,7 @@ function useStore() {
    Färghelpers för kategorier
    ====================================== */
 function customerCategoryBadge(cat) {
-  const base = "text-xs px-2 py-0.5 rounded-full border text-white";
+  const base = "text-xs px-2 py-1 rounded text-white";
   switch (cat) {
     case "StålHall":
     case "Stålhall":
@@ -85,12 +85,12 @@ function customerCategoryBadge(cat) {
     case "Turbovex":
       return `${base} bg-blue-500`;          // Blå
     default:
-      return "text-xs px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700";
+      return "text-xs px-2 py-1 rounded bg-gray-100 text-gray-700";
   }
 }
 
 function supplierCategoryBadge(cat) {
-  const base = "text-xs px-2 py-0.5 rounded-full border text-white";
+  const base = "text-xs px-2 py-1 rounded text-white";
   switch (cat) {
     case "Stålhalls leverantör":
       return `${base} bg-gray-500`;          // Grå
@@ -102,12 +102,8 @@ function supplierCategoryBadge(cat) {
       return `${base} bg-purple-500`;        // Lila
     case "Vent Leverantör":
       return `${base} bg-blue-500`;          // Blå
-    case "Bygg":
-      return `${base} bg-orange-500`;
-    case "Projektering":
-      return `${base} bg-yellow-400 text-black`;
     default:
-      return "text-xs px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700";
+      return "text-xs px-2 py-1 rounded bg-gray-100 text-gray-700";
   }
 }
 
@@ -854,15 +850,12 @@ function CustomersPanel({ entities = [], setState }) {
     setDraft({
       id: c.id,
       companyName: c.companyName || "",
-      firstName: c.firstName || "",
-      lastName: c.lastName || "",
       orgNo: c.orgNo || "",
       phone: c.phone || "",
       email: c.email || "",
       address: c.address || "",
       zip: c.zip || "",
       city: c.city || "",
-      notes: c.notes || "",
       customerCategory: c.customerCategory || "",
     });
     setState((s) => ({
@@ -913,15 +906,12 @@ function CustomersPanel({ entities = [], setState }) {
     setDraft({
       id: c.id,
       companyName: c.companyName || "",
-      firstName: c.firstName || "",
-      lastName: c.lastName || "",
       orgNo: c.orgNo || "",
       phone: c.phone || "",
       email: c.email || "",
       address: c.address || "",
       zip: c.zip || "",
       city: c.city || "",
-      notes: c.notes || "",
       customerCategory: c.customerCategory || "",
     });
   };
@@ -939,15 +929,12 @@ function CustomersPanel({ entities = [], setState }) {
       id,
       type: "supplier",
       companyName: draft.companyName || "",
-      firstName: draft.firstName || "",
-      lastName: draft.lastName || "",
       orgNo: draft.orgNo || "",
       phone: draft.phone || "",
       email: draft.email || "",
       address: draft.address || "",
       zip: draft.zip || "",
       city: draft.city || "",
-      notes: draft.notes || "",
       supplierCategory: draft.customerCategory || "",
       createdAt: new Date().toISOString(),
     };
@@ -969,15 +956,12 @@ function CustomersPanel({ entities = [], setState }) {
           ? {
               ...e,
               companyName: draft.companyName || "",
-              firstName: draft.firstName || "",
-              lastName: draft.lastName || "",
               orgNo: draft.orgNo || "",
               phone: draft.phone || "",
               email: draft.email || "",
               address: draft.address || "",
               zip: draft.zip || "",
               city: draft.city || "",
-              notes: draft.notes || "",
               customerCategory: draft.customerCategory || "",
               updatedAt: new Date().toISOString(),
             }
@@ -1022,7 +1006,6 @@ function CustomersPanel({ entities = [], setState }) {
             <option value="StålHall">Stålhall</option>
             <option value="Totalentreprenad">Totalentreprenad</option>
             <option value="Turbovex">Turbovex</option>
-            <option value="Övrigt">Övrigt</option>
           </select>
         </div>
       </div>
@@ -1038,8 +1021,20 @@ function CustomersPanel({ entities = [], setState }) {
               >
                 <div className="font-medium truncate">
                   {c.companyName || "(namnlös kund)"}
+                  {(c.firstName || c.lastName) && (
+                    <span className="text-sm text-gray-500 ml-1">
+                      ({[c.firstName, c.lastName].filter(Boolean).join(" ")})
+                    </span>
+                  )}
                 </div>
-                <div className="text-xs text-gray-500">{c.city || ""}</div>
+                <div className="text-xs text-gray-500">
+                  {[
+                    c.city || "",
+                    c.phone || "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={customerCategoryBadge(c.customerCategory)}>
@@ -1097,38 +1092,6 @@ function CustomersPanel({ entities = [], setState }) {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Förnamn</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.firstName}
-                  onChange={(e) => updateDraft("firstName", e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Efternamn</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.lastName}
-                  onChange={(e) => updateDraft("lastName", e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Förnamn</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.firstName}
-                  onChange={(e) => updateDraft("firstName", e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Efternamn</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.lastName}
-                  onChange={(e) => updateDraft("lastName", e.target.value)}
-                />
-              </div>
-              <div>
                 <label className="text-sm font-medium">OrgNr</label>
                 <input
                   className="w-full border rounded px-3 py-2"
@@ -1176,14 +1139,6 @@ function CustomersPanel({ entities = [], setState }) {
                   onChange={(e) => updateDraft("city", e.target.value)}
                 />
               </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Anteckningar</label>
-                <textarea
-                  className="w-full border rounded px-3 py-2 min-h-[80px]"
-                  value={draft.notes || ""}
-                  onChange={(e) => updateDraft("notes", e.target.value)}
-                />
-              </div>
               <div className="flex items-end gap-2">
                 <div className="flex-1">
                   <label className="text-sm font-medium">Kategori</label>
@@ -1198,7 +1153,6 @@ function CustomersPanel({ entities = [], setState }) {
                     <option value="StålHall">Stålhall</option>
                     <option value="Totalentreprenad">Totalentreprenad</option>
                     <option value="Turbovex">Turbovex</option>
-                    <option value="Övrigt">Övrigt</option>
                   </select>
                 </div>
                 <button
@@ -1262,15 +1216,12 @@ function SuppliersPanel({ entities = [], setState }) {
     setDraft({
       id: s.id,
       companyName: s.companyName || "",
-      firstName: s.firstName || "",
-      lastName: s.lastName || "",
       orgNo: s.orgNo || "",
       phone: s.phone || "",
       email: s.email || "",
       address: s.address || "",
       zip: s.zip || "",
       city: s.city || "",
-      notes: s.notes || "",
       supplierCategory: s.supplierCategory || "",
     });
     setState((st) => ({
@@ -1318,15 +1269,12 @@ function SuppliersPanel({ entities = [], setState }) {
     setDraft({
       id: s.id,
       companyName: s.companyName || "",
-      firstName: s.firstName || "",
-      lastName: s.lastName || "",
       orgNo: s.orgNo || "",
       phone: s.phone || "",
       email: s.email || "",
       address: s.address || "",
       zip: s.zip || "",
       city: s.city || "",
-      notes: s.notes || "",
       supplierCategory: s.supplierCategory || "",
     });
   };
@@ -1344,15 +1292,12 @@ function SuppliersPanel({ entities = [], setState }) {
       id,
       type: "customer",
       companyName: draft.companyName || "",
-      firstName: draft.firstName || "",
-      lastName: draft.lastName || "",
       orgNo: draft.orgNo || "",
       phone: draft.phone || "",
       email: draft.email || "",
       address: draft.address || "",
       zip: draft.zip || "",
       city: draft.city || "",
-      notes: draft.notes || "",
       customerCategory: draft.supplierCategory || "",
       createdAt: new Date().toISOString(),
     };
@@ -1374,15 +1319,12 @@ function SuppliersPanel({ entities = [], setState }) {
           ? {
               ...e,
               companyName: draft.companyName || "",
-              firstName: draft.firstName || "",
-              lastName: draft.lastName || "",
               orgNo: draft.orgNo || "",
               phone: draft.phone || "",
               email: draft.email || "",
               address: draft.address || "",
               zip: draft.zip || "",
               city: draft.city || "",
-              notes: draft.notes || "",
               supplierCategory: draft.supplierCategory || "",
               updatedAt: new Date().toISOString(),
             }
@@ -1468,9 +1410,6 @@ function SuppliersPanel({ entities = [], setState }) {
             <option value="EL leverantör">EL leverantör</option>
             <option value="VVS Leverantör">VVS Leverantör</option>
             <option value="Vent Leverantör">Vent Leverantör</option>
-            <option value="Bygg">Bygg</option>
-            <option value="Projektering">Projektering</option>
-            <option value="Övrigt">Övrigt</option>
           </select>
         </div>
       </div>
@@ -1486,9 +1425,21 @@ function SuppliersPanel({ entities = [], setState }) {
               >
                 <div className="font-medium truncate">
                   {sup.companyName || "(namnlös leverantör)"}
+                  {(sup.firstName || sup.lastName) && (
+                    <span className="text-sm text-gray-500 ml-1">
+                      ({[sup.firstName, sup.lastName].filter(Boolean).join(" ")})
+                    </span>
+                  )}
                   {mode === "archive" ? " (Arkiv)" : ""}
                 </div>
-                <div className="text-xs text-gray-500">{sup.city || ""}</div>
+                <div className="text-xs text-gray-500">
+                  {[
+                    sup.city || "",
+                    sup.phone || "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={supplierCategoryBadge(sup.supplierCategory)}>
@@ -1560,38 +1511,6 @@ function SuppliersPanel({ entities = [], setState }) {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Förnamn</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.firstName}
-                  onChange={(e) => updateDraft("firstName", e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Efternamn</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.lastName}
-                  onChange={(e) => updateDraft("lastName", e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Förnamn</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.firstName}
-                  onChange={(e) => updateDraft("firstName", e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Efternamn</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.lastName}
-                  onChange={(e) => updateDraft("lastName", e.target.value)}
-                />
-              </div>
-              <div>
                 <label className="text-sm font-medium">OrgNr</label>
                 <input
                   className="w-full border rounded px-3 py-2"
@@ -1639,14 +1558,6 @@ function SuppliersPanel({ entities = [], setState }) {
                   onChange={(e) => updateDraft("city", e.target.value)}
                 />
               </div>
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Anteckningar</label>
-                <textarea
-                  className="w-full border rounded px-3 py-2 min-h-[80px]"
-                  value={draft.notes || ""}
-                  onChange={(e) => updateDraft("notes", e.target.value)}
-                />
-              </div>
               <div className="flex items-end gap-2">
                 <div className="flex-1">
                   <label className="text-sm font-medium">Kategori</label>
@@ -1663,9 +1574,6 @@ function SuppliersPanel({ entities = [], setState }) {
                     <option value="EL leverantör">EL leverantör</option>
                     <option value="VVS Leverantör">VVS Leverantör</option>
                     <option value="Vent Leverantör">Vent Leverantör</option>
-                    <option value="Bygg">Bygg</option>
-                    <option value="Projektering">Projektering</option>
-                    <option value="Övrigt">Övrigt</option>
                   </select>
                 </div>
                 <button
@@ -1719,33 +1627,6 @@ export default function App() {
   const [view, setView] = useState("activities");
   // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
 
-  // Engångsmigrering: dela upp name till firstName/lastName om de saknas
-  useEffect(() => {
-    if (!state || state._migratedNamesV1) return;
-
-    const updatedEntities = (state.entities || []).map((e) => {
-      if (
-        (e.type === "customer" || e.type === "supplier") &&
-        !e.firstName &&
-        !e.lastName &&
-        typeof e.name === "string" &&
-        e.name.trim()
-      ) {
-        const parts = e.name.trim().split(/\s+/);
-        const firstName = parts[0] || "";
-        const lastName = parts.slice(1).join(" ");
-        return { ...e, firstName, lastName };
-      }
-      return e;
-    });
-
-    setState((s) => ({
-      ...s,
-      entities: updatedEntities,
-      _migratedNamesV1: true,
-    }));
-  }, [state, setState]);
-
   const newId = () =>
     crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
 
@@ -1754,7 +1635,7 @@ export default function App() {
     const a = {
       id,
       title: "",
-      responsible: "Cralle",
+      responsible: "Övrig",
       priority: "medium",
       status: "",
       dueDate: "",
