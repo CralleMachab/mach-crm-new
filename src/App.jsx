@@ -84,6 +84,8 @@ function customerCategoryBadge(cat) {
       return `${base} bg-orange-500`;        // Orange
     case "Turbovex":
       return `${base} bg-blue-500`;          // Blå
+    case "Övrigt":
+      return "text-xs px-2 py-1 rounded bg-white text-gray-700 border";
     default:
       return "text-xs px-2 py-1 rounded bg-gray-100 text-gray-700";
   }
@@ -102,6 +104,12 @@ function supplierCategoryBadge(cat) {
       return `${base} bg-purple-500`;        // Lila
     case "Vent Leverantör":
       return `${base} bg-blue-500`;          // Blå
+    case "Bygg":
+      return `${base} bg-orange-500`;
+    case "Projektering":
+      return `${base} bg-yellow-400 text-black`;
+    case "Övrigt":
+      return "text-xs px-2 py-1 rounded bg-white text-gray-700 border";
     default:
       return "text-xs px-2 py-1 rounded bg-gray-100 text-gray-700";
   }
@@ -337,7 +345,56 @@ const inNext7 = (dateStr, timeStr) => {
     </div>
   );
 
-  return (
+  
+  const activeActivities = useMemo(
+    () => (activities || []).filter((a) => !a?.deletedAt),
+    [activities]
+  );
+
+  const isDoneStatus = (a) => a?.priority === "klar" || a?.status === "klar";
+
+  const addDays = (ymd, days) => {
+    if (!ymd) return "";
+    const d = new Date(ymd + "T00:00:00");
+    d.setDate(d.getDate() + days);
+    const m = `${d.getMonth() + 1}`.padStart(2, "0");
+    const day = `${d.getDate()}`.padStart(2, "0");
+    return `${d.getFullYear()}-${m}-${day}`;
+  };
+
+  const todayYMD = todayISO();
+  const next7YMD = addDays(todayYMD, 7);
+
+  const overdueActivities = activeActivities
+    .filter((a) => a.dueDate && a.dueDate < todayYMD && !isDoneStatus(a))
+    .sort((a, b) =>
+      ((a.dueDate || "") + "T" + (a.dueTime || "")).localeCompare(
+        (b.dueDate || "") + "T" + (b.dueTime || "")
+      )
+    );
+
+  const todayActivities = activeActivities
+    .filter((a) => isSameDay(a.dueDate, todayYMD) && !isDoneStatus(a))
+    .sort((a, b) =>
+      ((a.dueDate || "") + "T" + (a.dueTime || "")).localeCompare(
+        (b.dueDate || "") + "T" + (b.dueTime || "")
+      )
+    );
+
+  const upcoming7Activities = activeActivities
+    .filter(
+      (a) =>
+        a.dueDate &&
+        a.dueDate > todayYMD &&
+        a.dueDate <= next7YMD &&
+        !isDoneStatus(a)
+    )
+    .sort((a, b) =>
+      ((a.dueDate || "") + "T" + (a.dueTime || "")).localeCompare(
+        (b.dueDate || "") + "T" + (b.dueTime || "")
+      )
+    );
+return (
     <div className="bg-white rounded-2xl shadow p-4">
       {/* rubrik + läge (Aktiva/Arkiv) + filter */}
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
@@ -456,7 +513,71 @@ const inNext7 = (dateStr, timeStr) => {
             </div>
           </div>
         )}
-      </div>
+      
+      {mode === "active" && (
+        <div className="mb-3 space-y-3 text-sm">
+          {todayActivities.length > 0 && (
+            <div>
+              <div className="font-semibold flex items-center gap-2">
+                <span>⏰ Idag</span>
+                <span className="text-xs text-gray-500">
+                  {todayActivities.length} st
+                </span>
+              </div>
+              <ul className="list-disc ml-5">
+                {todayActivities.slice(0, 5).map((a) => (
+                  <li key={a.id} className="text-gray-700">
+                    {a.title || "Aktivitet"}{" "}
+                    <span className="text-gray-500">
+                      {fmt(a.dueDate, a.dueTime)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {overdueActivities.length > 0 && (
+            <div>
+              <div className="font-semibold flex items-center gap-2 text-rose-700">
+                <span>⚠️ Försenade</span>
+                <span className="text-xs text-gray-500">
+                  {overdueActivities.length} st
+                </span>
+              </div>
+              <ul className="list-disc ml-5">
+                {overdueActivities.slice(0, 5).map((a) => (
+                  <li key={a.id} className="text-gray-700">
+                    {a.title || "Aktivitet"}{" "}
+                    <span className="text-gray-500">
+                      {fmt(a.dueDate, a.dueTime)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {upcoming7Activities.length > 0 && (
+            <div>
+              <div className="font-semibold flex items-center gap-2">
+                <span>📅 Kommande 7 dagar</span>
+                <span className="text-xs text-gray-500">
+                  {upcoming7Activities.length} st
+                </span>
+              </div>
+              <ul className="list-disc ml-5">
+                {upcoming7Activities.slice(0, 7).map((a) => (
+                  <li key={a.id} className="text-gray-700">
+                    {fmt(a.dueDate, a.dueTime)} – {a.title || "Aktivitet"}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+</div>
 
       {/* lista */}
       <ul className="divide-y">
@@ -1006,6 +1127,7 @@ function CustomersPanel({ entities = [], setState }) {
             <option value="StålHall">Stålhall</option>
             <option value="Totalentreprenad">Totalentreprenad</option>
             <option value="Turbovex">Turbovex</option>
+            <option value="Övrigt">Övrigt</option>
           </select>
         </div>
       </div>
@@ -1153,6 +1275,7 @@ function CustomersPanel({ entities = [], setState }) {
                     <option value="StålHall">Stålhall</option>
                     <option value="Totalentreprenad">Totalentreprenad</option>
                     <option value="Turbovex">Turbovex</option>
+                    <option value="Övrigt">Övrigt</option>
                   </select>
                 </div>
                 <button
@@ -1410,6 +1533,9 @@ function SuppliersPanel({ entities = [], setState }) {
             <option value="EL leverantör">EL leverantör</option>
             <option value="VVS Leverantör">VVS Leverantör</option>
             <option value="Vent Leverantör">Vent Leverantör</option>
+            <option value="Bygg">Bygg</option>
+            <option value="Projektering">Projektering</option>
+            <option value="Övrigt">Övrigt</option>
           </select>
         </div>
       </div>
@@ -1574,6 +1700,9 @@ function SuppliersPanel({ entities = [], setState }) {
                     <option value="EL leverantör">EL leverantör</option>
                     <option value="VVS Leverantör">VVS Leverantör</option>
                     <option value="Vent Leverantör">Vent Leverantör</option>
+                    <option value="Bygg">Bygg</option>
+                    <option value="Projektering">Projektering</option>
+                    <option value="Övrigt">Övrigt</option>
                   </select>
                 </div>
                 <button
@@ -1635,7 +1764,7 @@ export default function App() {
     const a = {
       id,
       title: "",
-      responsible: "Övrig",
+      responsible: "Cralle",
       priority: "medium",
       status: "",
       dueDate: "",
