@@ -939,12 +939,15 @@ function CustomersPanel({ entities = [], setState }) {
       id,
       type: "supplier",
       companyName: draft.companyName || "",
+      firstName: draft.firstName || "",
+      lastName: draft.lastName || "",
       orgNo: draft.orgNo || "",
       phone: draft.phone || "",
       email: draft.email || "",
       address: draft.address || "",
       zip: draft.zip || "",
       city: draft.city || "",
+      notes: draft.notes || "",
       supplierCategory: draft.customerCategory || "",
       createdAt: new Date().toISOString(),
     };
@@ -1341,12 +1344,15 @@ function SuppliersPanel({ entities = [], setState }) {
       id,
       type: "customer",
       companyName: draft.companyName || "",
+      firstName: draft.firstName || "",
+      lastName: draft.lastName || "",
       orgNo: draft.orgNo || "",
       phone: draft.phone || "",
       email: draft.email || "",
       address: draft.address || "",
       zip: draft.zip || "",
       city: draft.city || "",
+      notes: draft.notes || "",
       customerCategory: draft.supplierCategory || "",
       createdAt: new Date().toISOString(),
     };
@@ -1712,6 +1718,33 @@ export default function App() {
   const [state, setState] = useStore();
   const [view, setView] = useState("activities");
   // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
+
+  // Engångsmigrering: dela upp name till firstName/lastName om de saknas
+  useEffect(() => {
+    if (!state || state._migratedNamesV1) return;
+
+    const updatedEntities = (state.entities || []).map((e) => {
+      if (
+        (e.type === "customer" || e.type === "supplier") &&
+        !e.firstName &&
+        !e.lastName &&
+        typeof e.name === "string" &&
+        e.name.trim()
+      ) {
+        const parts = e.name.trim().split(/\s+/);
+        const firstName = parts[0] || "";
+        const lastName = parts.slice(1).join(" ");
+        return { ...e, firstName, lastName };
+      }
+      return e;
+    });
+
+    setState((s) => ({
+      ...s,
+      entities: updatedEntities,
+      _migratedNamesV1: true,
+    }));
+  }, [state, setState]);
 
   const newId = () =>
     crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
