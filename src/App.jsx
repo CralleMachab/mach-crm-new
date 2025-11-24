@@ -16,7 +16,13 @@ function useStore() {
   const [state, setState] = useState(() => {
     const s = loadState();
     if (s && typeof s === "object") return s;
-    return { activities: [], entities: [], offers: [], projects: [], _lastSavedAt: "" };
+    return {
+      activities: [],
+      entities: [],
+      offers: [],
+      projects: [],
+      _lastSavedAt: "",
+    };
   });
 
   // Lokalt
@@ -84,6 +90,8 @@ function customerCategoryBadge(cat) {
       return `${base} bg-orange-500`; // Orange
     case "Turbovex":
       return `${base} bg-blue-500`; // Blå
+    case "Admin":
+      return `${base} bg-green-500`; // Grön
     case "Övrigt":
       return "text-xs px-2 py-1 rounded bg-white text-gray-700 border";
     default:
@@ -96,8 +104,9 @@ function supplierCategoryBadge(cat) {
   switch (cat) {
     case "Stålhalls leverantör":
       return `${base} bg-gray-500`; // Grå
-    case "Mark företag":
-      return `${base} bg-amber-800`; // Brun-ish
+    case "Mark & Betong":
+    case "Mark företag": // stöd för gamla värdet
+      return `${base} bg-amber-800`; // Samma färg
     case "EL leverantör":
       return `${base} bg-red-500`; // Röd
     case "VVS Leverantör":
@@ -108,6 +117,8 @@ function supplierCategoryBadge(cat) {
       return `${base} bg-orange-500`;
     case "Projektering":
       return `${base} bg-yellow-400 text-black`;
+    case "Admin":
+      return `${base} bg-green-500`; // Grön
     case "Övrigt":
       return "text-xs px-2 py-1 rounded bg-white text-gray-700 border";
     default:
@@ -214,7 +225,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const isDone = (a) => a?.priority === "klar" || a?.status === "klar";
   const isFollow = (a) => a?.status === "återkoppling";
 
-  // NY: används för visuell markering + filter "Försenade"
   const isOverdue = (a) => {
     if (!a?.dueDate) return false;
     const today = todayISO();
@@ -498,7 +508,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   {mode === "archive" ? " (Arkiv)" : ""}
                 </div>
                 <div className="flex items-center gap-3">
-                  {/* NY: röd text + '(försenad)' om försenad */}
                   <div
                     className={
                       isOverdue(a)
@@ -1063,6 +1072,7 @@ function CustomersPanel({ entities = [], setState }) {
             <option value="StålHall">Stålhall</option>
             <option value="Totalentreprenad">Totalentreprenad</option>
             <option value="Turbovex">Turbovex</option>
+            <option value="Admin">Admin</option>
             <option value="Övrigt">Övrigt</option>
           </select>
         </div>
@@ -1232,6 +1242,7 @@ function CustomersPanel({ entities = [], setState }) {
                       Totalentreprenad
                     </option>
                     <option value="Turbovex">Turbovex</option>
+                    <option value="Admin">Admin</option>
                     <option value="Övrigt">Övrigt</option>
                   </select>
                 </div>
@@ -1523,12 +1534,13 @@ function SuppliersPanel({ entities = [], setState }) {
             <option value="Stålhalls leverantör">
               Stålhalls leverantör
             </option>
-            <option value="Mark företag">Mark företag</option>
+            <option value="Mark & Betong">Mark & Betong</option>
             <option value="EL leverantör">EL leverantör</option>
             <option value="VVS Leverantör">VVS Leverantör</option>
             <option value="Vent Leverantör">Vent Leverantör</option>
             <option value="Bygg">Bygg</option>
             <option value="Projektering">Projektering</option>
+            <option value="Admin">Admin</option>
             <option value="Övrigt">Övrigt</option>
           </select>
         </div>
@@ -1717,12 +1729,13 @@ function SuppliersPanel({ entities = [], setState }) {
                     <option value="Stålhalls leverantör">
                       Stålhalls leverantör
                     </option>
-                    <option value="Mark företag">Mark företag</option>
+                    <option value="Mark & Betong">Mark & Betong</option>
                     <option value="EL leverantör">EL leverantör</option>
                     <option value="VVS Leverantör">VVS Leverantör</option>
                     <option value="Vent Leverantör">Vent Leverantör</option>
                     <option value="Bygg">Bygg</option>
                     <option value="Projektering">Projektering</option>
+                    <option value="Admin">Admin</option>
                     <option value="Övrigt">Övrigt</option>
                   </select>
                 </div>
@@ -1825,7 +1838,6 @@ export default function App() {
       value: 0,
       status: "utkast",
       note: "",
-      // nytt fält: datum för nästa händelse
       nextActionDate: "",
       files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
       supplierIds: [],
@@ -1894,7 +1906,8 @@ export default function App() {
     <div className="mx-auto max-w-7xl p-4">
       {/* HEADER */}
       <header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <h1 className="text-xl font-semibold">Mach CRM</h1>
+        {/* Byter text mot logga */}
+        <img src="/logo.png" alt="Mach CRM" className="h-8 w-auto" />
         <div className="flex items-center gap-2">
           <button
             className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
