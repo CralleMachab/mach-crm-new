@@ -1791,6 +1791,49 @@ function SuppliersPanel({ entities = [], setState }) {
   );
 }
 
+// Hjälpare: räkna fram nästa offertnummer (350xx-serien)
+function getNextOfferNumber(state) {
+  const parseNo = (val) => {
+    const n = Number(val);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const all = [];
+
+  // Titta på alla offerter
+  for (const o of state.offers || []) {
+    const n = parseNo(o.offerNumber || o.offerNo);
+    if (n && n >= 35000 && n < 60000) all.push(n);
+  }
+
+  // Titta även på projekt (ifall projekt från offert har samma nummer)
+  for (const p of state.projects || []) {
+    const n = parseNo(p.projectNumber || p.projectNo);
+    if (n && n >= 35000 && n < 60000) all.push(n);
+  }
+
+  const max = all.length ? Math.max(...all) : 35000;
+  return String(max + 1); // t.ex. 35001, 35002, ...
+}
+
+// Hjälpare: räkna fram nästa projektnummer i 600xx-serien
+function getNextDirectProjectNumber(state) {
+  const parseNo = (val) => {
+    const n = Number(val);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const all = [];
+
+  for (const p of state.projects || []) {
+    const n = parseNo(p.projectNumber || p.projectNo);
+    if (n && n >= 60000) all.push(n);
+  }
+
+  const max = all.length ? Math.max(...all) : 60000;
+  return String(max + 1); // t.ex. 60001, 60002, ...
+}
+
 /* ===========================
    App — layout + sidomeny
    =========================== */
