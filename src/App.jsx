@@ -16,13 +16,7 @@ function useStore() {
   const [state, setState] = useState(() => {
     const s = loadState();
     if (s && typeof s === "object") return s;
-    return {
-      activities: [],
-      entities: [],
-      offers: [],
-      projects: [],
-      _lastSavedAt: "",
-    };
+    return { activities: [], entities: [], offers: [], projects: [] };
   });
 
   // Lokalt
@@ -84,14 +78,14 @@ function customerCategoryBadge(cat) {
   switch (cat) {
     case "StålHall":
     case "Stålhall":
-      return `${base} bg-gray-500`; // Grå
+      return `${base} bg-gray-500`;          // Grå
     case "Totalentreprenad":
     case "TotalEntreprenad":
-      return `${base} bg-orange-500`; // Orange
+      return `${base} bg-orange-500`;        // Orange
     case "Turbovex":
-      return `${base} bg-blue-500`; // Blå
+      return `${base} bg-blue-500`;          // Blå
     case "Admin":
-      return `${base} bg-green-500`; // Grön
+      return `${base} bg-green-500`;          // Grön
     case "Övrigt":
       return "text-xs px-2 py-1 rounded bg-white text-gray-700 border";
     default:
@@ -103,22 +97,22 @@ function supplierCategoryBadge(cat) {
   const base = "text-xs px-2 py-1 rounded text-white";
   switch (cat) {
     case "Stålhalls leverantör":
-      return `${base} bg-gray-500`; // Grå
+      return `${base} bg-gray-500`;          // Grå
     case "Mark & Betong":
-    case "Mark företag": // stöd för gamla värdet
-      return `${base} bg-amber-800`; // Samma färg
+    case "Mark företag":
+      return `${base} bg-amber-800`;         // Brun-ish
     case "EL leverantör":
-      return `${base} bg-red-500`; // Röd
+      return `${base} bg-red-500`;           // Röd
     case "VVS Leverantör":
-      return `${base} bg-purple-500`; // Lila
+      return `${base} bg-purple-500`;        // Lila
     case "Vent Leverantör":
-      return `${base} bg-blue-500`; // Blå
+      return `${base} bg-blue-500`;          // Blå
     case "Bygg":
       return `${base} bg-orange-500`;
     case "Projektering":
       return `${base} bg-yellow-400 text-black`;
     case "Admin":
-      return `${base} bg-green-500`; // Grön
+      return `${base} bg-green-500`;          // Grön
     case "Övrigt":
       return "text-xs px-2 py-1 rounded bg-white text-gray-700 border";
     default:
@@ -130,9 +124,9 @@ function supplierCategoryBadge(cat) {
    Aktiviteter — lista + arkiv-läge
    ========================================================== */
 function ActivitiesPanel({ activities = [], entities = [], setState }) {
-  const [respFilter, setRespFilter] = useState("all");
-  const [rangeFilter, setRangeFilter] = useState("7");
-  const [dateFilter, setDateFilter] = useState("");
+  const [respFilter,   setRespFilter]   = useState("all");
+  const [rangeFilter,  setRangeFilter]  = useState("7");
+  const [dateFilter,   setDateFilter]   = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [mode, setMode] = useState("active"); // "active" | "archive"
 
@@ -170,24 +164,18 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
   const inNext7 = (dateStr, timeStr) => {
     if (!dateStr) return true;
-
-    // Start: idag kl 00:00
     const today = new Date();
     const start = new Date(
       today.getFullYear(),
       today.getMonth(),
       today.getDate()
     );
-
-    // Slut: 6 dagar framåt = totalt 7 datum (idag + 6)
     const end = new Date(
       today.getFullYear(),
       today.getMonth(),
       today.getDate() + 6
     );
-
     const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
-
     return d >= start && d <= end;
   };
 
@@ -210,7 +198,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const respChip = (who) => {
     const base = "text-xs font-semibold px-2 py-1 rounded border";
     if (who === "Mattias") return `${base} border-purple-400 text-purple-700`;
-    if (who === "Cralle") return `${base} border-blue-400 text-blue-700`;
+    if (who === "Cralle")  return `${base} border-blue-400 text-blue-700`;
     return `${base} border-gray-300 text-gray-700`;
   };
 
@@ -218,7 +206,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     if (!s) return null;
     const base = "text-xs px-2 py-1 rounded";
     if (s === "återkoppling") return `${base} bg-orange-100 text-orange-700`;
-    if (s === "klar") return `${base} bg-green-100 text-green-700`;
+    if (s === "klar")         return `${base} bg-green-100 text-green-700`;
     return `${base} bg-gray-100 text-gray-700`;
   };
 
@@ -407,8 +395,8 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
             <div className="flex rounded-xl overflow-hidden border">
               {[
                 { k: "today", label: "Idag" },
-                { k: "7", label: "7 dagar" },
-                { k: "all", label: "Alla" },
+                { k: "7",     label: "7 dagar" },
+                { k: "all",   label: "Alla" },
               ].map((o) => (
                 <button
                   key={o.k}
@@ -885,9 +873,7 @@ function CustomersPanel({ entities = [], setState }) {
 
   // Öppna direkt om _shouldOpen är satt
   useEffect(() => {
-    const c = (entities || []).find(
-      (e) => e.type === "customer" && e._shouldOpen
-    );
+    const c = (entities || []).find((e) => e.type === "customer" && e._shouldOpen);
     if (!c) return;
     setOpenItem(c);
     setDraft({
@@ -913,9 +899,7 @@ function CustomersPanel({ entities = [], setState }) {
   }, [entities, setState]);
 
   const list = useMemo(() => {
-    let arr = (entities || []).filter(
-      (e) => e.type === "customer" && !e.deletedAt
-    );
+    let arr = (entities || []).filter((e) => e.type === "customer" && !e.deletedAt);
 
     if (q.trim()) {
       const s = q.trim().toLowerCase();
@@ -930,7 +914,6 @@ function CustomersPanel({ entities = [], setState }) {
       arr = arr.filter((e) => (e.customerCategory || "") === cat);
     }
 
-    // Sortering: 3 senaste med lastUsedAt först, sedan resten alfabetiskt
     const withUsed = arr.filter((e) => !!e.lastUsedAt);
     withUsed.sort((a, b) =>
       (b.lastUsedAt || "").localeCompare(a.lastUsedAt || "")
@@ -947,7 +930,6 @@ function CustomersPanel({ entities = [], setState }) {
   }, [entities, q, cat]);
 
   const openEdit = (c) => {
-    // uppdatera lastUsedAt
     setState((s) => ({
       ...s,
       entities: (s.entities || []).map((e) =>
@@ -1091,7 +1073,11 @@ function CustomersPanel({ entities = [], setState }) {
                   {c.companyName || "(namnlös kund)"}
                   {(c.firstName || c.lastName) && (
                     <span className="text-sm text-gray-500 ml-1">
-                      ({[c.firstName, c.lastName].filter(Boolean).join(" ")})
+                      (
+                      {[c.firstName, c.lastName]
+                        .filter(Boolean)
+                        .join(" ")}
+                      )
                     </span>
                   )}
                 </div>
@@ -1302,7 +1288,7 @@ function CustomersPanel({ entities = [], setState }) {
    Leverantörer
    ====================================== */
 function SuppliersPanel({ entities = [], setState }) {
-  const [q, setQ] = useState("");
+  const [q, setQ]   = useState("");
   const [cat, setCat] = useState("all");
   const [mode, setMode] = useState("active"); // active | archive
   const [openItem, setOpenItem] = useState(null);
@@ -1355,7 +1341,12 @@ function SuppliersPanel({ entities = [], setState }) {
       );
     }
     if (cat !== "all") {
-      arr = arr.filter((e) => (e.supplierCategory || "") === cat);
+      arr = arr.filter((e) => {
+        const val = e.supplierCategory === "Mark företag"
+          ? "Mark & Betong"
+          : (e.supplierCategory || "");
+        return val === cat;
+      });
     }
 
     arr.sort((a, b) =>
@@ -1384,7 +1375,10 @@ function SuppliersPanel({ entities = [], setState }) {
       address: s.address || "",
       zip: s.zip || "",
       city: s.city || "",
-      supplierCategory: s.supplierCategory || "",
+      supplierCategory:
+        s.supplierCategory === "Mark företag"
+          ? "Mark & Betong"
+          : s.supplierCategory || "",
       notes: s.notes || "",
     });
   };
@@ -1576,7 +1570,9 @@ function SuppliersPanel({ entities = [], setState }) {
               </button>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={supplierCategoryBadge(sup.supplierCategory)}>
-                  {sup.supplierCategory || "—"}
+                  {sup.supplierCategory === "Mark företag"
+                    ? "Mark & Betong"
+                    : sup.supplierCategory || "—"}
                 </span>
                 {mode === "active" ? (
                   <button
@@ -1733,383 +1729,3 @@ function SuppliersPanel({ entities = [], setState }) {
                     <option value="EL leverantör">EL leverantör</option>
                     <option value="VVS Leverantör">VVS Leverantör</option>
                     <option value="Vent Leverantör">Vent Leverantör</option>
-                    <option value="Bygg">Bygg</option>
-                    <option value="Projektering">Projektering</option>
-                    <option value="Admin">Admin</option>
-                    <option value="Övrigt">Övrigt</option>
-                  </select>
-                </div>
-                <button
-                  type="button"
-                  className="text-xs px-2 py-2 rounded bg-slate-600 text-white whitespace-nowrap"
-                  onClick={createCustomerFromSupplier}
-                >
-                  Gör till kund
-                </button>
-              </div>
-
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Anteckningar</label>
-                <textarea
-                  className="w-full border rounded px-3 py-2 min-h-[80px]"
-                  value={draft.notes || ""}
-                  onChange={(e) => updateDraft("notes", e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex gap-2">
-              <button
-                className="px-3 py-2 rounded bg-green-600 text-white"
-                onClick={saveDraft}
-                type="button"
-              >
-                Spara
-              </button>
-              <button
-                className="px-3 py-2 rounded bg-rose-600 text-white"
-                onClick={() => softDelete(openItem)}
-                type="button"
-              >
-                Ta bort
-              </button>
-              <button
-                className="ml-auto px-3 py-2 rounded border"
-                onClick={() => {
-                  setOpenItem(null);
-                  setDraft(null);
-                }}
-                type="button"
-              >
-                Avbryt
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Hjälpare: räkna fram nästa offertnummer (350xx-serien)
-function getNextOfferNumber(state) {
-  const parseNo = (val) => {
-    const n = Number(val);
-    return Number.isFinite(n) ? n : null;
-  };
-
-  const all = [];
-
-  // Titta på alla offerter
-  for (const o of state.offers || []) {
-    const n = parseNo(o.offerNumber || o.offerNo);
-    if (n && n >= 35000 && n < 60000) all.push(n);
-  }
-
-  // Titta även på projekt (ifall projekt från offert har samma nummer)
-  for (const p of state.projects || []) {
-    const n = parseNo(p.projectNumber || p.projectNo);
-    if (n && n >= 35000 && n < 60000) all.push(n);
-  }
-
-  const max = all.length ? Math.max(...all) : 35000;
-  return String(max + 1); // t.ex. 35001, 35002, ...
-}
-
-// Hjälpare: räkna fram nästa projektnummer i 600xx-serien
-function getNextDirectProjectNumber(state) {
-  const parseNo = (val) => {
-    const n = Number(val);
-    return Number.isFinite(n) ? n : null;
-  };
-
-  const all = [];
-
-  for (const p of state.projects || []) {
-    const n = parseNo(p.projectNumber || p.projectNo);
-    if (n && n >= 60000) all.push(n);
-  }
-
-  const max = all.length ? Math.max(...all) : 60000;
-  return String(max + 1); // t.ex. 60001, 60002, ...
-}
-
-/* ===========================
-   App — layout + sidomeny
-   =========================== */
-export default function App() {
-  const [state, setState] = useStore();
-  const [view, setView] = useState("activities");
-  // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
-
-  const newId = () =>
-    crypto?.randomUUID
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2);
-
-  function createActivity() {
-    const id = newId();
-    const a = {
-      id,
-      title: "",
-      responsible: "Cralle",
-      priority: "medium",
-      status: "",
-      dueDate: "",
-      dueTime: "",
-      description: "",
-      customerId: "",
-      supplierId: "",
-      contactName: "",
-      isPhone: false,
-      isEmail: false,
-      isLunch: false,
-      isMeeting: false,
-      createdAt: new Date().toISOString(),
-      _shouldOpen: true,
-    };
-    setState((s) => ({ ...s, activities: [...(s.activities || []), a] }));
-    setView("activities");
-  }
-
-function createOffer() {
-  setState((s) => {
-    const id = newId();
-    const nextNo = getNextOfferNumber(s); // 350xx-serien
-
-    const o = {
-      id,
-      title: "",
-      customerId: "",
-      value: 0,
-      status: "utkast",
-      note: "",
-      nextActionDate: "",
-      files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
-      supplierIds: [],
-      offerNumber: nextNo, // <- nytt fält
-      createdAt: new Date().toISOString(),
-      _shouldOpen: true,
-    };
-
-    return { ...s, offers: [...(s.offers || []), o] };
-  });
-
-  setView("offers");
-}
-
-
-function createProjectEmpty() {
-  setState((s) => {
-    const id = newId();
-    const nextNo = getNextDirectProjectNumber(s); // 600xx-serien
-
-    const p = {
-      id,
-      name: "",
-      customerId: "",
-      status: "pågående",
-      budget: 0,
-      startDate: "",
-      endDate: "",
-      note: "",
-      files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
-      projectNumber: nextNo, // <- nytt fält
-      createdAt: new Date().toISOString(),
-      _shouldOpen: true,
-    };
-
-    return { ...s, projects: [...(s.projects || []), p] };
-  });
-
-  setView("projects");
-}
-
-
-  function createCustomer() {
-    const id = newId();
-    const c = {
-      id,
-      type: "customer",
-      companyName: "",
-      firstName: "",
-      lastName: "",
-      notes: "",
-      createdAt: new Date().toISOString(),
-      customerCategory: "",
-      _shouldOpen: true,
-    };
-    setState((s) => ({ ...s, entities: [...(s.entities || []), c] }));
-    setView("customers");
-  }
-
-  function createSupplier() {
-    const id = newId();
-    const sup = {
-      id,
-      type: "supplier",
-      companyName: "",
-      firstName: "",
-      lastName: "",
-      notes: "",
-      createdAt: new Date().toISOString(),
-      supplierCategory: "",
-      _shouldOpen: true,
-    };
-    setState((s) => ({ ...s, entities: [...(s.entities || []), sup] }));
-    setView("suppliers");
-  }
-
-  return (
-    <div className="mx-auto max-w-7xl p-4">
-      {/* HEADER */}
-      <header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        {/* Byter text mot logga */}
-        <img src="/logo.png" alt="Mach CRM" className="h-8 w-auto" />
-        <div className="flex items-center gap-2">
-          <button
-            className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
-            onClick={createActivity}
-            title="Skapa ny aktivitet"
-            type="button"
-          >
-            + Ny aktivitet
-          </button>
-          <button
-            className="border rounded-xl px-3 py-2 bg-orange-300 hover:bg-orange-400"
-            onClick={createOffer}
-            title="Skapa ny offert"
-            type="button"
-          >
-            + Ny offert
-          </button>
-          <button
-            className="border rounded-xl px-3 py-2 bg-green-200 hover:bg-green-300"
-            onClick={createProjectEmpty}
-            title="Skapa nytt projekt"
-            type="button"
-          >
-            + Nytt projekt
-          </button>
-          <button
-            className="border rounded-xl px-3 py-2 bg-blue-200 hover:bg-blue-300"
-            onClick={createCustomer}
-            title="Lägg till kund"
-            type="button"
-          >
-            + Ny kund
-          </button>
-          <button
-            className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300"
-            onClick={createSupplier}
-            title="Lägg till leverantör"
-            type="button"
-          >
-            + Ny leverantör
-          </button>
-
-          {/* Inställningar-knapp */}
-          <button
-            className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
-            onClick={() => setView("settings")}
-            title="Inställningar"
-            type="button"
-          >
-            🛠️
-          </button>
-        </div>
-      </header>
-
-      {/* LAYOUT: vänster sidomeny + höger innehåll */}
-      <div className="grid grid-cols-12 gap-4">
-        {/* SIDOMENY */}
-        <aside className="col-span-12 md:col-span-3 lg:col-span-2">
-          <div className="bg-white rounded-2xl shadow p-3 space-y-2">
-            {[
-              ["activities", "Aktiviteter"],
-              ["activitiesCalendar", "Kalender"],
-              ["customers", "Kunder"],
-              ["suppliers", "Leverantörer"],
-              ["offers", "Offerter"],
-              ["projects", "Projekt"],
-              ["settings", "Inställningar"],
-            ].map(([k, label]) => (
-              <button
-                key={k}
-                className={`w-full text-left px-3 py-2 rounded-xl border ${
-                  view === k
-                    ? "bg-black text-white"
-                    : "bg-white text-gray-800 hover:bg-gray-50"
-                }`}
-                onClick={() => setView(k)}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </aside>
-
-        {/* INNEHÅLL */}
-        <main className="col-span-12 md:col-span-9 lg:col-span-10">
-          {view === "activities" && (
-            <ActivitiesPanel
-              activities={state.activities || []}
-              entities={state.entities || []}
-              setState={setState}
-            />
-          )}
-
-          {view === "activitiesCalendar" && (
-            <ActivitiesCalendarPanel
-              activities={state.activities || []}
-              setState={setState}
-              setView={setView}
-            />
-          )}
-
-          {view === "customers" && (
-            <CustomersPanel
-              entities={state.entities || []}
-              setState={setState}
-            />
-          )}
-
-          {view === "suppliers" && (
-            <SuppliersPanel
-              entities={state.entities || []}
-              setState={setState}
-            />
-          )}
-
-          {view === "offers" && (
-            <OffersPanel
-              offers={state.offers || []}
-              entities={state.entities || []}
-              setState={setState}
-            />
-          )}
-
-          {view === "projects" && (
-            <ProjectsPanel
-              projects={state.projects || []}
-              setState={setState}
-              entities={state.entities || []}
-              offers={state.offers || []}
-            />
-          )}
-
-          {view === "settings" && (
-            <SettingsPanel
-              entities={state.entities || []}
-              offers={state.offers || []}
-              projects={state.projects || []}
-              activities={state.activities || []}
-              setState={setState}
-            />
-          )}
-        </main>
-      </div>
-    </div>
-  );
-}
