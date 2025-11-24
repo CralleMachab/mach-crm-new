@@ -1872,8 +1872,11 @@ export default function App() {
     setView("activities");
   }
 
-  function createOffer() {
+function createOffer() {
+  setState((s) => {
     const id = newId();
+    const nextNo = getNextOfferNumber(s); // 350xx-serien
+
     const o = {
       id,
       title: "",
@@ -1884,16 +1887,23 @@ export default function App() {
       nextActionDate: "",
       files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
       supplierIds: [],
+      offerNumber: nextNo, // <- nytt fält
       createdAt: new Date().toISOString(),
       _shouldOpen: true,
     };
 
-    setState((s) => ({ ...s, offers: [...(s.offers || []), o] }));
-    setView("offers");
-  }
+    return { ...s, offers: [...(s.offers || []), o] };
+  });
 
-  function createProjectEmpty() {
+  setView("offers");
+}
+
+
+function createProjectEmpty() {
+  setState((s) => {
     const id = newId();
+    const nextNo = getNextDirectProjectNumber(s); // 600xx-serien
+
     const p = {
       id,
       name: "",
@@ -1904,12 +1914,17 @@ export default function App() {
       endDate: "",
       note: "",
       files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
+      projectNumber: nextNo, // <- nytt fält
       createdAt: new Date().toISOString(),
       _shouldOpen: true,
     };
-    setState((s) => ({ ...s, projects: [...(s.projects || []), p] }));
-    setView("projects");
-  }
+
+    return { ...s, projects: [...(s.projects || []), p] };
+  });
+
+  setView("projects");
+}
+
 
   function createCustomer() {
     const id = newId();
