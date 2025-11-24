@@ -78,12 +78,12 @@ function customerCategoryBadge(cat) {
   switch (cat) {
     case "StålHall":
     case "Stålhall":
-      return `${base} bg-gray-500`;          // Grå
+      return `${base} bg-gray-500`; // Grå
     case "Totalentreprenad":
     case "TotalEntreprenad":
-      return `${base} bg-orange-500`;        // Orange
+      return `${base} bg-orange-500`; // Orange
     case "Turbovex":
-      return `${base} bg-blue-500`;          // Blå
+      return `${base} bg-blue-500`; // Blå
     case "Övrigt":
       return "text-xs px-2 py-1 rounded bg-white text-gray-700 border";
     default:
@@ -95,15 +95,15 @@ function supplierCategoryBadge(cat) {
   const base = "text-xs px-2 py-1 rounded text-white";
   switch (cat) {
     case "Stålhalls leverantör":
-      return `${base} bg-gray-500`;          // Grå
+      return `${base} bg-gray-500`; // Grå
     case "Mark företag":
-      return `${base} bg-amber-800`;         // Brun-ish
+      return `${base} bg-amber-800`; // Brun-ish
     case "EL leverantör":
-      return `${base} bg-red-500`;           // Röd
+      return `${base} bg-red-500`; // Röd
     case "VVS Leverantör":
-      return `${base} bg-purple-500`;        // Lila
+      return `${base} bg-purple-500`; // Lila
     case "Vent Leverantör":
-      return `${base} bg-blue-500`;          // Blå
+      return `${base} bg-blue-500`; // Blå
     case "Bygg":
       return `${base} bg-orange-500`;
     case "Projektering":
@@ -119,14 +119,14 @@ function supplierCategoryBadge(cat) {
    Aktiviteter — lista + arkiv-läge
    ========================================================== */
 function ActivitiesPanel({ activities = [], entities = [], setState }) {
-  const [respFilter, setRespFilter]   = useState("all");
+  const [respFilter, setRespFilter] = useState("all");
   const [rangeFilter, setRangeFilter] = useState("7");
-  const [dateFilter, setDateFilter]   = useState("");
+  const [dateFilter, setDateFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [mode, setMode] = useState("active"); // "active" | "archive"
 
   const [openItem, setOpenItem] = useState(null);
-  const [draft, setDraft]       = useState(null);
+  const [draft, setDraft] = useState(null);
 
   const customers = useMemo(
     () => (entities || []).filter((e) => e?.type === "customer"),
@@ -149,34 +149,36 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       return `${dateStr} ${timeStr || ""}`;
     }
   };
+
   const todayISO = () => {
     const d = new Date();
     const m = `${d.getMonth() + 1}`.padStart(2, "0");
     const day = `${d.getDate()}`.padStart(2, "0");
     return `${d.getFullYear()}-${m}-${day}`;
   };
-const inNext7 = (dateStr, timeStr) => {
-  if (!dateStr) return true;
 
-  // Start: idag kl 00:00
-  const today = new Date();
-  const start = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
+  const inNext7 = (dateStr, timeStr) => {
+    if (!dateStr) return true;
 
-  // Slut: 6 dagar framåt = totalt 7 datum (idag + 6)
-  const end = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate() + 6
-  );
+    // Start: idag kl 00:00
+    const today = new Date();
+    const start = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate()
+    );
 
-  const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
+    // Slut: 6 dagar framåt = totalt 7 datum (idag + 6)
+    const end = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 6
+    );
 
-  return d >= start && d <= end;
-};
+    const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
+
+    return d >= start && d <= end;
+  };
 
   const isSameDay = (dateStr, ymd) => !!dateStr && dateStr.slice(0, 10) === ymd;
 
@@ -193,18 +195,30 @@ const inNext7 = (dateStr, timeStr) => {
         return `${base} bg-gray-100 text-gray-700`;
     }
   };
+
   const respChip = (who) => {
     const base = "text-xs font-semibold px-2 py-1 rounded border";
     if (who === "Mattias") return `${base} border-purple-400 text-purple-700`;
     if (who === "Cralle") return `${base} border-blue-400 text-blue-700`;
     return `${base} border-gray-300 text-gray-700`;
   };
+
   const statusBadge = (s) => {
     if (!s) return null;
     const base = "text-xs px-2 py-1 rounded";
     if (s === "återkoppling") return `${base} bg-orange-100 text-orange-700`;
     if (s === "klar") return `${base} bg-green-100 text-green-700`;
     return `${base} bg-gray-100 text-gray-700`;
+  };
+
+  const isDone = (a) => a?.priority === "klar" || a?.status === "klar";
+  const isFollow = (a) => a?.status === "återkoppling";
+
+  // NY: används för visuell markering + filter "Försenade"
+  const isOverdue = (a) => {
+    if (!a?.dueDate) return false;
+    const today = todayISO();
+    return a.dueDate < today && !isDone(a);
   };
 
   // Öppna direkt om _shouldOpen är satt (nyss skapad)
@@ -246,9 +260,6 @@ const inNext7 = (dateStr, timeStr) => {
       arr = arr.filter((a) => !!a?.deletedAt);
     }
 
-    const isDone = (a) => a?.priority === "klar" || a?.status === "klar";
-    const isFollow = (a) => a?.status === "återkoppling";
-
     if (mode === "active") {
       if (statusFilter === "done") {
         arr = arr.filter(isDone);
@@ -258,10 +269,14 @@ const inNext7 = (dateStr, timeStr) => {
         arr = arr.filter((a) => isDone(a) || isFollow(a));
       } else if (statusFilter === "all_except_done") {
         arr = arr.filter((a) => !isDone(a));
+      } else if (statusFilter === "overdue") {
+        arr = arr.filter((a) => isOverdue(a));
       }
+
       if (respFilter !== "all") {
         arr = arr.filter((a) => (a?.responsible || "Övrig") === respFilter);
       }
+
       if (rangeFilter === "today") {
         const ymd = todayISO();
         arr = arr.filter((a) => isSameDay(a?.dueDate, ymd));
@@ -345,56 +360,7 @@ const inNext7 = (dateStr, timeStr) => {
     </div>
   );
 
-  
-  const activeActivities = useMemo(
-    () => (activities || []).filter((a) => !a?.deletedAt),
-    [activities]
-  );
-
-  const isDoneStatus = (a) => a?.priority === "klar" || a?.status === "klar";
-
-  const addDays = (ymd, days) => {
-    if (!ymd) return "";
-    const d = new Date(ymd + "T00:00:00");
-    d.setDate(d.getDate() + days);
-    const m = `${d.getMonth() + 1}`.padStart(2, "0");
-    const day = `${d.getDate()}`.padStart(2, "0");
-    return `${d.getFullYear()}-${m}-${day}`;
-  };
-
-  const todayYMD = todayISO();
-  const next7YMD = addDays(todayYMD, 7);
-
-  const overdueActivities = activeActivities
-    .filter((a) => a.dueDate && a.dueDate < todayYMD && !isDoneStatus(a))
-    .sort((a, b) =>
-      ((a.dueDate || "") + "T" + (a.dueTime || "")).localeCompare(
-        (b.dueDate || "") + "T" + (b.dueTime || "")
-      )
-    );
-
-  const todayActivities = activeActivities
-    .filter((a) => isSameDay(a.dueDate, todayYMD) && !isDoneStatus(a))
-    .sort((a, b) =>
-      ((a.dueDate || "") + "T" + (a.dueTime || "")).localeCompare(
-        (b.dueDate || "") + "T" + (b.dueTime || "")
-      )
-    );
-
-  const upcoming7Activities = activeActivities
-    .filter(
-      (a) =>
-        a.dueDate &&
-        a.dueDate > todayYMD &&
-        a.dueDate <= next7YMD &&
-        !isDoneStatus(a)
-    )
-    .sort((a, b) =>
-      ((a.dueDate || "") + "T" + (a.dueTime || "")).localeCompare(
-        (b.dueDate || "") + "T" + (b.dueTime || "")
-      )
-    );
-return (
+  return (
     <div className="bg-white rounded-2xl shadow p-4">
       {/* rubrik + läge (Aktiva/Arkiv) + filter */}
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
@@ -491,6 +457,7 @@ return (
                 <option value="followup">Endast återkoppling</option>
                 <option value="done_or_followup">Klara + Återkoppling</option>
                 <option value="all_except_done">Alla utom klara</option>
+                <option value="overdue">Försenade</option>
               </select>
             </div>
 
@@ -513,71 +480,7 @@ return (
             </div>
           </div>
         )}
-      
-      {mode === "active" && (
-        <div className="mb-3 space-y-3 text-sm">
-          {todayActivities.length > 0 && (
-            <div>
-              <div className="font-semibold flex items-center gap-2">
-                <span>⏰ Idag</span>
-                <span className="text-xs text-gray-500">
-                  {todayActivities.length} st
-                </span>
-              </div>
-              <ul className="list-disc ml-5">
-                {todayActivities.slice(0, 5).map((a) => (
-                  <li key={a.id} className="text-gray-700">
-                    {a.title || "Aktivitet"}{" "}
-                    <span className="text-gray-500">
-                      {fmt(a.dueDate, a.dueTime)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {overdueActivities.length > 0 && (
-            <div>
-              <div className="font-semibold flex items-center gap-2 text-rose-700">
-                <span>⚠️ Försenade</span>
-                <span className="text-xs text-gray-500">
-                  {overdueActivities.length} st
-                </span>
-              </div>
-              <ul className="list-disc ml-5">
-                {overdueActivities.slice(0, 5).map((a) => (
-                  <li key={a.id} className="text-gray-700">
-                    {a.title || "Aktivitet"}{" "}
-                    <span className="text-gray-500">
-                      {fmt(a.dueDate, a.dueTime)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {upcoming7Activities.length > 0 && (
-            <div>
-              <div className="font-semibold flex items-center gap-2">
-                <span>📅 Kommande 7 dagar</span>
-                <span className="text-xs text-gray-500">
-                  {upcoming7Activities.length} st
-                </span>
-              </div>
-              <ul className="list-disc ml-5">
-                {upcoming7Activities.slice(0, 7).map((a) => (
-                  <li key={a.id} className="text-gray-700">
-                    {fmt(a.dueDate, a.dueTime)} – {a.title || "Aktivitet"}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-</div>
+      </div>
 
       {/* lista */}
       <ul className="divide-y">
@@ -595,8 +498,16 @@ return (
                   {mode === "archive" ? " (Arkiv)" : ""}
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="text-xs text-gray-500">
+                  {/* NY: röd text + '(försenad)' om försenad */}
+                  <div
+                    className={
+                      isOverdue(a)
+                        ? "text-xs text-red-600 font-semibold"
+                        : "text-xs text-gray-500"
+                    }
+                  >
                     {fmt(a.dueDate, a.dueTime)}
+                    {isOverdue(a) && " (försenad)"}
                   </div>
                   <Icons a={a} />
                 </div>
@@ -965,12 +876,16 @@ function CustomersPanel({ entities = [], setState }) {
 
   // Öppna direkt om _shouldOpen är satt
   useEffect(() => {
-    const c = (entities || []).find((e) => e.type === "customer" && e._shouldOpen);
+    const c = (entities || []).find(
+      (e) => e.type === "customer" && e._shouldOpen
+    );
     if (!c) return;
     setOpenItem(c);
     setDraft({
       id: c.id,
       companyName: c.companyName || "",
+      firstName: c.firstName || "",
+      lastName: c.lastName || "",
       orgNo: c.orgNo || "",
       phone: c.phone || "",
       email: c.email || "",
@@ -978,6 +893,7 @@ function CustomersPanel({ entities = [], setState }) {
       zip: c.zip || "",
       city: c.city || "",
       customerCategory: c.customerCategory || "",
+      notes: c.notes || "",
     });
     setState((s) => ({
       ...s,
@@ -988,7 +904,9 @@ function CustomersPanel({ entities = [], setState }) {
   }, [entities, setState]);
 
   const list = useMemo(() => {
-    let arr = (entities || []).filter((e) => e.type === "customer" && !e.deletedAt);
+    let arr = (entities || []).filter(
+      (e) => e.type === "customer" && !e.deletedAt
+    );
 
     if (q.trim()) {
       const s = q.trim().toLowerCase();
@@ -1005,12 +923,16 @@ function CustomersPanel({ entities = [], setState }) {
 
     // Sortering: 3 senaste med lastUsedAt först, sedan resten alfabetiskt
     const withUsed = arr.filter((e) => !!e.lastUsedAt);
-    withUsed.sort((a, b) => (b.lastUsedAt || "").localeCompare(a.lastUsedAt || ""));
+    withUsed.sort((a, b) =>
+      (b.lastUsedAt || "").localeCompare(a.lastUsedAt || "")
+    );
     const top3 = withUsed.slice(0, 3).map((e) => e.id);
 
     const topList = arr.filter((e) => top3.includes(e.id));
     const rest = arr.filter((e) => !top3.includes(e.id));
-    rest.sort((a, b) => (a.companyName || "").localeCompare(b.companyName || ""));
+    rest.sort((a, b) =>
+      (a.companyName || "").localeCompare(b.companyName || "")
+    );
 
     return [...topList, ...rest];
   }, [entities, q, cat]);
@@ -1027,6 +949,8 @@ function CustomersPanel({ entities = [], setState }) {
     setDraft({
       id: c.id,
       companyName: c.companyName || "",
+      firstName: c.firstName || "",
+      lastName: c.lastName || "",
       orgNo: c.orgNo || "",
       phone: c.phone || "",
       email: c.email || "",
@@ -1034,6 +958,7 @@ function CustomersPanel({ entities = [], setState }) {
       zip: c.zip || "",
       city: c.city || "",
       customerCategory: c.customerCategory || "",
+      notes: c.notes || "",
     });
   };
 
@@ -1050,6 +975,8 @@ function CustomersPanel({ entities = [], setState }) {
       id,
       type: "supplier",
       companyName: draft.companyName || "",
+      firstName: draft.firstName || "",
+      lastName: draft.lastName || "",
       orgNo: draft.orgNo || "",
       phone: draft.phone || "",
       email: draft.email || "",
@@ -1057,6 +984,7 @@ function CustomersPanel({ entities = [], setState }) {
       zip: draft.zip || "",
       city: draft.city || "",
       supplierCategory: draft.customerCategory || "",
+      notes: draft.notes || "",
       createdAt: new Date().toISOString(),
     };
 
@@ -1077,6 +1005,8 @@ function CustomersPanel({ entities = [], setState }) {
           ? {
               ...e,
               companyName: draft.companyName || "",
+              firstName: draft.firstName || "",
+              lastName: draft.lastName || "",
               orgNo: draft.orgNo || "",
               phone: draft.phone || "",
               email: draft.email || "",
@@ -1084,6 +1014,7 @@ function CustomersPanel({ entities = [], setState }) {
               zip: draft.zip || "",
               city: draft.city || "",
               customerCategory: draft.customerCategory || "",
+              notes: draft.notes || "",
               updatedAt: new Date().toISOString(),
             }
           : e
@@ -1094,7 +1025,12 @@ function CustomersPanel({ entities = [], setState }) {
   };
 
   const softDelete = (c) => {
-    if (!window.confirm("Ta bort denna kund? Den hamnar i arkiv (kan återställas via Inställningar).")) return;
+    if (
+      !window.confirm(
+        "Ta bort denna kund? Den hamnar i arkiv (kan återställas via Inställningar)."
+      )
+    )
+      return;
     setState((s) => ({
       ...s,
       entities: (s.entities || []).map((e) =>
@@ -1150,12 +1086,7 @@ function CustomersPanel({ entities = [], setState }) {
                   )}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {[
-                    c.city || "",
-                    c.phone || "",
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {[c.city || "", c.phone || ""].filter(Boolean).join(" · ")}
                 </div>
               </button>
               <div className="flex items-center gap-2 shrink-0">
@@ -1210,9 +1141,33 @@ function CustomersPanel({ entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.companyName}
-                  onChange={(e) => updateDraft("companyName", e.target.value)}
+                  onChange={(e) =>
+                    updateDraft("companyName", e.target.value)
+                  }
                 />
               </div>
+
+              <div>
+                <label className="text-sm font-medium">Förnamn</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.firstName || ""}
+                  onChange={(e) =>
+                    updateDraft("firstName", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Efternamn</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.lastName || ""}
+                  onChange={(e) =>
+                    updateDraft("lastName", e.target.value)
+                  }
+                />
+              </div>
+
               <div>
                 <label className="text-sm font-medium">OrgNr</label>
                 <input
@@ -1273,7 +1228,9 @@ function CustomersPanel({ entities = [], setState }) {
                   >
                     <option value="">—</option>
                     <option value="StålHall">Stålhall</option>
-                    <option value="Totalentreprenad">Totalentreprenad</option>
+                    <option value="Totalentreprenad">
+                      Totalentreprenad
+                    </option>
                     <option value="Turbovex">Turbovex</option>
                     <option value="Övrigt">Övrigt</option>
                   </select>
@@ -1285,6 +1242,15 @@ function CustomersPanel({ entities = [], setState }) {
                 >
                   Gör till leverantör
                 </button>
+              </div>
+
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Anteckningar</label>
+                <textarea
+                  className="w-full border rounded px-3 py-2 min-h-[80px]"
+                  value={draft.notes || ""}
+                  onChange={(e) => updateDraft("notes", e.target.value)}
+                />
               </div>
             </div>
 
@@ -1333,12 +1299,16 @@ function SuppliersPanel({ entities = [], setState }) {
 
   // Öppna direkt om _shouldOpen är satt
   useEffect(() => {
-    const s = (entities || []).find((e) => e.type === "supplier" && e._shouldOpen);
+    const s = (entities || []).find(
+      (e) => e.type === "supplier" && e._shouldOpen
+    );
     if (!s) return;
     setOpenItem(s);
     setDraft({
       id: s.id,
       companyName: s.companyName || "",
+      firstName: s.firstName || "",
+      lastName: s.lastName || "",
       orgNo: s.orgNo || "",
       phone: s.phone || "",
       email: s.email || "",
@@ -1346,6 +1316,7 @@ function SuppliersPanel({ entities = [], setState }) {
       zip: s.zip || "",
       city: s.city || "",
       supplierCategory: s.supplierCategory || "",
+      notes: s.notes || "",
     });
     setState((st) => ({
       ...st,
@@ -1376,7 +1347,9 @@ function SuppliersPanel({ entities = [], setState }) {
       arr = arr.filter((e) => (e.supplierCategory || "") === cat);
     }
 
-    arr.sort((a, b) => (a.companyName || "").localeCompare(b.companyName || ""));
+    arr.sort((a, b) =>
+      (a.companyName || "").localeCompare(b.companyName || "")
+    );
 
     return arr;
   }, [entities, q, cat, mode]);
@@ -1392,6 +1365,8 @@ function SuppliersPanel({ entities = [], setState }) {
     setDraft({
       id: s.id,
       companyName: s.companyName || "",
+      firstName: s.firstName || "",
+      lastName: s.lastName || "",
       orgNo: s.orgNo || "",
       phone: s.phone || "",
       email: s.email || "",
@@ -1399,6 +1374,7 @@ function SuppliersPanel({ entities = [], setState }) {
       zip: s.zip || "",
       city: s.city || "",
       supplierCategory: s.supplierCategory || "",
+      notes: s.notes || "",
     });
   };
 
@@ -1415,6 +1391,8 @@ function SuppliersPanel({ entities = [], setState }) {
       id,
       type: "customer",
       companyName: draft.companyName || "",
+      firstName: draft.firstName || "",
+      lastName: draft.lastName || "",
       orgNo: draft.orgNo || "",
       phone: draft.phone || "",
       email: draft.email || "",
@@ -1422,6 +1400,7 @@ function SuppliersPanel({ entities = [], setState }) {
       zip: draft.zip || "",
       city: draft.city || "",
       customerCategory: draft.supplierCategory || "",
+      notes: draft.notes || "",
       createdAt: new Date().toISOString(),
     };
 
@@ -1442,6 +1421,8 @@ function SuppliersPanel({ entities = [], setState }) {
           ? {
               ...e,
               companyName: draft.companyName || "",
+              firstName: draft.firstName || "",
+              lastName: draft.lastName || "",
               orgNo: draft.orgNo || "",
               phone: draft.phone || "",
               email: draft.email || "",
@@ -1449,6 +1430,7 @@ function SuppliersPanel({ entities = [], setState }) {
               zip: draft.zip || "",
               city: draft.city || "",
               supplierCategory: draft.supplierCategory || "",
+              notes: draft.notes || "",
               updatedAt: new Date().toISOString(),
             }
           : e
@@ -1459,7 +1441,12 @@ function SuppliersPanel({ entities = [], setState }) {
   };
 
   const softDelete = (sup) => {
-    if (!window.confirm("Ta bort denna leverantör? Den hamnar i arkiv (kan återställas via Inställningar).")) return;
+    if (
+      !window.confirm(
+        "Ta bort denna leverantör? Den hamnar i arkiv (kan återställas via Inställningar)."
+      )
+    )
+      return;
     setState((s0) => ({
       ...s0,
       entities: (s0.entities || []).map((e) =>
@@ -1473,7 +1460,12 @@ function SuppliersPanel({ entities = [], setState }) {
   };
 
   const hardDelete = (sup) => {
-    if (!window.confirm("Ta bort denna leverantör PERMANENT? Detta går inte att ångra.")) return;
+    if (
+      !window.confirm(
+        "Ta bort denna leverantör PERMANENT? Detta går inte att ångra."
+      )
+    )
+      return;
     setState((s0) => ({
       ...s0,
       entities: (s0.entities || []).filter((e) => e.id !== sup.id),
@@ -1528,7 +1520,9 @@ function SuppliersPanel({ entities = [], setState }) {
             onChange={(e) => setCat(e.target.value)}
           >
             <option value="all">Alla kategorier</option>
-            <option value="Stålhalls leverantör">Stålhalls leverantör</option>
+            <option value="Stålhalls leverantör">
+              Stålhalls leverantör
+            </option>
             <option value="Mark företag">Mark företag</option>
             <option value="EL leverantör">EL leverantör</option>
             <option value="VVS Leverantör">VVS Leverantör</option>
@@ -1553,16 +1547,17 @@ function SuppliersPanel({ entities = [], setState }) {
                   {sup.companyName || "(namnlös leverantör)"}
                   {(sup.firstName || sup.lastName) && (
                     <span className="text-sm text-gray-500 ml-1">
-                      ({[sup.firstName, sup.lastName].filter(Boolean).join(" ")})
+                      (
+                      {[sup.firstName, sup.lastName]
+                        .filter(Boolean)
+                        .join(" ")}
+                      )
                     </span>
                   )}
                   {mode === "archive" ? " (Arkiv)" : ""}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {[
-                    sup.city || "",
-                    sup.phone || "",
-                  ]
+                  {[sup.city || "", sup.phone || ""]
                     .filter(Boolean)
                     .join(" · ")}
                 </div>
@@ -1594,7 +1589,9 @@ function SuppliersPanel({ entities = [], setState }) {
         ))}
         {list.length === 0 && (
           <li className="py-6 text-sm text-gray-500">
-            {mode === "active" ? "Inga leverantörer." : "Inga arkiverade leverantörer."}
+            {mode === "active"
+              ? "Inga leverantörer."
+              : "Inga arkiverade leverantörer."}
           </li>
         )}
       </ul>
@@ -1636,6 +1633,28 @@ function SuppliersPanel({ entities = [], setState }) {
                   }
                 />
               </div>
+
+              <div>
+                <label className="text-sm font-medium">Förnamn</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.firstName || ""}
+                  onChange={(e) =>
+                    updateDraft("firstName", e.target.value)
+                  }
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Efternamn</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.lastName || ""}
+                  onChange={(e) =>
+                    updateDraft("lastName", e.target.value)
+                  }
+                />
+              </div>
+
               <div>
                 <label className="text-sm font-medium">OrgNr</label>
                 <input
@@ -1695,7 +1714,9 @@ function SuppliersPanel({ entities = [], setState }) {
                     }
                   >
                     <option value="">—</option>
-                    <option value="Stålhalls leverantör">Stålhalls leverantör</option>
+                    <option value="Stålhalls leverantör">
+                      Stålhalls leverantör
+                    </option>
                     <option value="Mark företag">Mark företag</option>
                     <option value="EL leverantör">EL leverantör</option>
                     <option value="VVS Leverantör">VVS Leverantör</option>
@@ -1712,6 +1733,15 @@ function SuppliersPanel({ entities = [], setState }) {
                 >
                   Gör till kund
                 </button>
+              </div>
+
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Anteckningar</label>
+                <textarea
+                  className="w-full border rounded px-3 py-2 min-h-[80px]"
+                  value={draft.notes || ""}
+                  onChange={(e) => updateDraft("notes", e.target.value)}
+                />
               </div>
             </div>
 
@@ -1757,7 +1787,9 @@ export default function App() {
   // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
 
   const newId = () =>
-    crypto?.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+    crypto?.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2);
 
   function createActivity() {
     const id = newId();
@@ -1794,7 +1826,7 @@ export default function App() {
       status: "utkast",
       note: "",
       // nytt fält: datum för nästa händelse
-      nextActionDate: "", 
+      nextActionDate: "",
       files: { Ritningar: [], Offerter: [], Kalkyler: [], KMA: [] },
       supplierIds: [],
       createdAt: new Date().toISOString(),
@@ -1830,6 +1862,9 @@ export default function App() {
       id,
       type: "customer",
       companyName: "",
+      firstName: "",
+      lastName: "",
+      notes: "",
       createdAt: new Date().toISOString(),
       customerCategory: "",
       _shouldOpen: true,
@@ -1844,6 +1879,9 @@ export default function App() {
       id,
       type: "supplier",
       companyName: "",
+      firstName: "",
+      lastName: "",
+      notes: "",
       createdAt: new Date().toISOString(),
       supplierCategory: "",
       _shouldOpen: true,
@@ -1952,19 +1990,25 @@ export default function App() {
           )}
 
           {view === "activitiesCalendar" && (
-  <ActivitiesCalendarPanel
-    activities={state.activities || []}
-    setState={setState}
-    setView={setView}
-  />
-)}
+            <ActivitiesCalendarPanel
+              activities={state.activities || []}
+              setState={setState}
+              setView={setView}
+            />
+          )}
 
           {view === "customers" && (
-            <CustomersPanel entities={state.entities || []} setState={setState} />
+            <CustomersPanel
+              entities={state.entities || []}
+              setState={setState}
+            />
           )}
 
           {view === "suppliers" && (
-            <SuppliersPanel entities={state.entities || []} setState={setState} />
+            <SuppliersPanel
+              entities={state.entities || []}
+              setState={setState}
+            />
           )}
 
           {view === "offers" && (
