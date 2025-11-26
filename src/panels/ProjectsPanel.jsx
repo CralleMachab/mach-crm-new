@@ -34,31 +34,13 @@ const groupFiles = (list = []) => {
   return obj;
 };
 
-function projectStatusBadge(status) {
-  const base =
-    "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium";
-  switch (status) {
-    case "pågående":
-      return `${base} bg-blue-100 text-blue-700`;
-    case "avslutat":
-      return `${base} bg-green-100 text-green-700`;
-    case "paus":
-      return `${base} bg-yellow-100 text-yellow-700`;
-    case "inställt":
-      return `${base} bg-rose-100 text-rose-700`;
-    default:
-      return `${base} bg-gray-100 text-gray-700`;
-  }
-}
-
 export default function ProjectsPanel({
   projects = [],
+  setState,
   entities = [],
   offers = [],
-  setState,
 }) {
   const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
@@ -72,32 +54,46 @@ export default function ProjectsPanel({
   );
 
   const customerName = (id) =>
-    customers.find((c) => c.id === id)?.companyName ||
-    customers.find((c) => c.id === id)?.name ||
-    "—";
+    customers.find((c) => c.id === id)?.companyName || "—";
+
+  useEffect(() => {
+    const p = (projects || []).find((x) => x?._shouldOpen);
+    if (!p) return;
+    setOpenItem(p);
+    setDraft({
+      id: p.id,
+      name: p.name || "",
+      customerId: p.customerId || "",
+      status: p.status || "pågående",
+      budget: p.budget ?? 0,
+      startDate: p.startDate || "",
+      endDate: p.endDate || "",
+      note: p.note || "",
+      filesList: flattenFiles(p.files),
+      internalId: p.internalId || "",
+      originatingOfferId: p.originatingOfferId || "",
+      supplierIds: Array.isArray(p.supplierIds) ? p.supplierIds.slice() : [],
+      kind: p.kind || "",
+    });
+    setState((s) => ({
+      ...s,
+      projects: (s.projects || []).map((x) =>
+        x.id === p.id ? { ...x, _shouldOpen: undefined } : x
+      ),
+    }));
+  }, [projects, setState]);
 
   const list = useMemo(() => {
     let arr = (projects || []).filter((p) => !p.deletedAt);
-
     if (q.trim()) {
       const s = q.trim().toLowerCase();
-      arr = arr.filter((p) => {
-        const cname = customerName(p.customerId).toLowerCase();
-        return (
-          (p.name || "").toLowerCase().includes(s) ||
-          (p.internalId || "").toString().includes(s) ||
-          cname.includes(s)
-        );
-      });
+      arr = arr.filter((p) =>
+        (p.name || "").toLowerCase().includes(s)
+      );
     }
-
-    if (statusFilter !== "all") {
-      arr = arr.filter((p) => (p.status || "pågående") === statusFilter);
-    }
-
     arr.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
     return arr;
-  }, [projects, q, statusFilter, customers]);
+  }, [projects, q]);
 
   const openEdit = (p) => {
     setOpenItem(p);
@@ -111,11 +107,27 @@ export default function ProjectsPanel({
       endDate: p.endDate || "",
       note: p.note || "",
       filesList: flattenFiles(p.files),
-      internalId: p.internalId || p.projectNumber || "",
+      internalId: p.internalId || "",
       originatingOfferId: p.originatingOfferId || "",
       supplierIds: Array.isArray(p.supplierIds) ? p.supplierIds.slice() : [],
       kind: p.kind || "",
     });
+  };
+
+  const projectStatusBadge = (status) => {
+    const base = "inline-flex items-center px-2 py-0.5 rounded text-xs font-medium";
+    switch (status) {
+      case "pågående":
+        return `${base} bg-blue-100 text-blue-700`;
+      case "avslutat":
+        return `${base} bg-green-100 text-green-700`;
+      case "paus":
+        return `${base} bg-yellow-100 text-yellow-700`;
+      case "inställt":
+        return `${base} bg-rose-100 text-rose-700`;
+      default:
+        return `${base} bg-gray-100 text-gray-700`;
+    }
   };
 
   const setFileField = (idx, field, value) => {
@@ -206,7 +218,6 @@ export default function ProjectsPanel({
               note: draft.note || "",
               files,
               internalId: draft.internalId || "",
-              projectNumber: draft.internalId || p.projectNumber || "",
               originatingOfferId: draft.originatingOfferId || "",
               supplierIds: Array.isArray(draft.supplierIds)
                 ? draft.supplierIds.slice()
@@ -224,7 +235,7 @@ export default function ProjectsPanel({
   const softDelete = (p) => {
     if (
       !window.confirm(
-        "Ta bort detta projekt? Det hamnar i Arkiv (kan tas bort permanent via Inställningar)."
+        "Ta bort detta projekt? Det hamnar i Arkiv och kan tas bort permanent därifrån."
       )
     )
       return;
@@ -240,11 +251,13 @@ export default function ProjectsPanel({
     }
   };
 
-  const exportText = () => {
+  const emailProject = () => {
     if (!draft) return;
+
+    const customer =
+      customers.find((c) => c.id === draft.customerId) || null;
     const files = groupFiles(draft.filesList || []);
 
-    const customer = customers.find((c) => c.id === draft.customerId);
     const lines = [];
 
     lines.push(`Projekt: ${draft.name || ""}`);
@@ -266,7 +279,7 @@ export default function ProjectsPanel({
       lines.push(`Slut: ${draft.endDate}`);
     }
     if (draft.kind) {
-      lines.push(`Entreprenadform: ${draft.kind}`);
+      lines.push(`Typ: ${draft.kind}`);
     }
 
     lines.push("");
@@ -282,125 +295,120 @@ export default function ProjectsPanel({
       if (!arr.length) return;
       lines.push(`${cat}:`);
       arr.forEach((f) => {
-        lines.push(`- ${f.name} (${f.webUrl})`);
+        lines.push(
+          `- ${(f.name || "fil")}${
+            f.webUrl ? " – " + f.webUrl : ""
+          }`
+        );
       });
       lines.push("");
     });
 
-    const text = lines.join("\n");
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = (draft.internalId || "projekt") + ".txt";
-    a.click();
-    URL.revokeObjectURL(url);
+    const subject = `Projekt – ${draft.name || ""}`;
+    const body = lines.join("\n");
+
+    const mailto = `mailto:?subject=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+
+    window.location.href = mailto;
   };
 
-  const exportHtml = () => {
+  const printProject = () => {
     if (!draft) return;
+    const customer =
+      customers.find((c) => c.id === draft.customerId) || null;
     const files = groupFiles(draft.filesList || []);
-    const customer = customers.find((c) => c.id === draft.customerId);
+    const fileLines = FILE_CATS.map((cat) => {
+      const arr = files[cat] || [];
+      if (!arr.length) return "";
+      const items = arr
+        .map(
+          (f) =>
+            `<li>${(f.name || "fil")
+              .replace(/</g, "&lt;")
+              .replace(/>/g, "&gt;")}${
+              f.webUrl
+                ? ` – <a href="${f.webUrl}">${f.webUrl}</a>`
+                : ""
+            }</li>`
+        )
+        .join("");
+      return `<h4>${cat}</h4><ul>${items}</ul>`;
+    }).join("");
 
     const todayStr = new Date().toLocaleDateString("sv-SE");
 
     const html = `<!DOCTYPE html>
 <html lang="sv">
 <head>
-  <meta charset="UTF-8" />
-  <title>Projekt ${draft.name || ""}</title>
+  <meta charset="utf-8" />
+  <title>Projekt – ${draft.name || ""}</title>
   <style>
-    * { box-sizing: border-box; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 24px;
+      padding: 32px;
       background: #f3f4f6;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     .page {
-      max-width: 900px;
+      max-width: 800px;
       margin: 0 auto;
-      background: white;
+      background: #ffffff;
       border-radius: 16px;
-      padding: 24px 24px 32px 24px;
-      box-shadow: 0 10px 40px rgba(15, 23, 42, 0.12);
+      padding: 32px 40px;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
     }
     .header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      padding-bottom: 16px;
-      border-bottom: 1px solid #e5e7eb;
-      margin-bottom: 16px;
+      margin-bottom: 24px;
     }
-    .title-block {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+    .title-block h1 {
+      margin: 0 0 4px 0;
+      font-size: 26px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
     }
-    .title {
-      font-size: 20px;
-      font-weight: 700;
-      color: #111827;
-    }
-    .subtitle {
-      font-size: 13px;
+    .title-block .subtitle {
+      font-size: 14px;
       color: #6b7280;
     }
-    .badges {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 4px;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 11px;
-    }
-    .badge-label {
-      font-weight: 600;
+    .company-block {
+      text-align: right;
+      font-size: 13px;
       color: #4b5563;
     }
-    .badge-value {
-      font-weight: 500;
-      color: #111827;
+    .company-block img {
+      height: 56px;
+      margin-bottom: 4px;
     }
-    .section {
-      margin-top: 16px;
-      padding-top: 12px;
-      border-top: 1px solid #e5e7eb;
-    }
-    .section-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #111827;
-      margin-bottom: 8px;
-    }
-    .two-col {
+    .meta-grid {
       display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 32px;
-    }
-    .field-grid {
-      display: grid;
-      grid-template-columns: 120px 1fr;
-      row-gap: 4px;
-      column-gap: 8px;
-      font-size: 13px;
-      color: #374151;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 24px;
+      font-size: 14px;
+      margin-bottom: 12px;
     }
     .label {
-      font-weight: 500;
-      color: #6b7280;
+      font-weight: 600;
+      color: #374151;
     }
     .value {
       color: #111827;
     }
-    .note-box {
+    .section-title {
+      margin-top: 24px;
+      margin-bottom: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .box {
       border-radius: 12px;
+      border: 1px solid #e5e7eb;
       background: #f9fafb;
       padding: 12px 16px;
       font-size: 14px;
@@ -417,9 +425,32 @@ export default function ProjectsPanel({
       margin-top: 24px;
       text-align: right;
     }
-    .footer-text {
-      font-size: 11px;
-      color: #9ca3af;
+    .btn-print {
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      padding: 8px 16px;
+      font-size: 14px;
+      background: #111827;
+      color: #f9fafb;
+      cursor: pointer;
+    }
+    .btn-print:hover {
+      background: #020617;
+    }
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      .page {
+        box-shadow: none;
+        border-radius: 0;
+        margin: 0;
+        max-width: none;
+      }
+      .footer-actions {
+        display: none;
+      }
     }
   </style>
 </head>
@@ -427,146 +458,118 @@ export default function ProjectsPanel({
   <div class="page">
     <div class="header">
       <div class="title-block">
-        <div class="title">${draft.name || ""}</div>
-        <div class="subtitle">Projektöversikt</div>
+        <h1>Projekt</h1>
         <div class="subtitle">Datum: ${todayStr}</div>
       </div>
-      <div class="badges">
-        <div class="badge" style="background:#eef2ff;">
-          <span class="badge-label">Status:</span>
-          <span class="badge-value">${draft.status || "pågående"}</span>
-        </div>
-        ${
-          draft.internalId
-            ? `<div class="badge" style="background:#ecfdf5;">
-          <span class="badge-label">Projektnr:</span>
-          <span class="badge-value">${draft.internalId}</span>
-        </div>`
-            : ""
-        }
+      <div class="company-block">
+        <img src="/logo.png" alt="Mach Entreprenad AB" />
+        <div>Mach Entreprenad AB</div>
       </div>
     </div>
 
-    <div class="section two-col">
+    <div class="meta-grid">
       <div>
-        <div class="section-title">Grundinfo</div>
-        <div class="field-grid">
-          <div class="label">Projekt:</div>
-          <div class="value">${draft.name || ""}</div>
-          <div class="label">Kund:</div>
-          <div class="value">${
+        <span class="label">Namn:</span>
+        <span class="value"> ${draft.name || ""}</span>
+      </div>
+      <div>
+        <span class="label">Kund:</span>
+        <span class="value">
+          ${
             customer
               ? customer.companyName || customer.name || "—"
               : "—"
-          }</div>
-          <div class="label">Status:</div>
-          <div class="value">${draft.status || "pågående"}</div>
-          <div class="label">Start:</div>
-          <div class="value">${draft.startDate || "—"}</div>
-          <div class="label">Slut:</div>
-          <div class="value">${draft.endDate || "—"}</div>
-          ${
-            draft.kind
-              ? `<div><span class="label">Entreprenadform:</span> <span class="value">${draft.kind}</span></div>`
-              : ""
           }
-        </div>
+        </span>
       </div>
+      ${
+        draft.internalId
+          ? `<div><span class="label">Projektnr:</span> <span class="value">${draft.internalId}</span></div>`
+          : ""
+      }
       <div>
-        <div class="section-title">Budget</div>
-        <div class="field-grid">
-          <div class="label">Budget:</div>
-          <div class="value">${(Number(draft.budget) || 0).toLocaleString(
-            "sv-SE"
-          )} kr</div>
-        </div>
+        <span class="label">Budget:</span>
+        <span class="value">
+          ${(Number(draft.budget) || 0).toLocaleString("sv-SE")} kr
+        </span>
       </div>
+      ${
+        draft.status
+          ? `<div><span class="label">Status:</span> <span class="value">${draft.status}</span></div>`
+          : ""
+      }
+      ${
+        draft.startDate
+          ? `<div><span class="label">Start:</span> <span class="value">${draft.startDate}</span></div>`
+          : ""
+      }
+      ${
+        draft.endDate
+          ? `<div><span class="label">Slut:</span> <span class="value">${draft.endDate}</span></div>`
+          : ""
+      }
+      ${
+        draft.kind
+          ? `<div><span class="label">Typ:</span> <span class="value">${draft.kind}</span></div>`
+          : ""
+      }
     </div>
 
     <div class="section">
       <div class="section-title">Beskrivning / anteckning</div>
-      <div class="note-box">
-        ${
-          draft.note
-            ? draft.note
-              .replace(/</g, "&lt;")
-              .replace(/>/g, "&gt;")
-              .replace(/\\n/g, "<br/>")
-            : "<span style='color:#6b7280;'>Ingen anteckning angiven.</span>"
-        }
+      <div class="box">
+        <p>${
+          (draft.note || "")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\\n/g, "<br/>") || "Ingen anteckning."
+        }</p>
       </div>
     </div>
 
     <div class="section">
       <div class="section-title">Filer</div>
-      ${
-        FILE_CATS.map((cat) => {
-          const arr = files[cat] || [];
-          if (!arr.length) return "";
-          const items = arr
-            .map(
-              (f) =>
-                `<li><a href="${f.webUrl}" target="_blank" rel="noopener">${f.name}</a></li>`
-            )
-            .join("");
-          return `
-            <div style="margin-bottom:12px;">
-              <div class="label" style="margin-bottom:4px;">${cat}</div>
-              <ul>${items}</ul>
-            </div>
-          `;
-        }).join("") || "<div class='value' style='color:#6b7280;'>Inga filer tillagda.</div>"
-      }
+      <div class="box">
+        ${fileLines || "<p>Inga filer kopplade.</p>"}
+      </div>
     </div>
 
     <div class="footer-actions">
-      <div class="footer-text">
-        Genererad från Mach CRM
-      </div>
+      <button class="btn-print" onclick="window.print()">Skriv ut</button>
     </div>
   </div>
 </body>
 </html>`;
 
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = (draft.internalId || "projekt") + ".html";
-    a.click();
-    URL.revokeObjectURL(url);
+    const w = window.open("", "_blank");
+    if (!w) {
+      alert("Tillåt popup-fönster för att kunna skriva ut projektet.");
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+    w.focus();
   };
 
   return (
     <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
+      <div className="flex items-center justify-between mb-3">
         <h2 className="font-semibold">Projekt</h2>
-        <div className="flex gap-2 flex-wrap items-center">
-          <input
-            className="border rounded-xl px-3 py-2"
-            placeholder="Sök på namn, projektnr, kund..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <select
-            className="border rounded-xl px-3 py-2"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="all">Alla statusar</option>
-            <option value="pågående">Pågående</option>
-            <option value="avslutat">Avslutat</option>
-            <option value="paus">Paus</option>
-            <option value="inställt">Inställt</option>
-          </select>
-        </div>
+        <input
+          className="border rounded-xl px-3 py-2"
+          placeholder="Sök..."
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
       </div>
 
       <ul className="divide-y">
         {list.map((p) => {
-          const wonOffer = (offers || []).find(
-            (o) => o.id === p.originatingOfferId && o.status === "vunnen"
-          );
+          const wonOffer =
+            p.originatingOfferId &&
+            (offers || []).find(
+              (o) => o.id === p.originatingOfferId && o.status === "vunnen"
+            );
           return (
             <li key={p.id} className="py-3">
               <div className="flex items-center justify-between gap-3">
@@ -575,13 +578,8 @@ export default function ProjectsPanel({
                   onClick={() => openEdit(p)}
                   type="button"
                 >
-                  <div className="font-medium truncate flex items-center gap-2">
-                    <span>{p.name || "Projekt"}</span>
-                    {p.internalId && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
-                        #{p.internalId}
-                      </span>
-                    )}
+                  <div className="font-medium truncate">
+                    {p.name || "Projekt"}
                   </div>
                   <div className="text-xs text-gray-500 flex items-center gap-2 flex-wrap">
                     <span>Kund: {customerName(p.customerId)}</span>
@@ -603,14 +601,8 @@ export default function ProjectsPanel({
                       <span
                         className={
                           "text-[11px] px-2 py-0.5 rounded " +
-                          (p.kind === "Totalentreprenad ABT-06"
+                          (p.kind === "Entreprenad"
                             ? "bg-orange-200 text-orange-800"
-                            : p.kind === "AB-04"
-                            ? "bg-amber-200 text-amber-800"
-                            : p.kind === "Bygg"
-                            ? "bg-yellow-200 text-yellow-800"
-                            : p.kind === "ABK09"
-                            ? "bg-purple-200 text-purple-800"
                             : p.kind === "Turbovex"
                             ? "bg-blue-200 text-blue-800"
                             : "bg-gray-100 text-gray-700")
@@ -679,7 +671,6 @@ export default function ProjectsPanel({
                   }
                 />
               </div>
-
               <div>
                 <label className="text-sm font-medium">Kund</label>
                 <select
@@ -695,46 +686,11 @@ export default function ProjectsPanel({
                   <option value="">—</option>
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.companyName || c.name || c.id}
+                      {c.companyName || c.id}
                     </option>
                   ))}
                 </select>
               </div>
-
-              <div>
-                <label className="text-sm font-medium">Status</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.status}
-                  onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      status: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="pågående">Pågående</option>
-                  <option value="avslutat">Avslutat</option>
-                  <option value="paus">Paus</option>
-                  <option value="inställt">Inställt</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Projektnr</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.internalId || ""}
-                  onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      internalId: e.target.value,
-                    }))
-                  }
-                  placeholder="t.ex. 35073 eller 60001"
-                />
-              </div>
-
               <div>
                 <label className="text-sm font-medium">Budget (kr)</label>
                 <input
@@ -749,7 +705,34 @@ export default function ProjectsPanel({
                   }
                 />
               </div>
-
+              <div>
+                <label className="text-sm font-medium">Status</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.status}
+                  onChange={(e) =>
+                    setDraft((d) => ({ ...d, status: e.target.value }))
+                  }
+                >
+                  <option value="pågående">Pågående</option>
+                  <option value="avslutat">Avslutat</option>
+                  <option value="paus">Paus</option>
+                  <option value="inställt">Inställt</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Projektnr</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.internalId || ""}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      internalId: e.target.value,
+                    }))
+                  }
+                />
+              </div>
               <div>
                 <label className="text-sm font-medium">Startdatum</label>
                 <input
@@ -764,7 +747,6 @@ export default function ProjectsPanel({
                   }
                 />
               </div>
-
               <div>
                 <label className="text-sm font-medium">Slutdatum</label>
                 <input
@@ -779,9 +761,8 @@ export default function ProjectsPanel({
                   }
                 />
               </div>
-
               <div>
-                <label className="text-sm font-medium">Entreprenadform</label>
+                <label className="text-sm font-medium">Typ</label>
                 <select
                   className="w-full border rounded px-3 py-2"
                   value={draft.kind || ""}
@@ -790,16 +771,10 @@ export default function ProjectsPanel({
                   }
                 >
                   <option value="">—</option>
-                  <option value="Totalentreprenad ABT-06">
-                    Totalentreprenad ABT-06
-                  </option>
-                  <option value="AB-04">AB-04</option>
-                  <option value="Bygg">Bygg</option>
-                  <option value="ABK09">ABK09</option>
+                  <option value="Entreprenad">Entreprenad</option>
                   <option value="Turbovex">Turbovex</option>
                 </select>
               </div>
-
               <div className="col-span-2">
                 <label className="text-sm font-medium">Anteckning</label>
                 <textarea
@@ -812,7 +787,7 @@ export default function ProjectsPanel({
               </div>
             </div>
 
-            {/* Leverantörer kopplade till projektet */}
+            {/* Leverantörer */}
             <div className="mt-4 border rounded-xl p-3">
               <div className="font-medium mb-2">Kopplade leverantörer</div>
               <div className="flex gap-2 mb-2">
@@ -981,18 +956,18 @@ export default function ProjectsPanel({
                 Spara
               </button>
               <button
-                className="px-3 py-2 rounded bg-sky-600 text-white"
-                onClick={exportText}
+                className="px-3 py-2 rounded bg-indigo-600 text-white"
+                onClick={emailProject}
                 type="button"
               >
-                Exportera TXT
+                Maila projekt
               </button>
               <button
-                className="px-3 py-2 rounded bg-indigo-600 text-white"
-                onClick={exportHtml}
+                className="px-3 py-2 rounded bg-slate-600 text-white"
+                onClick={printProject}
                 type="button"
               >
-                Exportera HTML
+                Skriv ut projekt
               </button>
               <button
                 className="px-3 py-2 rounded bg-rose-600 text-white"
