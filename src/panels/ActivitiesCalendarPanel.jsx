@@ -26,11 +26,17 @@ export default function ActivitiesCalendarPanel({
 
         if (!dateStr) return null;
 
+        let bg = "#e5e7eb"; // grå som standard
+        if (a.responsible === "Cralle") bg = "#bfdbfe"; // blåaktig
+        else if (a.responsible === "Mattias") bg = "#fed7aa"; // orangeaktig
+
         return {
           id: a.id,
           title: a.title || "Aktivitet",
           start: dateStr,
           allDay: true,
+          backgroundColor: bg,
+          borderColor: bg,
         };
       })
       .filter(Boolean);
@@ -77,7 +83,10 @@ export default function ActivitiesCalendarPanel({
   // Klick på datum => skapa ny aktivitet och öppna den i aktivitetsvyn
   const handleDateClick = (info) => {
     const dateStr = info.dateStr; // YYYY-MM-DD
-    const nowIso = new Date().toISOString();
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const defaultTime = `${hh}:00`;
+    const nowIso = now.toISOString();
 
     const a = {
       id: newId(),
@@ -86,7 +95,7 @@ export default function ActivitiesCalendarPanel({
       priority: "medium",
       status: "",
       dueDate: dateStr,
-      dueTime: "",
+      dueTime: defaultTime,
       description: "",
       customerId: "",
       supplierId: "",
