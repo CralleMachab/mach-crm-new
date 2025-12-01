@@ -1,4 +1,6 @@
-// src/panels/ProjectsPanel.jsx
+// OBS: Detta är din befintliga fil med ändrad "Typ" -> "Entreprenadform"
+// och uppdaterad options + färger, men ingen annan logik ändrad.
+
 import React, { useEffect, useMemo, useState } from "react";
 import { pickOneDriveFiles } from "../components/onedrive";
 
@@ -128,6 +130,24 @@ export default function ProjectsPanel({
       default:
         return `${base} bg-gray-100 text-gray-700`;
     }
+  };
+
+  const kindBadge = (kind) => {
+    if (!kind) return "";
+    const base = "text-[11px] px-2 py-0.5 rounded ";
+    if (kind.includes("ABT-06")) {
+      return base + "bg-orange-200 text-orange-800";
+    }
+    if (kind.includes("AB-04")) {
+      return base + "bg-amber-200 text-amber-800";
+    }
+    if (kind.includes("ABK09")) {
+      return base + "bg-slate-200 text-slate-800";
+    }
+    if (kind.includes("ABM 07") || kind.includes("Turbovex")) {
+      return base + "bg-blue-200 text-blue-800";
+    }
+    return base + "bg-gray-100 text-gray-700";
   };
 
   const setFileField = (idx, field, value) => {
@@ -279,7 +299,7 @@ export default function ProjectsPanel({
       lines.push(`Slut: ${draft.endDate}`);
     }
     if (draft.kind) {
-      lines.push(`Typ: ${draft.kind}`);
+      lines.push(`Entreprenadform: ${draft.kind}`);
     }
 
     lines.push("");
@@ -510,7 +530,7 @@ export default function ProjectsPanel({
       }
       ${
         draft.kind
-          ? `<div><span class="label">Typ:</span> <span class="value">${draft.kind}</span></div>`
+          ? `<div><span class="label">Entreprenadform:</span> <span class="value">${draft.kind}</span></div>`
           : ""
       }
     </div>
@@ -598,16 +618,7 @@ export default function ProjectsPanel({
                       </span>
                     )}
                     {p.kind && (
-                      <span
-                        className={
-                          "text-[11px] px-2 py-0.5 rounded " +
-                          (p.kind === "Entreprenad"
-                            ? "bg-orange-200 text-orange-800"
-                            : p.kind === "Turbovex"
-                            ? "bg-blue-200 text-blue-800"
-                            : "bg-gray-100 text-gray-700")
-                        }
-                      >
+                      <span className={kindBadge(p.kind)}>
                         {p.kind}
                       </span>
                     )}
@@ -762,7 +773,9 @@ export default function ProjectsPanel({
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Typ</label>
+                <label className="text-sm font-medium">
+                  Entreprenadform
+                </label>
                 <select
                   className="w-full border rounded px-3 py-2"
                   value={draft.kind || ""}
@@ -771,8 +784,12 @@ export default function ProjectsPanel({
                   }
                 >
                   <option value="">—</option>
-                  <option value="Entreprenad">Entreprenad</option>
-                  <option value="Turbovex">Turbovex</option>
+                  <option value="ABT-06 Totalentreprenad">
+                    ABT-06 Totalentreprenad
+                  </option>
+                  <option value="AB-04">AB-04</option>
+                  <option value="ABK09">ABK09</option>
+                  <option value="ABM 07 Turbovex">ABM 07 Turbovex</option>
                 </select>
               </div>
               <div className="col-span-2">
