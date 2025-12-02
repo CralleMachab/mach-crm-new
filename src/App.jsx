@@ -196,6 +196,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
         return `${base} bg-red-100 text-red-700`;
       case "medium":
         return `${base} bg-yellow-100 text-yellow-700`;
+      case "low":
       default:
         return `${base} bg-gray-100 text-gray-700`;
     }
@@ -209,6 +210,16 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     return `${base} bg-gray-200 text-gray-800`;
   };
 
+  const statusBadge = (s) => {
+    if (!s) return null;
+    const base = "text-xs px-2 py-1 rounded";
+    if (s === "återkoppling")
+      return `${base} bg-orange-100 text-orange-700`;
+    if (s === "klar") return `${base} bg-green-100 text-green-700`;
+    return `${base} bg-gray-100 text-gray-700`;
+  };
+
+  // Nytt: kundnamn i titel
   const getCustomerName = (id) => {
     if (!id) return "";
     const c = customers.find((x) => x.id === id);
@@ -533,9 +544,11 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
         )}
       </div>
 
+      {/* sammanfattning (Idag / Försenade / Kommande 7 dagar) */}
       {mode === "active" && (
         <div className="mb-3 space-y-3 text-sm">
-{rangeFilter === "all" && todayActivities.length > 0 && (
+          {/* Idag – bara när filtret = Alla */}
+          {rangeFilter === "all" && todayActivities.length > 0 && (
             <div>
               <div className="font-semibold flex items-center gap-2">
                 <span>⏰ Idag</span>
@@ -544,15 +557,19 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 </span>
               </div>
               <ul className="list-disc ml-5">
-{todayActivities.slice(0, 5).map((a) => (
-  <li key={a.id} className="text-gray-700">
-    {buildTitle(a)}{" "}
-    <span className="text-gray-500">
-      {fmt(a.dueDate, a.dueTime)}
-    </span>
-  </li>
-))}
+                {todayActivities.slice(0, 5).map((a) => (
+                  <li key={a.id} className="text-gray-700">
+                    {buildTitle(a)}{" "}
+                    <span className="text-gray-500">
+                      {fmt(a.dueDate, a.dueTime)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
+          {/* Försenade – låter vi ligga kvar alltid */}
           {overdueActivities.length > 0 && (
             <div>
               <div className="font-semibold flex items-center gap-2 text-rose-700">
@@ -562,21 +579,20 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 </span>
               </div>
               <ul className="list-disc ml-5">
-{overdueActivities.slice(0, 5).map((a) => (
-  <li key={a.id} className="text-gray-700">
-    {buildTitle(a)}{" "}
-    <span className="text-gray-500">
-      {fmt(a.dueDate, a.dueTime)}
-    </span>
-  </li>
-))}
+                {overdueActivities.slice(0, 5).map((a) => (
+                  <li key={a.id} className="text-gray-700">
+                    {buildTitle(a)}{" "}
+                    <span className="text-gray-500">
+                      {fmt(a.dueDate, a.dueTime)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-          {/* Kommande 7 dagar: visas nu ENDAST när filter = "Alla" */}
-{rangeFilter === "all" &&
-  !dateFilter &&
-  statusFilter === "all" &&
-  respFilter === "all" &&
-  upcoming7Activities.length > 0 && (
+          {/* Kommande 7 dagar – bara när filtret = Alla */}
+          {rangeFilter === "all" && upcoming7Activities.length > 0 && (
             <div>
               <div className="font-semibold flex items-center gap-2">
                 <span>📅 Kommande 7 dagar</span>
@@ -585,11 +601,11 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 </span>
               </div>
               <ul className="list-disc ml-5">
-{upcoming7Activities.slice(0, 7).map((a) => (
-  <li key={a.id} className="text-gray-700">
-    {fmt(a.dueDate, a.dueTime)} – {buildTitle(a)}
-  </li>
-))}
+                {upcoming7Activities.slice(0, 7).map((a) => (
+                  <li key={a.id} className="text-gray-700">
+                    {fmt(a.dueDate, a.dueTime)} – {buildTitle(a)}
+                  </li>
+                ))}
               </ul>
             </div>
           )}
@@ -607,10 +623,10 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 title="Öppna aktiviteten"
                 type="button"
               >
-<div className="font-medium truncate">
-  {buildTitle(a)}
-  {mode === "archive" ? " (Arkiv)" : ""}
-</div>
+                <div className="font-medium truncate">
+                  {buildTitle(a)}
+                  {mode === "archive" ? " (Arkiv)" : ""}
+                </div>
                 <div className="flex items-center gap-3">
                   <div className="text-xs text-gray-500">
                     {fmt(a.dueDate, a.dueTime)}
