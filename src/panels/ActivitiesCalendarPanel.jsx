@@ -1,4 +1,3 @@
-// src/panels/ActivitiesCalendarPanel.jsx
 import React, { useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -26,9 +25,19 @@ export default function ActivitiesCalendarPanel({
 
         if (!dateStr) return null;
 
-        let bg = "#e5e7eb"; // grå som standard
-        if (a.responsible === "Cralle") bg = "#bfdbfe"; // blåaktig
-        else if (a.responsible === "Mattias") bg = "#fed7aa"; // orangeaktig
+        // Standard: grå bakgrund, mörk text
+        let bg = "#e5e7eb"; // grå
+        let textColor = "#111827"; // mörkgrå/svart
+
+        if (a.responsible === "Cralle") {
+          // Cralle: normal blå text
+          bg = "#e5e7eb";        // behåll neutral/grå bakgrund
+          textColor = "#1d4ed8"; // normal blå text
+        } else if (a.responsible === "Mattias") {
+          // Mattias: orange bakgrund, svart text
+          bg = "#fb923c";        // orange
+          textColor = "#000000"; // svart text
+        }
 
         return {
           id: a.id,
@@ -37,6 +46,7 @@ export default function ActivitiesCalendarPanel({
           allDay: true,
           backgroundColor: bg,
           borderColor: bg,
+          textColor,
         };
       })
       .filter(Boolean);
@@ -125,21 +135,21 @@ export default function ActivitiesCalendarPanel({
         </p>
       </div>
 
-<FullCalendar
-  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-  initialView="dayGridMonth"
-  headerToolbar={{
-    left: "prev,next today",
-    center: "title",
-    right: "dayGridMonth,timeGridWeek", // 👈 knappar för Månad / Vecka
-  }}
-  height="auto"
-  events={events}
-  editable={true}
-  eventDrop={handleEventDrop}
-  eventClick={handleEventClick}
-  dateClick={handleDateClick}
-/>
+      <FullCalendar
+        plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+        initialView="dayGridMonth"
+        headerToolbar={{
+          left: "prev,next today",
+          center: "title",
+          right: "dayGridMonth,timeGridWeek", // 👈 knappar för Månad / Vecka
+        }}
+        height="auto"
+        events={events}
+        editable={true}
+        eventDrop={handleEventDrop}
+        eventClick={handleEventClick}
+        dateClick={handleDateClick}
+      />
     </div>
   );
 }
