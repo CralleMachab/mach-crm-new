@@ -2153,97 +2153,90 @@ export default function App() {
       <div className="flex flex-col gap-4">
         {/* Meny-knappar (ersätter sidomenyn) */}
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setView("activities")}
-            className={
-              "px-3 py-2 rounded-full text-sm " +
-              (view === "activities"
-                ? "bg-black text-white"
-                : "bg-white text-gray-800 border hover:bg-gray-50")
-            }
-          >
-            Aktiviteter
-          </button>
+  {/* Aktiviteter – ljusgrå som + Ny aktivitet */}
+  <button
+    type="button"
+    onClick={() => setView("activities")}
+    className={
+      "px-3 py-2 rounded-full text-sm border " +
+      (view === "activities"
+        ? "bg-gray-300 text-black"
+        : "bg-gray-200 text-black hover:bg-gray-300")
+    }
+  >
+    Aktiviteter
+  </button>
 
-          <button
-            type="button"
-            onClick={() => setView("activitiesCalendar")}
-            className={
-              "px-3 py-2 rounded-full text-sm " +
-              (view === "activitiesCalendar"
-                ? "bg-black text-white"
-                : "bg-white text-gray-800 border hover:bg-gray-50")
-            }
-          >
-            Kalender
-          </button>
+  {/* Kalender – grå */}
+  <button
+    type="button"
+    onClick={() => setView("activitiesCalendar")}
+    className={
+      "px-3 py-2 rounded-full text-sm border " +
+      (view === "activitiesCalendar"
+        ? "bg-gray-300 text-black"
+        : "bg-gray-200 text-black hover:bg-gray-300")
+    }
+  >
+    Kalender
+  </button>
 
-          <button
-            type="button"
-            onClick={() => setView("customers")}
-            className={
-              "px-3 py-2 rounded-full text-sm " +
-              (view === "customers"
-                ? "bg-black text-white"
-                : "bg-white text-gray-800 border hover:bg-gray-50")
-            }
-          >
-            Kunder
-          </button>
+  {/* Kunder – samma ljusblå som + Ny kund */}
+  <button
+    type="button"
+    onClick={() => setView("customers")}
+    className={
+      "px-3 py-2 rounded-full text-sm border " +
+      (view === "customers"
+        ? "bg-blue-300 text-black"
+        : "bg-blue-200 text-black hover:bg-blue-300")
+    }
+  >
+    Kunder
+  </button>
 
-          <button
-            type="button"
-            onClick={() => setView("suppliers")}
-            className={
-              "px-3 py-2 rounded-full text-sm " +
-              (view === "suppliers"
-                ? "bg-black text-white"
-                : "bg-white text-gray-800 border hover:bg-gray-50")
-            }
-          >
-            Leverantörer
-          </button>
+  {/* Leverantörer – samma gul som + Ny leverantör */}
+  <button
+    type="button"
+    onClick={() => setView("suppliers")}
+    className={
+      "px-3 py-2 rounded-full text-sm border " +
+      (view === "suppliers"
+        ? "bg-amber-300 text-black"
+        : "bg-amber-200 text-black hover:bg-amber-300")
+    }
+  >
+    Leverantörer
+  </button>
 
-          <button
-            type="button"
-            onClick={() => setView("offers")}
-            className={
-              "px-3 py-2 rounded-full text-sm " +
-              (view === "offers"
-                ? "bg-black text-white"
-                : "bg-white text-gray-800 border hover:bg-gray-50")
-            }
-          >
-            Offerter
-          </button>
+  {/* Offerter – samma orange som + Ny offert */}
+  <button
+    type="button"
+    onClick={() => setView("offers")}
+    className={
+      "px-3 py-2 rounded-full text-sm border " +
+      (view === "offers"
+        ? "bg-orange-400 text-black"
+        : "bg-orange-300 text-black hover:bg-orange-400")
+    }
+  >
+    Offerter
+  </button>
 
-          <button
-            type="button"
-            onClick={() => setView("projects")}
-            className={
-              "px-3 py-2 rounded-full text-sm " +
-              (view === "projects"
-                ? "bg-black text-white"
-                : "bg-white text-gray-800 border hover:bg-gray-50")
-            }
-          >
-            Projekt
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setView("settings")}
-            className={
-              "px-3 py-2 rounded-full text-sm " +
-              (view === "settings"
-                ? "bg-black text-white"
-                : "bg-white text-gray-800 border hover:bg-gray-50")
-            }
-          >
-            Inställningar
-          </button>
-        </div>
+  {/* Projekt – samma grön som + Nytt projekt */}
+  <button
+    type="button"
+    onClick={() => setView("projects")}
+    className={
+      "px-3 py-2 rounded-full text-sm border " +
+      (view === "projects"
+        ? "bg-green-300 text-black"
+        : "bg-green-200 text-black hover:bg-green-300")
+    }
+  >
+    Projekt
+  </button>
+</div>
 
         {/* Innehåll */}
         <main className="space-y-4">
