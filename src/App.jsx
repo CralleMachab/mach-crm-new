@@ -575,7 +575,11 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
           )}
 
           {/* Kommande 7 dagar: visas nu ENDAST när filter = "Alla" */}
-          {rangeFilter === "all" && upcoming7Activities.length > 0 && (
+{rangeFilter === "all" &&
+  !dateFilter &&
+  statusFilter === "all" &&
+  respFilter === "all" &&
+  upcoming7Activities.length > 0 && (
             <div>
               <div className="font-semibold flex items-center gap-2">
                 <span>📅 Kommande 7 dagar</span>
