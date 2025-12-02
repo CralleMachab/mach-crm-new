@@ -29,15 +29,15 @@ export default function ActivitiesCalendarPanel({
         let bg = "#e5e7eb"; // grå
         let textColor = "#111827"; // mörkgrå/svart
 
-        if (a.responsible === "Cralle") {
-          // Cralle: normal blå text
-          bg = "#e5e7eb";        // behåll neutral/grå bakgrund
-          textColor = "#1d4ed8"; // normal blå text
-        } else if (a.responsible === "Mattias") {
-          // Mattias: orange bakgrund, svart text
-          bg = "#fb923c";        // orange
-          textColor = "#000000"; // svart text
-        }
+if (a.responsible === "Cralle") {
+  // Cralle: blå bakgrund (samma känsla som Kunder-knappen), svart text
+  bg = "#bfdbfe";        // Tailwind blue-200
+  textColor = "#000000"; // svart text
+} else if (a.responsible === "Mattias") {
+  // Mattias: orange bakgrund, svart text
+  bg = "#fb923c";
+  textColor = "#000000";
+}
 
         return {
           id: a.id,
