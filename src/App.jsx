@@ -2004,6 +2004,11 @@ export default function App() {
   const [view, setView] = useState("activities");
   // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
 
+  const lastSyncedIso = state?._lastSavedAt || "";
+  const lastSyncedText = lastSyncedIso
+    ? formatSwedishDateTime(lastSyncedIso)
+    : "Ingen synk ännu";
+
   const newId = () =>
     crypto?.randomUUID
       ? crypto.randomUUID()
