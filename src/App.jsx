@@ -7,6 +7,24 @@ import ProjectsPanel from "./panels/ProjectsPanel.jsx";
 import ActivitiesCalendarPanel from "./panels/ActivitiesCalendarPanel.jsx";
 import SettingsPanel from "./panels/SettingsPanel.jsx";
 
+// Hjälp-funktion för att visa svenskt datum/tid
+function formatSwedishDateTime(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("sv-SE", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 /* ===========================
    useStore — lokal + SharePoint
    =========================== */
