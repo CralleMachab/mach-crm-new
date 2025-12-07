@@ -2127,67 +2127,76 @@ export default function App() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl p-4">
-      {/* HEADER */}
-      <header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-        <h1 className="text-xl font-semibold">Mach CRM</h1>
+<header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+  <h1 className="text-xl font-semibold">Mach CRM</h1>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
-            onClick={createActivity}
-            title="Skapa ny aktivitet"
-            type="button"
-          >
-            + Ny aktivitet
-          </button>
+  {/* HÖGER DEL – KNAPPAR + SENAST SYNKAD */}
+  <div className="flex flex-col items-end gap-1">
+    {/* Knapprad */}
+    <div className="flex items-center gap-2 flex-wrap">
 
-          <button
-            className="border rounded-xl px-3 py-2 bg-orange-300 hover:bg-orange-400"
-            onClick={createOffer}
-            title="Skapa ny offert"
-            type="button"
-          >
-            + Ny offert
-          </button>
+      <button
+        className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
+        onClick={createActivity}
+        title="Skapa ny aktivitet"
+        type="button"
+      >
+        + Ny aktivitet
+      </button>
 
-          <button
-            className="border rounded-xl px-3 py-2 bg-green-200 hover:bg-green-300"
-            onClick={createProjectEmpty}
-            title="Skapa nytt projekt"
-            type="button"
-          >
-            + Nytt projekt
-          </button>
+      <button
+        className="border rounded-xl px-3 py-2 bg-orange-300 hover:bg-orange-400"
+        onClick={createOffer}
+        title="Skapa ny offert"
+        type="button"
+      >
+        + Ny offert
+      </button>
 
-          <button
-            className="border rounded-xl px-3 py-2 bg-blue-200 hover:bg-blue-300"
-            onClick={createCustomer}
-            title="Lägg till kund"
-            type="button"
-          >
-            + Ny kund
-          </button>
+      <button
+        className="border rounded-xl px-3 py-2 bg-green-200 hover:bg-green-300"
+        onClick={createProjectEmpty}
+        title="Skapa nytt projekt"
+        type="button"
+      >
+        + Nytt projekt
+      </button>
 
-          <button
-            className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300"
-            onClick={createSupplier}
-            title="Lägg till leverantör"
-            type="button"
-          >
-            + Ny leverantör
-          </button>
+      <button
+        className="border rounded-xl px-3 py-2 bg-blue-200 hover:bg-blue-300"
+        onClick={createCustomer}
+        title="Lägg till kund"
+        type="button"
+      >
+        + Ny kund
+      </button>
 
-          <button
-            className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
-            onClick={() => setView("settings")}
-            title="Inställningar"
-            type="button"
-          >
-            🛠️
-          </button>
-        </div>
-      </header>
+      <button
+        className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300"
+        onClick={createSupplier}
+        title="Lägg till leverantör"
+        type="button"
+      >
+        + Ny leverantör
+      </button>
+
+      <button
+        className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
+        onClick={() => setView("settings")}
+        title="Inställningar"
+        type="button"
+      >
+        🛠️
+      </button>
+
+    </div>
+
+    {/* NY RAD – SENAST SYNKAD */}
+    <div className="text-xs text-gray-500">
+      Senast synkad: {lastSyncedText}
+    </div>
+  </div>
+</header>
 
       {/* NY LAYOUT: menyrad överst, innehåll under */}
       <div className="flex flex-col gap-4">
