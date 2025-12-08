@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import { loadState, saveState } from "./lib/storage";
 import { fetchRemoteState, pushRemoteState } from "./lib/cloud";
@@ -39,62 +40,59 @@ function useStore() {
       entities: [],
       offers: [],
       projects: [],
-      _lastSavedAt: "",
     };
   });
 
-  // Lokalt
+  const [cloudStatus, setCloudStatus] = useState({
+    lastSyncedAt: null,
+    lastError: null,
+  });
+
   useEffect(() => {
-    saveState(state);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch {}
+      saveState(state);
+    } catch (err) {
+      console.error("Kunde inte spara lokalt", err);
+    }
   }, [state]);
 
-  // Push till SharePoint (debounce)
-  useEffect(() => {
-    const t = setTimeout(async () => {
-      try {
-        const withVersion = {
-          ...state,
-          _lastSavedAt: new Date().toISOString(),
-        };
-        await pushRemoteState(withVersion);
-      } catch (e) {
-        console.warn("Kunde inte spara till SharePoint:", e);
+  const loadFromCloud = async () => {
+    try {
+      const remote = await fetchRemoteState();
+      if (remote && typeof remote === "object") {
+        setState(remote);
+        saveState(remote);
+        setCloudStatus({
+          lastSyncedAt: new Date().toISOString(),
+          lastError: null,
+        });
       }
-    }, 800);
-    return () => clearTimeout(t);
-  }, [state]);
+    } catch (err) {
+      console.error("Fel vid hämtning från moln", err);
+      setCloudStatus((s) => ({
+        ...s,
+        lastError: err?.message || String(err),
+      }));
+    }
+  };
 
-  // Poll från SharePoint
-  useEffect(() => {
-    let stopped = false;
-    const tick = async () => {
-      try {
-        const remote = await fetchRemoteState();
-        if (remote && typeof remote === "object") {
-          const lv = state?._lastSavedAt || "";
-          const rv = remote?._lastSavedAt || "";
-          if (rv && rv !== lv) {
-            setState(remote);
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
-            } catch {}
-          }
-        }
-      } catch {
-      } finally {
-        if (!stopped) setTimeout(tick, 5000);
-      }
-    };
-    tick();
-    return () => {
-      stopped = true;
-    };
-  }, []); // bara första gången
+  const pushToCloud = async () => {
+    try {
+      await pushRemoteState(state);
+      setCloudStatus({
+        lastSyncedAt: new Date().toISOString(),
+        lastError: null,
+      });
+    } catch (err) {
+      console.error("Fel vid uppladdning till moln", err);
+      setCloudStatus((s) => ({
+        ...s,
+        lastError: err?.message || String(err),
+      }));
+    }
+  };
 
-  return [state, setState];
+  return [state, setState, cloudStatus, loadFromCloud, pushToCloud];
 }
 
 /* ======================================
@@ -111,6 +109,8 @@ function customerCategoryBadge(cat) {
       return `${base} bg-orange-500`; // Orange
     case "Turbovex":
       return `${base} bg-blue-500`; // Blå
+    case "Bygg":
+      return `${base} bg-orange-500`; // Orange
     case "Övrigt":
       return "text-xs px-2 py-1 rounded bg-white text-gray-700 border";
     default:
@@ -164,20 +164,12 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     [entities]
   );
 
-  const fmtDateTime = (dateStr, timeStr) => {
-    if (!dateStr) return "";
-    const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
-    try {
-      return d.toLocaleString("sv-SE", {
-        dateStyle: "medium",
-        timeStyle: timeStr ? "short" : undefined,
-      });
-    } catch {
-      return `${dateStr} ${timeStr || ""}`;
-    }
+  const dateOnly = (iso) => {
+    if (!iso) return "";
+    return iso.slice(0, 10);
   };
 
-  const todayISO = () => {
+  const todayString = () => {
     const d = new Date();
     const m = `${d.getMonth() + 1}`.padStart(2, "0");
     const day = `${d.getDate()}`.padStart(2, "0");
@@ -199,112 +191,14 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       today.getDate() + 6
     );
 
-    const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
-    return d >= start && d <= end;
+    const [year, month, day] = dateStr.split("-").map((x) => parseInt(x, 10));
+    const d = new Date(year, (month || 1) - 1, day || 1);
+
+    if (d < start || d > end) return false;
+
+    if (!timeStr) return true;
+    return true;
   };
-
-  const isSameDay = (dateStr, ymd) =>
-    !!dateStr && dateStr.slice(0, 10) === ymd;
-
-  const prBadge = (p) => {
-    const base = "text-xs px-2 py-1 rounded";
-    switch (p) {
-      case "hög":
-        return `${base} bg-rose-200 text-rose-800`;
-      case "medel":
-        return `${base} bg-amber-200 text-amber-800`;
-      case "låg":
-        return `${base} bg-slate-200 text-slate-800`;
-      case "klar":
-        return `${base} bg-green-200 text-green-800`;
-      default:
-        return `${base} bg-slate-100 text-slate-700`;
-    }
-  };
-
-  const statusBadge = (s) => {
-    const base = "text-xs px-2 py-1 rounded";
-    switch (s) {
-      case "planerad":
-        return `${base} bg-blue-100 text-blue-800`;
-      case "återkoppling":
-        return `${base} bg-orange-100 text-orange-800`;
-      case "klar":
-        return `${base} bg-green-100 text-green-800`;
-      case "inställd":
-        return `${base} bg-slate-200 text-slate-800`;
-      default:
-        return `${base} bg-slate-100 text-slate-700`;
-    }
-  };
-
-  const respLabel = (r) => r || "—";
-
-  // Normaliserad lista med filter
-  const visible = useMemo(() => {
-    let list = (activities || []).slice();
-
-    if (mode === "active") {
-      // ej borttagna
-      list = list.filter((a) => !a.deletedAt);
-    } else {
-      // arkiv-läge
-      list = list.filter((a) => !!a.deletedAt);
-    }
-
-    if (respFilter !== "all") {
-      list = list.filter((a) => (a.responsible || "") === respFilter);
-    }
-
-    if (statusFilter !== "all") {
-      list = list.filter((a) => (a.status || "planerad") === statusFilter);
-    }
-
-    if (dateFilter) {
-      list = list.filter((a) =>
-        isSameDay(a.dueDate || a.date, dateFilter.slice(0, 10))
-      );
-    } else if (rangeFilter === "today") {
-      const today = todayISO();
-      list = list.filter((a) =>
-        isSameDay(a.dueDate || a.date, today)
-      );
-    } else if (rangeFilter === "7") {
-      list = list.filter((a) =>
-        inNext7(a.dueDate || a.date, a.dueTime || a.time)
-      );
-    } // rangeFilter === "all" => ingen extra datum-filtrering
-
-    // sortera på datum + tid
-    list.sort((a, b) => {
-      const da = (a.dueDate || a.date || "") + "T" + (a.dueTime || "");
-      const db = (b.dueDate || b.date || "") + "T" + (b.dueTime || "");
-      return da.localeCompare(db);
-    });
-
-    return list;
-  }, [activities, mode, respFilter, statusFilter, rangeFilter, dateFilter]);
-
-  const today = todayISO();
-
-  const overdue = visible.filter(
-    (a) =>
-      !a.deletedAt &&
-      (a.status || "planerad") !== "klar" &&
-      (a.dueDate || a.date) &&
-      (a.dueDate || a.date) < today
-  );
-
-  const todayActivities = visible.filter((a) =>
-    isSameDay(a.dueDate || a.date, today)
-  );
-
-  const upcoming7 = visible.filter(
-    (a) =>
-      (a.dueDate || a.date) &&
-      (a.dueDate || a.date) > today &&
-      inNext7(a.dueDate || a.date, a.dueTime || a.time)
-  );
 
   const ensureDateAndTimes = (obj) => {
     const now = new Date();
@@ -342,49 +236,57 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     };
   };
 
-  const openEdit = (a) => {
-    setOpenItem(a);
-    setDraft({
-      id: a.id,
-      title: a.title || "",
-      description: a.description || "",
-      responsible: a.responsible || "",
-      priority: a.priority || "medel",
-      status: a.status || "planerad",
-      dueDate: a.dueDate || a.date || "",
-      dueTime: a.dueTime || a.time || "",
-      endTime: a.endTime || "",
-      reminder: !!a.reminder,
-      customerId: a.customerId || "",
-      supplierId: a.supplierId || "",
-      contactName: a.contactName || "",
-      phone: a.phone || "",
-      email: a.email || "",
-    });
-  };
+  // Öppna nyskapad aktivitet om _shouldOpen är satt (från huvudmenyn)
+  useEffect(() => {
+    const a = (activities || []).find((x) => x._shouldOpen);
+    if (!a) return;
 
-  const softDelete = (a) => {
-    if (
-      !window.confirm(
-        "Ta bort denna aktivitet? Den hamnar i arkiv (kan återställas via Inställningar)."
-      )
-    )
-      return;
+    const withDates = ensureDateAndTimes(a);
+    setOpenItem(withDates);
+    setDraft(withDates);
 
     setState((s) => ({
       ...s,
       activities: (s.activities || []).map((x) =>
-        x.id === a.id ? { ...x, deletedAt: new Date().toISOString() } : x
+        x.id === a.id ? { ...x, _shouldOpen: undefined } : x
       ),
     }));
-    if (openItem?.id === a.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
+  }, [activities, setState]);
 
   const Icons = ({ a }) => (
     <div className="flex items-center gap-1 text-sm">
+      {a.isPhone && (
+        <span
+          className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-blue-100 text-blue-800"
+          title="Telefon"
+        >
+          📞
+        </span>
+      )}
+      {a.isMeeting && (
+        <span
+          className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-purple-100 text-purple-800"
+          title="Möte"
+        >
+          📅
+        </span>
+      )}
+      {a.isEmail && (
+        <span
+          className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-sky-100 text-sky-800"
+          title="Mail"
+        >
+          ✉️
+        </span>
+      )}
+      {a.isLunch && (
+        <span
+          className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-amber-100 text-amber-800"
+          title="Lunch"
+        >
+          🍽️
+        </span>
+      )}
       {a.reminder && (
         <span
           className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-yellow-200 text-yellow-900"
@@ -418,9 +320,110 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       end = `${eh}:${em}`;
     }
     if (end) {
-      return `${fmtDateTime(date, start)} – ${end}`;
+      return `${date} ${start}–${end}`;
     }
-    return fmtDateTime(date, start);
+    return `${date} ${start}`;
+  };
+
+  const filteredActivities = useMemo(() => {
+    let arr = activities || [];
+
+    if (mode === "active") {
+      arr = arr.filter((a) => a.status !== "klar" && a.status !== "inställd");
+    } else {
+      arr = arr.filter((a) => a.status === "klar" || a.status === "inställd");
+    }
+
+    if (respFilter !== "all") {
+      if (respFilter === "Annat") {
+        arr = arr.filter(
+          (a) => a.responsible && !["Cralle", "Mattias"].includes(a.responsible)
+        );
+      } else {
+        arr = arr.filter((a) => (a.responsible || "") === respFilter);
+      }
+    }
+
+    if (statusFilter !== "all") {
+      arr = arr.filter((a) => (a.status || "planerad") === statusFilter);
+    }
+
+    if (rangeFilter === "today") {
+      const t = todayString();
+      arr = arr.filter((a) => (a.dueDate || a.date || "") === t);
+    } else if (rangeFilter === "7") {
+      arr = arr.filter((a) =>
+        inNext7(a.dueDate || a.date || "", a.dueTime || a.time || "")
+      );
+    }
+
+    if (dateFilter) {
+      arr = arr.filter((a) => (a.dueDate || a.date || "") === dateFilter);
+    }
+
+    arr = arr.map((a) => {
+      const d = new Date(a.dueDate || a.date || a.createdAt || Date.now());
+      return {
+        ...a,
+        _sortKey: d.getTime(),
+      };
+    });
+
+    arr.sort((a, b) => {
+      if (a._sortKey !== b._sortKey) {
+        return a._sortKey - b._sortKey;
+      }
+      return (a.title || "").localeCompare(b.title || "");
+    });
+
+    return arr;
+  }, [activities, respFilter, rangeFilter, dateFilter, statusFilter, mode]);
+
+  const statusLabel = (s) => {
+    switch (s || "planerad") {
+      case "planerad":
+        return "Planerad";
+      case "återkoppling":
+        return "Återkoppling";
+      case "klar":
+        return "Klar";
+      case "inställd":
+        return "Inställd";
+      default:
+        return s || "Planerad";
+    }
+  };
+
+  const statusBadge = (s) => {
+    const base = "text-xs px-2 py-1 rounded";
+    switch (s) {
+      case "planerad":
+        return `${base} bg-blue-100 text-blue-800`;
+      case "återkoppling":
+        return `${base} bg-amber-100 text-amber-800`;
+      case "klar":
+        return `${base} bg-green-100 text-green-800`;
+      case "inställd":
+        return `${base} bg-red-100 text-red-800`;
+      default:
+        return `${base} bg-slate-100 text-slate-800`;
+    }
+  };
+
+  const priorityBadge = (p) => {
+    const base = "text-xs px-2 py-1 rounded";
+    switch (p || "medel") {
+      case "hög":
+        return `${base} bg-red-100 text-red-800`;
+      case "medel":
+        return `${base} bg-amber-100 text-amber-800`;
+      case "låg":
+        return `${base} bg-slate-200 text-slate-800`;
+      case "klar":
+        return `${base} bg-green-200 text-green-800`;
+      default:
+        return `${base} bg-slate-100 text-slate-700`;
+    }
   };
 
   const createNewDraft = () => {
@@ -443,6 +446,10 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       dueTime: `${h}:00`,
       endTime: "",
       reminder: false,
+      isPhone: false,
+      isEmail: false,
+      isLunch: false,
+      isMeeting: false,
       customerId: "",
       supplierId: "",
       contactName: "",
@@ -472,35 +479,69 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
     setState((s) => ({
       ...s,
-      activities: (s.activities || []).map((x) =>
-        x.id === updated.id ? updated : x
+      activities: (s.activities || []).map((a) =>
+        a.id === openItem.id ? { ...a, ...updated } : a
       ),
     }));
     setOpenItem(null);
     setDraft(null);
   };
 
-  const saveAndMarkDone = () =>
-    applyUpdateAndClose((obj) => ({
-      ...obj,
-      priority: "klar",
+  const saveOnly = () => {
+    applyUpdateAndClose((merged) => merged);
+  };
+
+  const saveAndMarkDone = () => {
+    applyUpdateAndClose((merged) => ({
+      ...merged,
       status: "klar",
-      completedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      doneAt: new Date().toISOString(),
     }));
+  };
 
-  const saveAndFollowUp = () =>
-    applyUpdateAndClose((obj) => ({
-      ...obj,
+  const saveAndFollowUp = () => {
+    applyUpdateAndClose((merged) => ({
+      ...merged,
       status: "återkoppling",
-      updatedAt: new Date().toISOString(),
     }));
+  };
 
-  const saveOnly = () =>
-    applyUpdateAndClose((obj) => ({
-      ...obj,
-      updatedAt: new Date().toISOString(),
+  const deleteActivity = () => {
+    if (!openItem) return;
+    if (!window.confirm("Ta bort denna aktivitet?")) return;
+    setState((s) => ({
+      ...s,
+      activities: (s.activities || []).filter((a) => a.id !== openItem.id),
     }));
+    setOpenItem(null);
+    setDraft(null);
+  };
+
+  const openEdit = (a) => {
+    const merged = ensureDateAndTimes(a);
+    setOpenItem(merged);
+    setDraft({
+      id: merged.id,
+      title: merged.title || "",
+      description: merged.description || "",
+      responsible: merged.responsible || "",
+      priority: merged.priority || "medel",
+      status: merged.status || "planerad",
+      dueDate: merged.dueDate || "",
+      dueTime: merged.dueTime || "",
+      endTime: merged.endTime || "",
+      reminder: !!merged.reminder,
+      isPhone: !!merged.isPhone,
+      isEmail: !!merged.isEmail,
+      isLunch: !!merged.isLunch,
+      isMeeting: !!merged.isMeeting,
+      customerId: merged.customerId || "",
+      supplierId: merged.supplierId || "",
+      contactName: merged.contactName || "",
+      phone: merged.phone || "",
+      email: merged.email || "",
+    });
+  };
 
   return (
     <div className="space-y-4">
@@ -521,26 +562,26 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
         </div>
 
         <div>
-          <label className="block text-xs text-gray-600">Datum</label>
+          <label className="block text-xs text-gray-600">Datumintervall</label>
+          <select
+            className="border rounded-xl px-3 py-2"
+            value={rangeFilter}
+            onChange={(e) => setRangeFilter(e.target.value)}
+          >
+            <option value="today">Endast idag</option>
+            <option value="7">7 dagar framåt</option>
+            <option value="all">Alla datum</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-600">Specifikt datum</label>
           <input
             type="date"
             className="border rounded-xl px-3 py-2"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
           />
-        </div>
-
-        <div>
-          <label className="block text-xs text-gray-600">Tidsspann</label>
-          <select
-            className="border rounded-xl px-3 py-2"
-            value={rangeFilter}
-            onChange={(e) => setRangeFilter(e.target.value)}
-          >
-            <option value="today">Idag</option>
-            <option value="7">7 dagar</option>
-            <option value="all">Alla</option>
-          </select>
         </div>
 
         <div>
@@ -560,10 +601,10 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
         <div className="ml-auto flex gap-2">
           <button
-            className={`px-3 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl text-sm ${
               mode === "active"
-                ? "bg-slate-800 text-white"
-                : "bg-white text-slate-700"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700"
             }`}
             onClick={() => setMode("active")}
             type="button"
@@ -571,10 +612,10 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
             Aktiva
           </button>
           <button
-            className={`px-3 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl text-sm ${
               mode === "archive"
-                ? "bg-slate-800 text-white"
-                : "bg-white text-slate-700"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700"
             }`}
             onClick={() => setMode("archive")}
             type="button"
@@ -582,7 +623,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
             Arkiv
           </button>
           <button
-            className="px-3 py-2 rounded-xl border text-sm bg-gray-200 hover:bg-gray-300"
+            className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm"
             onClick={createNewDraft}
             type="button"
           >
@@ -591,88 +632,79 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
         </div>
       </div>
 
-      {/* Små sammanfattningar – Kommande 7 dagar bara när filtret = Alla */}
-      {mode === "active" && rangeFilter === "all" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-gray-700">
-          <div className="border rounded-xl p-2">
-            <div className="font-semibold mb-1">Försenade</div>
-            <div>{overdue.length} st</div>
-          </div>
-          <div className="border rounded-xl p-2">
-            <div className="font-semibold mb-1">Idag</div>
-            <div>{todayActivities.length} st</div>
-          </div>
-          <div className="border rounded-xl p-2">
-            <div className="font-semibold mb-1">Kommande 7 dagar</div>
-            <div>{upcoming7.length} st</div>
-          </div>
-        </div>
-      )}
-
       {/* Lista */}
-      <div className="space-y-3">
-        {visible.length === 0 && (
-          <div className="text-sm text-gray-500">
-            Inga aktiviteter matchar filtren.
-          </div>
-        )}
-
-        {visible.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            onClick={() => openEdit(a)}
-            className="w-full text-left border rounded-xl px-3 py-2 flex flex-col gap-1 hover:bg-gray-50"
-          >
-            <div className="flex items-center gap-2">
-              <div className="font-medium truncate">
-                {a.title || "(ingen titel)"}
-              </div>
-              {a.customerId && (
-                <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                  Kund kopplad
-                </span>
-              )}
-              {a.supplierId && (
-                <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-                  Leverantör kopplad
-                </span>
-              )}
-              <div className="ml-auto flex items-center gap-2">
-                <span className={prBadge(a.priority)}>{a.priority}</span>
-                <span className={statusBadge(a.status || "planerad")}>
-                  {a.status || "planerad"}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-gray-600">
-              <Icons a={a} />
-              <span className="truncate">
-                {timeRangeLabel(a)}
-              </span>
-              <span className="ml-auto text-[11px] text-gray-500">
-                Ansvarig: {respLabel(a.responsible)}
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      {/* Popup */}
-      {openItem && draft && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-30">
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-semibold text-lg">Redigera aktivitet</div>
+      <ul className="divide-y rounded-xl border bg-white">
+        {filteredActivities.map((a) => (
+          <li key={a.id} className="p-3 hover:bg-gray-50 transition">
+            <div className="flex items-center justify-between gap-3">
               <button
-                className="text-sm text-gray-500"
+                className="text-left flex-1 min-w-0"
+                onClick={() => openEdit(a)}
+                type="button"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium truncate">
+                    {a.title || "(Ingen titel)"}
+                  </span>
+                  <span className={priorityBadge(a.priority || "medel")}>
+                    {a.priority || "medel"}
+                  </span>
+                  <span className={statusBadge(a.status || "planerad")}>
+                    {statusLabel(a.status)}
+                  </span>
+                </div>
+                <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                  <span>{timeRangeLabel(a)}</span>
+                  {a.customerId && (
+                    <span>
+                      ·{" "}
+                      {
+                        customers.find((c) => c.id === a.customerId)
+                          ?.companyName
+                      }
+                    </span>
+                  )}
+                  {a.supplierId && (
+                    <span>
+                      ·{" "}
+                      {
+                        suppliers.find((s) => s.id === a.supplierId)
+                          ?.companyName
+                      }
+                    </span>
+                  )}
+                  {a.contactName && <span>· {a.contactName}</span>}
+                </div>
+              </button>
+              <Icons a={a} />
+            </div>
+          </li>
+        ))}
+
+        {filteredActivities.length === 0 && (
+          <li className="p-4 text-center text-gray-500 text-sm">
+            Inga aktiviteter matchar filtren.
+          </li>
+        )}
+      </ul>
+
+      {/* Popup för redigering */}
+      {openItem && draft && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-4 max-h-[90vh] overflow-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold">
+                {draft.title ? "Redigera aktivitet" : "Ny aktivitet"}
+              </h2>
+              <button
+                className="text-sm text-gray-500 hover:text-gray-800"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
                 }}
                 type="button"
               >
-                Stäng ✕
+                Stäng
               </button>
             </div>
 
@@ -681,30 +713,27 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 <label className="text-sm font-medium">Titel</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.title}
+                  value={draft.title || ""}
                   onChange={(e) => updateDraft("title", e.target.value)}
                 />
               </div>
 
-              <div>
-                <label className="text-sm font-medium">Prioritet</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.priority}
-                  onChange={(e) => updateDraft("priority", e.target.value)}
-                >
-                  <option value="hög">Hög</option>
-                  <option value="medel">Medel</option>
-                  <option value="låg">Låg</option>
-                  <option value="klar">Klar</option>
-                </select>
+              <div className="col-span-2">
+                <label className="text-sm font-medium">Beskrivning</label>
+                <textarea
+                  className="w-full border rounded px-3 py-2 min-h-[100px]"
+                  value={draft.description || ""}
+                  onChange={(e) =>
+                    updateDraft("description", e.target.value)
+                  }
+                />
               </div>
 
               <div>
                 <label className="text-sm font-medium">Ansvarig</label>
                 <select
                   className="w-full border rounded px-3 py-2"
-                  value={draft.responsible}
+                  value={draft.responsible || ""}
                   onChange={(e) =>
                     updateDraft("responsible", e.target.value)
                   }
@@ -713,6 +742,35 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   <option value="Cralle">Cralle</option>
                   <option value="Mattias">Mattias</option>
                   <option value="Annat">Annat</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Prioritet</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.priority || "medel"}
+                  onChange={(e) =>
+                    updateDraft("priority", e.target.value)
+                  }
+                >
+                  <option value="hög">Hög</option>
+                  <option value="medel">Medel</option>
+                  <option value="låg">Låg</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Status</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.status || "planerad"}
+                  onChange={(e) => updateDraft("status", e.target.value)}
+                >
+                  <option value="planerad">Planerad</option>
+                  <option value="återkoppling">Återkoppling</option>
+                  <option value="klar">Klar</option>
+                  <option value="inställd">Inställd</option>
                 </select>
               </div>
 
@@ -746,21 +804,75 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 />
               </div>
 
-              <div className="col-span-2 flex items-center gap-2 mt-1">
-                <input
-                  id="reminder-checkbox"
-                  type="checkbox"
-                  className="w-4 h-4"
-                  checked={!!draft.reminder}
-                  onChange={(e) =>
-                    updateDraft("reminder", e.target.checked)
-                  }
-                />
-                <label
-                  htmlFor="reminder-checkbox"
-                  className="text-sm text-gray-700"
-                >
-                  Påminnelse
+              <div className="col-span-2 flex flex-wrap items-center gap-4 mt-1 text-sm">
+                <label className="text-xs font-medium text-gray-500">
+                  Typ
+                </label>
+
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.isPhone}
+                    onChange={(e) =>
+                      updateDraft("isPhone", e.target.checked)
+                    }
+                  />
+                  <span title="Telefon">📞</span>
+                  <span>Telefon</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.isMeeting}
+                    onChange={(e) =>
+                      updateDraft("isMeeting", e.target.checked)
+                    }
+                  />
+                  <span title="Möte">📅</span>
+                  <span>Möte</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.isEmail}
+                    onChange={(e) =>
+                      updateDraft("isEmail", e.target.checked)
+                    }
+                  />
+                  <span title="Mail">✉️</span>
+                  <span>Mail</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.isLunch}
+                    onChange={(e) =>
+                      updateDraft("isLunch", e.target.checked)
+                    }
+                  />
+                  <span title="Lunch">🍽️</span>
+                  <span>Lunch</span>
+                </label>
+
+                <label className="inline-flex items-center gap-1">
+                  <input
+                    id="reminder-checkbox"
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.reminder}
+                    onChange={(e) =>
+                      updateDraft("reminder", e.target.checked)
+                    }
+                  />
+                  <span title="Påminnelse">⏰</span>
+                  <span>Påminnelse</span>
                 </label>
               </div>
 
@@ -768,7 +880,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 <label className="text-sm font-medium">Kund</label>
                 <select
                   className="w-full border rounded px-3 py-2"
-                  value={draft.customerId}
+                  value={draft.customerId || ""}
                   onChange={(e) =>
                     updateDraft("customerId", e.target.value)
                   }
@@ -776,7 +888,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   <option value="">—</option>
                   {customers.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.companyName || c.name || c.id}
+                      {c.companyName}
                     </option>
                   ))}
                 </select>
@@ -786,7 +898,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 <label className="text-sm font-medium">Leverantör</label>
                 <select
                   className="w-full border rounded px-3 py-2"
-                  value={draft.supplierId}
+                  value={draft.supplierId || ""}
                   onChange={(e) =>
                     updateDraft("supplierId", e.target.value)
                   }
@@ -794,21 +906,22 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   <option value="">—</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.companyName || s.name || s.id}
+                      {s.companyName}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Kontakt</label>
+              <div>
+                <label className="text-sm font-medium">
+                  Kontaktperson (namn)
+                </label>
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.contactName || ""}
                   onChange={(e) =>
                     updateDraft("contactName", e.target.value)
                   }
-                  placeholder="Namn på kontaktperson"
                 />
               </div>
 
@@ -829,50 +942,39 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   onChange={(e) => updateDraft("email", e.target.value)}
                 />
               </div>
-
-              <div className="col-span-2">
-                <label className="text-sm font-medium">Beskrivning</label>
-                <textarea
-                  className="w-full border rounded px-3 py-2 min-h-[100px]"
-                  value={draft.description || ""}
-                  onChange={(e) =>
-                    updateDraft("description", e.target.value)
-                  }
-                />
-              </div>
             </div>
 
             <div className="mt-4 flex gap-2">
               <button
-                className="px-3 py-2 rounded bg-green-600 text-white"
+                className="px-2 py-1 rounded text-sm bg-green-600 text-white"
                 onClick={saveAndMarkDone}
                 type="button"
               >
                 Spara & Markera Klar
               </button>
               <button
-                className="px-3 py-2 rounded bg-orange-500 text-white"
+                className="px-2 py-1 rounded text-sm bg-orange-500 text-white"
                 onClick={saveAndFollowUp}
                 type="button"
               >
                 Spara & Återkoppling
               </button>
               <button
-                className="px-3 py-2 rounded bg-rose-600 text-white"
-                onClick={() => softDelete(openItem)}
+                className="px-2 py-1 rounded text-sm bg-rose-600 text-white"
+                onClick={deleteActivity}
                 type="button"
               >
                 Ta bort
               </button>
               <button
-                className="ml-auto px-3 py-2 rounded border"
+                className="ml-auto px-2 py-1 rounded border text-sm"
                 onClick={saveOnly}
                 type="button"
               >
                 Spara
               </button>
               <button
-                className="px-3 py-2 rounded border"
+                className="px-2 py-1 rounded border text-sm"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
@@ -889,9 +991,9 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   );
 }
 
-/* ======================================
+/* ==========================================================
    Kunder
-   ====================================== */
+   ========================================================== */
 function CustomersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
@@ -934,12 +1036,23 @@ function CustomersPanel({ entities = [], setState }) {
 
     if (q.trim()) {
       const s = q.trim().toLowerCase();
-      arr = arr.filter(
-        (e) =>
-          (e.companyName || "").toLowerCase().includes(s) ||
-          (e.orgNo || "").toLowerCase().includes(s) ||
-          (e.city || "").toLowerCase().includes(s)
-      );
+      arr = arr.filter((e) => {
+        const company = (e.companyName || "").toLowerCase();
+        const orgNo = (e.orgNo || "").toLowerCase();
+        const city = (e.city || "").toLowerCase();
+        const first = (e.firstName || "").toLowerCase();
+        const last = (e.lastName || "").toLowerCase();
+        const full = `${first} ${last}`.trim();
+
+        return (
+          company.includes(s) ||
+          orgNo.includes(s) ||
+          city.includes(s) ||
+          first.includes(s) ||
+          last.includes(s) ||
+          full.includes(s)
+        );
+      });
     }
     if (cat !== "all") {
       arr = arr.filter((e) => (e.customerCategory || "") === cat);
@@ -953,10 +1066,9 @@ function CustomersPanel({ entities = [], setState }) {
     const top3 = withUsed.slice(0, 3).map((e) => e.id);
 
     const topList = arr.filter((e) => top3.includes(e.id));
-    const rest = arr.filter((e) => !top3.includes(e.id));
-    rest.sort((a, b) =>
-      (a.companyName || "").localeCompare(b.companyName || "")
-    );
+    const rest = arr
+      .filter((e) => !top3.includes(e.id))
+      .sort((a, b) => (a.companyName || "").localeCompare(b.companyName || ""));
 
     return [...topList, ...rest];
   }, [entities, q, cat]);
@@ -986,38 +1098,46 @@ function CustomersPanel({ entities = [], setState }) {
     });
   };
 
-  const updateDraft = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
-
-  const createSupplierFromCustomer = () => {
-    if (!draft) return;
+  const createNew = () => {
     const id =
       crypto?.randomUUID
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2);
 
-    const sup = {
+    const c = {
       id,
-      type: "supplier",
-      companyName: draft.companyName || "",
-      firstName: draft.firstName || "",
-      lastName: draft.lastName || "",
-      orgNo: draft.orgNo || "",
-      phone: draft.phone || "",
-      email: draft.email || "",
-      address: draft.address || "",
-      zip: draft.zip || "",
-      city: draft.city || "",
-      supplierCategory: draft.customerCategory || "",
-      notes: draft.notes || "",
+      type: "customer",
+      companyName: "",
+      firstName: "",
+      lastName: "",
+      orgNo: "",
+      phone: "",
+      email: "",
+      address: "",
+      zip: "",
+      city: "",
+      customerCategory: "",
+      notes: "",
       createdAt: new Date().toISOString(),
     };
-
     setState((s) => ({
       ...s,
-      entities: [...(s.entities || []), sup],
+      entities: [...(s.entities || []), c],
     }));
+    setOpenItem(c);
+    setDraft({
+      ...c,
+    });
+  };
 
-    alert("Leverantör skapad från kunden.");
+  const softDelete = (c) => {
+    if (!window.confirm("Arkivera kund?")) return;
+    setState((s) => ({
+      ...s,
+      entities: (s.entities || []).map((e) =>
+        e.id === c.id ? { ...e, deletedAt: new Date().toISOString() } : e
+      ),
+    }));
   };
 
   const saveDraft = () => {
@@ -1048,36 +1168,53 @@ function CustomersPanel({ entities = [], setState }) {
     setDraft(null);
   };
 
-  const softDelete = (c) => {
-    if (
-      !window.confirm(
-        "Ta bort denna kund? Den hamnar i arkiv (kan återställas via Inställningar)."
-      )
-    )
-      return;
+  const createSupplierFromCustomer = () => {
+    if (!draft) return;
+    const id =
+      crypto?.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+
+    const sup = {
+      id,
+      type: "supplier",
+      companyName: draft.companyName || "",
+      firstName: draft.firstName || "",
+      lastName: draft.lastName || "",
+      orgNo: draft.orgNo || "",
+      phone: draft.phone || "",
+      email: draft.email || "",
+      address: draft.address || "",
+      zip: draft.zip || "",
+      city: draft.city || "",
+      supplierCategory: "",
+      notes: draft.notes || "",
+      createdAt: new Date().toISOString(),
+    };
+
     setState((s) => ({
       ...s,
-      entities: (s.entities || []).map((e) =>
-        e.id === c.id ? { ...e, deletedAt: new Date().toISOString() } : e
-      ),
+      entities: [...(s.entities || []), sup],
     }));
-    if (openItem?.id === c.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
+
+    alert("Leverantör skapad från kunden.");
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <h2 className="font-semibold">Kunder</h2>
-        <div className="flex gap-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs text-gray-600">Sök</label>
           <input
             className="border rounded-xl px-3 py-2"
-            placeholder="Sök..."
+            placeholder="Företag / namn / orgnr / ort..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-600">Kategori</label>
           <select
             className="border rounded-xl px-3 py-2"
             value={cat}
@@ -1087,13 +1224,22 @@ function CustomersPanel({ entities = [], setState }) {
             <option value="StålHall">Stålhall</option>
             <option value="Totalentreprenad">Totalentreprenad</option>
             <option value="Turbovex">Turbovex</option>
+            <option value="Bygg">Bygg</option>
             <option value="Admin">Admin</option>
             <option value="Övrigt">Övrigt</option>
           </select>
         </div>
+
+        <button
+          className="ml-auto px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm"
+          onClick={createNew}
+          type="button"
+        >
+          + Ny kund
+        </button>
       </div>
 
-      <ul className="divide-y">
+      <ul className="divide-y rounded-xl border bg-white">
         {list.map((c) => (
           <li key={c.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
@@ -1104,16 +1250,6 @@ function CustomersPanel({ entities = [], setState }) {
               >
                 <div className="font-medium truncate">
                   {c.companyName || "(namnlös kund)"}
-                  {(c.firstName || c.lastName) && (
-                    <span className="text-sm text-gray-500 ml-1">
-                      {[
-                        c.firstName,
-                        c.lastName,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    </span>
-                  )}
                 </div>
                 <div className="text-xs text-gray-500">
                   {[c.city || "", c.phone || ""]
@@ -1130,33 +1266,29 @@ function CustomersPanel({ entities = [], setState }) {
                   onClick={() => softDelete(c)}
                   type="button"
                 >
-                  Ta bort
+                  Arkivera
                 </button>
               </div>
             </div>
           </li>
         ))}
+
         {list.length === 0 && (
-          <li className="py-6 text-sm text-gray-500">Inga kunder.</li>
+          <li className="p-4 text-center text-gray-500 text-sm">
+            Inga kunder.
+          </li>
         )}
       </ul>
 
       {openItem && draft && (
-        <div
-          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-          onClick={() => {
-            setOpenItem(null);
-            setDraft(null);
-          }}
-        >
-          <div
-            className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-semibold">Redigera kund</div>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-4 max-h-[90vh] overflow-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold">
+                {draft.companyName || "(namnlös kund)"}
+              </h2>
               <button
-                className="text-sm"
+                className="text-sm text-gray-500 hover:text-gray-800"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
@@ -1168,14 +1300,23 @@ function CustomersPanel({ entities = [], setState }) {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
+              <div>
                 <label className="text-sm font-medium">Företag</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.companyName}
+                  value={draft.companyName || ""}
                   onChange={(e) =>
                     updateDraft("companyName", e.target.value)
                   }
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Org.nr</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.orgNo || ""}
+                  onChange={(e) => updateDraft("orgNo", e.target.value)}
                 />
               </div>
 
@@ -1202,37 +1343,28 @@ function CustomersPanel({ entities = [], setState }) {
               </div>
 
               <div>
-                <label className="text-sm font-medium">OrgNr</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.orgNo}
-                  onChange={(e) => updateDraft("orgNo", e.target.value)}
-                />
-              </div>
-
-              <div>
                 <label className="text-sm font-medium">Telefon</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.phone}
+                  value={draft.phone || ""}
                   onChange={(e) => updateDraft("phone", e.target.value)}
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium">Epost</label>
+                <label className="text-sm font-medium">E-post</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.email}
+                  value={draft.email || ""}
                   onChange={(e) => updateDraft("email", e.target.value)}
                 />
               </div>
 
-              <div>
+              <div className="col-span-2">
                 <label className="text-sm font-medium">Adress</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.address}
+                  value={draft.address || ""}
                   onChange={(e) =>
                     updateDraft("address", e.target.value)
                   }
@@ -1243,7 +1375,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <label className="text-sm font-medium">Postnr</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.zip}
+                  value={draft.zip || ""}
                   onChange={(e) => updateDraft("zip", e.target.value)}
                 />
               </div>
@@ -1252,7 +1384,7 @@ function CustomersPanel({ entities = [], setState }) {
                 <label className="text-sm font-medium">Ort</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.city}
+                  value={draft.city || ""}
                   onChange={(e) => updateDraft("city", e.target.value)}
                 />
               </div>
@@ -1284,6 +1416,7 @@ function CustomersPanel({ entities = [], setState }) {
                       Totalentreprenad
                     </option>
                     <option value="Turbovex">Turbovex</option>
+                    <option value="Bygg">Bygg</option>
                     <option value="Admin">Admin</option>
                     <option value="Övrigt">Övrigt</option>
                   </select>
@@ -1307,17 +1440,8 @@ function CustomersPanel({ entities = [], setState }) {
               >
                 Spara
               </button>
-
               <button
-                className="px-3 py-2 rounded bg-rose-600 text-white"
-                onClick={() => softDelete(openItem)}
-                type="button"
-              >
-                Ta bort
-              </button>
-
-              <button
-                className="ml-auto px-3 py-2 rounded border"
+                className="px-3 py-2 rounded border"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
@@ -1334,9 +1458,9 @@ function CustomersPanel({ entities = [], setState }) {
   );
 }
 
-/* ======================================
+/* ==========================================================
    Leverantörer
-   ====================================== */
+   ========================================================== */
 function SuppliersPanel({ entities = [], setState }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
@@ -1383,12 +1507,23 @@ function SuppliersPanel({ entities = [], setState }) {
 
     if (q.trim()) {
       const s = q.trim().toLowerCase();
-      arr = arr.filter(
-        (e) =>
-          (e.companyName || "").toLowerCase().includes(s) ||
-          (e.orgNo || "").toLowerCase().includes(s) ||
-          (e.city || "").toLowerCase().includes(s)
-      );
+      arr = arr.filter((e) => {
+        const company = (e.companyName || "").toLowerCase();
+        const orgNo = (e.orgNo || "").toLowerCase();
+        const city = (e.city || "").toLowerCase();
+        const first = (e.firstName || "").toLowerCase();
+        const last = (e.lastName || "").toLowerCase();
+        const full = `${first} ${last}`.trim();
+
+        return (
+          company.includes(s) ||
+          orgNo.includes(s) ||
+          city.includes(s) ||
+          first.includes(s) ||
+          last.includes(s) ||
+          full.includes(s)
+        );
+      });
     }
 
     if (cat !== "all") {
@@ -1425,45 +1560,53 @@ function SuppliersPanel({ entities = [], setState }) {
     });
   };
 
-  const updateDraft = (k, v) => setDraft((d) => ({ ...d, [k]: v }));
-
-  const createCustomerFromSupplier = () => {
-    if (!draft) return;
+  const createNew = () => {
     const id =
       crypto?.randomUUID
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2);
 
-    const c = {
+    const s = {
       id,
-      type: "customer",
-      companyName: draft.companyName || "",
-      firstName: draft.firstName || "",
-      lastName: draft.lastName || "",
-      orgNo: draft.orgNo || "",
-      phone: draft.phone || "",
-      email: draft.email || "",
-      address: draft.address || "",
-      zip: draft.zip || "",
-      city: draft.city || "",
-      customerCategory: draft.supplierCategory || "",
-      notes: draft.notes || "",
+      type: "supplier",
+      companyName: "",
+      firstName: "",
+      lastName: "",
+      orgNo: "",
+      phone: "",
+      email: "",
+      address: "",
+      zip: "",
+      city: "",
+      supplierCategory: "",
+      notes: "",
       createdAt: new Date().toISOString(),
     };
-
-    setState((s) => ({
-      ...s,
-      entities: [...(s.entities || []), c],
+    setState((st) => ({
+      ...st,
+      entities: [...(st.entities || []), s],
     }));
+    setOpenItem(s);
+    setDraft({
+      ...s,
+    });
+  };
 
-    alert("Kund skapad från leverantören.");
+  const softDelete = (s) => {
+    if (!window.confirm("Arkivera leverantör?")) return;
+    setState((st) => ({
+      ...st,
+      entities: (st.entities || []).map((e) =>
+        e.id === s.id ? { ...e, deletedAt: new Date().toISOString() } : e
+      ),
+    }));
   };
 
   const saveDraft = () => {
     if (!draft) return;
-    setState((s) => ({
-      ...s,
-      entities: (s.entities || []).map((e) =>
+    setState((st) => ({
+      ...st,
+      entities: (st.entities || []).map((e) =>
         e.id === draft.id
           ? {
               ...e,
@@ -1487,80 +1630,53 @@ function SuppliersPanel({ entities = [], setState }) {
     setDraft(null);
   };
 
-  const softDelete = (sup) => {
-    if (
-      !window.confirm(
-        "Ta bort denna leverantör? Den hamnar i arkiv (kan återställas via Inställningar)."
-      )
-    )
-      return;
-    setState((s0) => ({
-      ...s0,
-      entities: (s0.entities || []).map((e) =>
-        e.id === sup.id ? { ...e, deletedAt: new Date().toISOString() } : e
-      ),
-    }));
-    if (openItem?.id === sup.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
+  const createCustomerFromSupplier = () => {
+    if (!draft) return;
+    const id =
+      crypto?.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
 
-  const hardDelete = (sup) => {
-    if (
-      !window.confirm(
-        "Ta bort denna leverantör PERMANENT? Detta går inte att ångra."
-      )
-    )
-      return;
-    setState((s0) => ({
-      ...s0,
-      entities: (s0.entities || []).filter((e) => e.id !== sup.id),
+    const c = {
+      id,
+      type: "customer",
+      companyName: draft.companyName || "",
+      firstName: draft.firstName || "",
+      lastName: draft.lastName || "",
+      orgNo: draft.orgNo || "",
+      phone: draft.phone || "",
+      email: draft.email || "",
+      address: draft.address || "",
+      zip: draft.zip || "",
+      city: draft.city || "",
+      customerCategory: "",
+      notes: draft.notes || "",
+      createdAt: new Date().toISOString(),
+    };
+
+    setState((st) => ({
+      ...st,
+      entities: [...(st.entities || []), c],
     }));
-    if (openItem?.id === sup.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
+
+    alert("Kund skapad från leverantören.");
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow p-4">
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <h2 className="font-semibold">Leverantörer</h2>
-          <div className="flex rounded-xl overflow-hidden border">
-            <button
-              type="button"
-              className={`px-3 py-1 text-sm ${
-                mode === "active"
-                  ? "bg-black text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-              onClick={() => setMode("active")}
-            >
-              Aktiva
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1 text-sm ${
-                mode === "archive"
-                  ? "bg-black text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-              onClick={() => setMode("archive")}
-            >
-              Arkiv
-            </button>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs text-gray-600">Sök</label>
           <input
             className="border rounded-xl px-3 py-2"
-            placeholder="Sök..."
+            placeholder="Företag / namn / orgnr / ort..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
+        </div>
+
+        <div>
+          <label className="block text-xs text-gray-600">Kategori</label>
           <select
             className="border rounded-xl px-3 py-2"
             value={cat}
@@ -1580,9 +1696,41 @@ function SuppliersPanel({ entities = [], setState }) {
             <option value="Övrigt">Övrigt</option>
           </select>
         </div>
+
+        <div className="ml-auto flex gap-2">
+          <button
+            className={`px-3 py-2 rounded-xl text-sm ${
+              mode === "active"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700"
+            }`}
+            onClick={() => setMode("active")}
+            type="button"
+          >
+            Aktiva
+          </button>
+          <button
+            className={`px-3 py-2 rounded-xl text-sm ${
+              mode === "archive"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 text-gray-700"
+            }`}
+            onClick={() => setMode("archive")}
+            type="button"
+          >
+            Arkiv
+          </button>
+          <button
+            className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm"
+            onClick={createNew}
+            type="button"
+          >
+            + Ny leverantör
+          </button>
+        </div>
       </div>
 
-      <ul className="divide-y">
+      <ul className="divide-y rounded-xl border bg-white">
         {list.map((sup) => (
           <li key={sup.id} className="py-3">
             <div className="flex items-center justify-between gap-3">
@@ -1593,17 +1741,6 @@ function SuppliersPanel({ entities = [], setState }) {
               >
                 <div className="font-medium truncate">
                   {sup.companyName || "(namnlös leverantör)"}
-                  {(sup.firstName || sup.lastName) && (
-                    <span className="text-sm text-gray-500 ml-1">
-                      {[
-                        sup.firstName,
-                        sup.lastName,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    </span>
-                  )}
-                  {mode === "archive" ? " (Arkiv)" : ""}
                 </div>
                 <div className="text-xs text-gray-500">
                   {[sup.city || "", sup.phone || ""]
@@ -1611,59 +1748,40 @@ function SuppliersPanel({ entities = [], setState }) {
                     .join(" · ")}
                 </div>
               </button>
-
               <div className="flex items-center gap-2 shrink-0">
-                <span className={supplierCategoryBadge(sup.supplierCategory)}>
+                <span
+                  className={supplierCategoryBadge(sup.supplierCategory)}
+                >
                   {sup.supplierCategory || "—"}
                 </span>
-
-                {mode === "active" ? (
-                  <button
-                    className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                    onClick={() => softDelete(sup)}
-                    type="button"
-                  >
-                    Ta bort
-                  </button>
-                ) : (
-                  <button
-                    className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
-                    onClick={() => hardDelete(sup)}
-                    type="button"
-                  >
-                    Ta bort permanent
-                  </button>
-                )}
+                <button
+                  className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                  onClick={() => softDelete(sup)}
+                  type="button"
+                >
+                  Arkivera
+                </button>
               </div>
             </div>
           </li>
         ))}
 
         {list.length === 0 && (
-          <li className="py-6 text-sm text-gray-500">
-            {mode === "active"
-              ? "Inga leverantörer."
-              : "Inga arkiverade leverantörer."}
+          <li className="p-4 text-center text-gray-500 text-sm">
+            Inga leverantörer.
           </li>
         )}
       </ul>
 
       {openItem && draft && (
-        <div
-          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-          onClick={() => {
-            setOpenItem(null);
-            setDraft(null);
-          }}
-        >
-          <div
-            className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-semibold">Redigera leverantör</div>
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-4 max-h-[90vh] overflow-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-lg font-semibold">
+                {draft.companyName || "(namnlös leverantör)"}
+              </h2>
               <button
-                className="text-sm"
+                className="text-sm text-gray-500 hover:text-gray-800"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
@@ -1675,14 +1793,23 @@ function SuppliersPanel({ entities = [], setState }) {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
+              <div>
                 <label className="text-sm font-medium">Företag</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.companyName}
+                  value={draft.companyName || ""}
                   onChange={(e) =>
                     updateDraft("companyName", e.target.value)
                   }
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Org.nr</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.orgNo || ""}
+                  onChange={(e) => updateDraft("orgNo", e.target.value)}
                 />
               </div>
 
@@ -1709,37 +1836,28 @@ function SuppliersPanel({ entities = [], setState }) {
               </div>
 
               <div>
-                <label className="text-sm font-medium">OrgNr</label>
-                <input
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.orgNo}
-                  onChange={(e) => updateDraft("orgNo", e.target.value)}
-                />
-              </div>
-
-              <div>
                 <label className="text-sm font-medium">Telefon</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.phone}
+                  value={draft.phone || ""}
                   onChange={(e) => updateDraft("phone", e.target.value)}
                 />
               </div>
 
               <div>
-                <label className="text-sm font-medium">Epost</label>
+                <label className="text-sm font-medium">E-post</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.email}
+                  value={draft.email || ""}
                   onChange={(e) => updateDraft("email", e.target.value)}
                 />
               </div>
 
-              <div>
+              <div className="col-span-2">
                 <label className="text-sm font-medium">Adress</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.address}
+                  value={draft.address || ""}
                   onChange={(e) =>
                     updateDraft("address", e.target.value)
                   }
@@ -1750,7 +1868,7 @@ function SuppliersPanel({ entities = [], setState }) {
                 <label className="text-sm font-medium">Postnr</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.zip}
+                  value={draft.zip || ""}
                   onChange={(e) => updateDraft("zip", e.target.value)}
                 />
               </div>
@@ -1759,7 +1877,7 @@ function SuppliersPanel({ entities = [], setState }) {
                 <label className="text-sm font-medium">Ort</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.city}
+                  value={draft.city || ""}
                   onChange={(e) => updateDraft("city", e.target.value)}
                 />
               </div>
@@ -1818,17 +1936,8 @@ function SuppliersPanel({ entities = [], setState }) {
               >
                 Spara
               </button>
-
               <button
-                className="px-3 py-2 rounded bg-rose-600 text-white"
-                onClick={() => softDelete(openItem)}
-                type="button"
-              >
-                Ta bort
-              </button>
-
-              <button
-                className="ml-auto px-3 py-2 rounded border"
+                className="px-3 py-2 rounded border"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
@@ -1845,15 +1954,16 @@ function SuppliersPanel({ entities = [], setState }) {
   );
 }
 
-/* ===========================
-   App — layout + meny
-   =========================== */
+/* ==========================================================
+   Huvud-App
+   ========================================================== */
 export default function App() {
-  const [state, setState] = useStore();
+  const [state, setState, cloudStatus, loadFromCloud, pushToCloud] =
+    useStore();
   const [view, setView] = useState("activities");
   // views: activities | activitiesCalendar | customers | suppliers | offers | projects | settings
 
-  const lastSyncedIso = state?._lastSavedAt || "";
+  const lastSyncedIso = cloudStatus.lastSyncedAt || "";
   const lastSyncedText = lastSyncedIso
     ? formatSwedishDateTime(lastSyncedIso)
     : "Ingen synk ännu";
@@ -1904,39 +2014,34 @@ export default function App() {
       files: {
         Ritningar: [],
         Offerter: [],
-        Kalkyler: [],
-        KMA: [],
+        Ordererkännande: [],
+        Beställning: [],
+        Övrigt: [],
       },
-      supplierIds: [],
       createdAt: new Date().toISOString(),
-      _shouldOpen: true,
     };
-
     setState((s) => ({ ...s, offers: [...(s.offers || []), o] }));
     setView("offers");
   }
 
-  function createProjectEmpty() {
+  function createProjectFromScratch() {
     const id = newId();
     const p = {
       id,
-      name: "",
+      title: "",
       customerId: "",
       status: "pågående",
-      budget: 0,
-      startDate: "",
-      endDate: "",
+      value: 0,
       note: "",
       files: {
         Ritningar: [],
         Offerter: [],
-        Kalkyler: [],
-        KMA: [],
+        Ordererkännande: [],
+        Beställning: [],
+        Övrigt: [],
       },
       createdAt: new Date().toISOString(),
-      _shouldOpen: true,
     };
-
     setState((s) => ({ ...s, projects: [...(s.projects || []), p] }));
     setView("projects");
   }
@@ -1949,9 +2054,15 @@ export default function App() {
       companyName: "",
       firstName: "",
       lastName: "",
+      orgNo: "",
+      phone: "",
+      email: "",
+      address: "",
+      zip: "",
+      city: "",
+      customerCategory: "",
       notes: "",
       createdAt: new Date().toISOString(),
-      customerCategory: "",
       _shouldOpen: true,
     };
     setState((s) => ({ ...s, entities: [...(s.entities || []), c] }));
@@ -1960,25 +2071,35 @@ export default function App() {
 
   function createSupplier() {
     const id = newId();
-    const sup = {
+    const s = {
       id,
       type: "supplier",
       companyName: "",
       firstName: "",
       lastName: "",
+      orgNo: "",
+      phone: "",
+      email: "",
+      address: "",
+      zip: "",
+      city: "",
+      supplierCategory: "",
       notes: "",
       createdAt: new Date().toISOString(),
-      supplierCategory: "",
       _shouldOpen: true,
     };
-    setState((s) => ({ ...s, entities: [...(s.entities || []), sup] }));
+    setState((st) => ({ ...st, entities: [...(st.entities || []), s] }));
     setView("suppliers");
   }
 
+  const activities = state.activities || [];
+  const entities = state.entities || [];
+  const offers = state.offers || [];
+  const projects = state.projects || [];
+
   return (
-    <div className="mx-auto max-w-7xl p-4">
-      {/* HEADER */}
-      <header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+    <div className="min-h-screen bg-slate-100 text-gray-900">
+      <header className="flex items-center justify-between mb-4 gap-3 flex-wrap p-4 bg-white shadow">
         <h1 className="text-xl font-semibold">Mach CRM</h1>
 
         <div className="flex flex-col items-end gap-1">
@@ -1994,7 +2115,25 @@ export default function App() {
             </button>
 
             <button
-              className="border rounded-xl px-3 py-2 bg-orange-300 hover:bg-orange-400"
+              className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
+              onClick={createCustomer}
+              title="Skapa ny kund"
+              type="button"
+            >
+              + Ny kund
+            </button>
+
+            <button
+              className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
+              onClick={createSupplier}
+              title="Skapa ny leverantör"
+              type="button"
+            >
+              + Ny leverantör
+            </button>
+
+            <button
+              className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
               onClick={createOffer}
               title="Skapa ny offert"
               type="button"
@@ -2003,179 +2142,176 @@ export default function App() {
             </button>
 
             <button
-              className="border rounded-xl px-3 py-2 bg-green-200 hover:bg-green-300"
-              onClick={createProjectEmpty}
+              className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
+              onClick={createProjectFromScratch}
               title="Skapa nytt projekt"
               type="button"
             >
               + Nytt projekt
             </button>
-
-            <button
-              className="border rounded-xl px-3 py-2 bg-blue-200 hover:bg-blue-300"
-              onClick={createCustomer}
-              title="Lägg till kund"
-              type="button"
-            >
-              + Ny kund
-            </button>
-
-            <button
-              className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300"
-              onClick={createSupplier}
-              title="Lägg till leverantör"
-              type="button"
-            >
-              + Ny leverantör
-            </button>
-
-            <button
-              className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
-              onClick={() => setView("settings")}
-              title="Inställningar"
-              type="button"
-            >
-              🛠️
-            </button>
           </div>
 
-          {/* Senast synkad-raden */}
-          <div className="text-xs text-gray-500">
-            Senast synkad: {lastSyncedText}
+          {/* Sync-info */}
+          <div className="text-xs text-right text-gray-500 flex items-center gap-2">
+            <span>Molnsynk:</span>
+            <span>{lastSyncedText}</span>
+            {cloudStatus.lastError && (
+              <span className="text-red-600">
+                Fel: {cloudStatus.lastError}
+              </span>
+            )}
+            <button
+              className="px-2 py-1 border rounded text-xs bg-white hover:bg-gray-50"
+              onClick={loadFromCloud}
+              type="button"
+            >
+              Hämta från moln
+            </button>
+            <button
+              className="px-2 py-1 border rounded text-xs bg-white hover:bg-gray-50"
+              onClick={pushToCloud}
+              type="button"
+            >
+              Ladda upp till moln
+            </button>
           </div>
         </div>
       </header>
 
-      {/* NY LAYOUT: menyrad överst, innehåll under */}
-      <div className="flex flex-col gap-4">
-        {/* Meny-knappar (ersätter sidomenyn) */}
-        <div className="flex flex-wrap gap-2 mb-2">
+      <div className="px-4 pb-4">
+        {/* Menyrad */}
+        <nav className="mb-4 flex flex-wrap gap-2">
           <button
-            type="button"
-            onClick={() => setView("activities")}
-            className={`px-3 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl text-sm ${
               view === "activities"
-                ? "bg-gray-200 text-gray-900"
-                : "bg-white text-gray-700"
+                ? "bg-blue-600 text-white"
+                : "bg-white border text-gray-700"
             }`}
-          >
-            Aktiviteter
-          </button>
-
-          <button
+            onClick={() => setView("activities")}
             type="button"
-            onClick={() => setView("activitiesCalendar")}
-            className={`px-3 py-2 rounded-xl border text-sm ${
+          >
+            Aktiviteter (lista)
+          </button>
+          <button
+            className={`px-3 py-2 rounded-xl text-sm ${
               view === "activitiesCalendar"
-                ? "bg-gray-400 text-white"
-                : "bg-white text-gray-700"
+                ? "bg-blue-600 text-white"
+                : "bg-white border text-gray-700"
             }`}
-          >
-            Kalender
-          </button>
-
-          <button
+            onClick={() => setView("activitiesCalendar")}
             type="button"
-            onClick={() => setView("customers")}
-            className={`px-3 py-2 rounded-xl border text-sm ${
+          >
+            Aktiviteter (kalender)
+          </button>
+          <button
+            className={`px-3 py-2 rounded-xl text-sm ${
               view === "customers"
-                ? "bg-blue-200 text-blue-900"
-                : "bg-white text-gray-700"
+                ? "bg-blue-600 text-white"
+                : "bg-white border text-gray-700"
             }`}
+            onClick={() => setView("customers")}
+            type="button"
           >
             Kunder
           </button>
-
           <button
-            type="button"
-            onClick={() => setView("suppliers")}
-            className={`px-3 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl text-sm ${
               view === "suppliers"
-                ? "bg-amber-200 text-amber-900"
-                : "bg-white text-gray-700"
+                ? "bg-blue-600 text-white"
+                : "bg-white border text-gray-700"
             }`}
+            onClick={() => setView("suppliers")}
+            type="button"
           >
             Leverantörer
           </button>
-
           <button
-            type="button"
-            onClick={() => setView("offers")}
-            className={`px-3 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl text-sm ${
               view === "offers"
-                ? "bg-orange-300 text-orange-900"
-                : "bg-white text-gray-700"
+                ? "bg-blue-600 text-white"
+                : "bg-white border text-gray-700"
             }`}
+            onClick={() => setView("offers")}
+            type="button"
           >
             Offerter
           </button>
-
           <button
-            type="button"
-            onClick={() => setView("projects")}
-            className={`px-3 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl text-sm ${
               view === "projects"
-                ? "bg-green-200 text-green-900"
-                : "bg-white text-gray-700"
+                ? "bg-blue-600 text-white"
+                : "bg-white border text-gray-700"
             }`}
+            onClick={() => setView("projects")}
+            type="button"
           >
             Projekt
           </button>
-        </div>
+          <button
+            className={`px-3 py-2 rounded-xl text-sm ${
+              view === "settings"
+                ? "bg-blue-600 text-white"
+                : "bg-white border text-gray-700"
+            }`}
+            onClick={() => setView("settings")}
+            type="button"
+          >
+            Export / inställningar
+          </button>
+        </nav>
 
-        {/* Själva innehållet/panelerna */}
-        <div className="bg-slate-50 rounded-2xl p-3">
+        {/* Innehåll */}
+        <main className="bg-white rounded-xl shadow p-4">
           {view === "activities" && (
             <ActivitiesPanel
-              activities={state.activities || []}
-              entities={state.entities || []}
+              activities={activities}
+              entities={entities}
               setState={setState}
             />
           )}
 
           {view === "activitiesCalendar" && (
             <ActivitiesCalendarPanel
-              activities={state.activities || []}
-              entities={state.entities || []}
+              activities={activities}
               setState={setState}
+              entities={entities}
+              setView={setView}
             />
           )}
 
           {view === "customers" && (
-            <CustomersPanel
-              entities={state.entities || []}
-              setState={setState}
-            />
+            <CustomersPanel entities={entities} setState={setState} />
           )}
 
           {view === "suppliers" && (
-            <SuppliersPanel
-              entities={state.entities || []}
-              setState={setState}
-            />
+            <SuppliersPanel entities={entities} setState={setState} />
           )}
 
           {view === "offers" && (
             <OffersPanel
-              offers={state.offers || []}
-              entities={state.entities || []}
+              offers={offers}
+              entities={entities}
               setState={setState}
             />
           )}
 
           {view === "projects" && (
             <ProjectsPanel
-              projects={state.projects || []}
-              offers={state.offers || []}
-              entities={state.entities || []}
+              projects={projects}
+              entities={entities}
               setState={setState}
             />
           )}
 
           {view === "settings" && (
-            <SettingsPanel state={state} setState={setState} />
+            <SettingsPanel
+              activities={activities}
+              entities={entities}
+              offers={offers}
+              projects={projects}
+            />
           )}
-        </div>
+        </main>
       </div>
     </div>
   );
