@@ -143,14 +143,14 @@ function supplierCategoryBadge(cat) {
 }
 
 /* ==========================================================
-   Aktiviteter — lista + arkiv-läge
+   Aktiviteter — lista + arkiv-läge (NY VERSION)
    ========================================================== */
 function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const [respFilter, setRespFilter] = useState("all");
-  const [rangeFilter, setRangeFilter] = useState("7");
+  const [rangeFilter, setRangeFilter] = useState("7"); // today | 7 | all
   const [dateFilter, setDateFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [mode, setMode] = useState("active"); // "active" | "archive"
+  const [statusFilter, setStatusFilter] = useState("all"); // all | planerad | återkoppling | klar | inställd
+  const [mode, setMode] = useState("active"); // active | archive
 
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -164,7 +164,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     [entities]
   );
 
-  const fmt = (dateStr, timeStr) => {
+  const fmtDateTime = (dateStr, timeStr) => {
     if (!dateStr) return "";
     const d = new Date(`${dateStr}T${timeStr || "00:00"}`);
     try {
@@ -203,163 +203,143 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     return d >= start && d <= end;
   };
 
-  const isSameDay = (dateStr, ymd) => !!dateStr && dateStr.slice(0, 10) === ymd;
+  const isSameDay = (dateStr, ymd) =>
+    !!dateStr && dateStr.slice(0, 10) === ymd;
 
   const prBadge = (p) => {
     const base = "text-xs px-2 py-1 rounded";
     switch (p) {
+      case "hög":
+        return `${base} bg-rose-200 text-rose-800`;
+      case "medel":
+        return `${base} bg-amber-200 text-amber-800`;
+      case "låg":
+        return `${base} bg-slate-200 text-slate-800`;
       case "klar":
         return `${base} bg-green-200 text-green-800`;
-      case "high":
-        return `${base} bg-red-100 text-red-700`;
-      case "medium":
-        return `${base} bg-yellow-100 text-yellow-700`;
-      case "low":
       default:
-        return `${base} bg-gray-100 text-gray-700`;
+        return `${base} bg-slate-100 text-slate-700`;
     }
-  };
-
-  const respChip = (who) => {
-    const base = "text-xs font-semibold px-2 py-1 rounded";
-    if (who === "Mattias") return `${base} bg-orange-200 text-orange-800`;
-    if (who === "Cralle") return `${base} bg-blue-200 text-blue-800`;
-    if (who === "Övrig") return `${base} bg-gray-200 text-gray-800`;
-    return `${base} bg-gray-200 text-gray-800`;
   };
 
   const statusBadge = (s) => {
-    if (!s) return null;
     const base = "text-xs px-2 py-1 rounded";
-    if (s === "återkoppling")
-      return `${base} bg-orange-100 text-orange-700`;
-    if (s === "klar") return `${base} bg-green-100 text-green-700`;
-    return `${base} bg-gray-100 text-gray-700`;
+    switch (s) {
+      case "planerad":
+        return `${base} bg-blue-100 text-blue-800`;
+      case "återkoppling":
+        return `${base} bg-orange-100 text-orange-800`;
+      case "klar":
+        return `${base} bg-green-100 text-green-800`;
+      case "inställd":
+        return `${base} bg-slate-200 text-slate-800`;
+      default:
+        return `${base} bg-slate-100 text-slate-700`;
+    }
   };
 
-  // Nytt: kundnamn i titel
-  const getCustomerName = (id) => {
-    if (!id) return "";
-    const c = customers.find((x) => x.id === id);
-    return c?.companyName || "";
-  };
+  const respLabel = (r) => r || "—";
 
-  const buildTitle = (a) => {
-    const base = a.title || "Aktivitet";
-    const cname = getCustomerName(a.customerId);
-    return cname ? `${cname} - ${base}` : base;
-  };
-
-  // Öppna direkt om _shouldOpen är satt (nyss skapad)
-  useEffect(() => {
-    const a = (activities || []).find((x) => x?._shouldOpen);
-    if (!a) return;
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const defaultTime = `${hh}:00`;
-    setOpenItem(a);
-    setDraft({
-      id: a.id,
-      title: a.title || "",
-      responsible: a.responsible || "Övrig",
-      dueDate: a.dueDate || "",
-      dueTime: a.dueTime || defaultTime,
-      priority: a.priority || "medium",
-      status: a.status || "",
-      description: a.description || "",
-      customerId: a.customerId || "",
-      supplierId: a.supplierId || "",
-      contactName: a.contactName || "",
-      isPhone: !!a.isPhone,
-      isEmail: !!a.isEmail,
-      isLunch: !!a.isLunch,
-      isMeeting: !!a.isMeeting,
-    });
-    setState((s) => ({
-      ...s,
-      activities: (s.activities || []).map((x) =>
-        x.id === a.id ? { ...x, _shouldOpen: undefined } : x
-      ),
-    }));
-  }, [activities, setState]);
-
-  const list = useMemo(() => {
-    let arr = Array.isArray(activities) ? activities.slice() : [];
+  // Normaliserad lista med filter
+  const visible = useMemo(() => {
+    let list = (activities || []).slice();
 
     if (mode === "active") {
-      arr = arr.filter((a) => !a?.deletedAt);
+      // ej borttagna
+      list = list.filter((a) => !a.deletedAt);
     } else {
-      arr = arr.filter((a) => !!a?.deletedAt);
+      // arkiv-läge
+      list = list.filter((a) => !!a.deletedAt);
     }
 
-    const isDone = (a) => a?.priority === "klar" || a?.status === "klar";
-    const isFollow = (a) => a?.status === "återkoppling";
-
-    if (mode === "active") {
-      if (statusFilter === "done") {
-        arr = arr.filter(isDone);
-      } else if (statusFilter === "followup") {
-        arr = arr.filter(isFollow);
-      } else if (statusFilter === "done_or_followup") {
-        arr = arr.filter((a) => isDone(a) || isFollow(a));
-      } else if (statusFilter === "all_except_done") {
-        arr = arr.filter((a) => !isDone(a));
-      }
-
-      if (respFilter !== "all") {
-        arr = arr.filter((a) => (a?.responsible || "Övrig") === respFilter);
-      }
-      if (rangeFilter === "today") {
-        const ymd = todayISO();
-        arr = arr.filter((a) => isSameDay(a?.dueDate, ymd));
-      } else if (rangeFilter === "7") {
-        arr = arr.filter((a) => inNext7(a?.dueDate, a?.dueTime));
-      } else if (rangeFilter === "date" && dateFilter) {
-        arr = arr.filter((a) => isSameDay(a?.dueDate, dateFilter));
-      }
+    if (respFilter !== "all") {
+      list = list.filter((a) => (a.responsible || "") === respFilter);
     }
 
-    arr.sort((a, b) => {
-      const ad = (a?.dueDate || "") + "T" + (a?.dueTime || "");
-      const bd = (b?.dueDate || "") + "T" + (b?.dueTime || "");
-      return ad.localeCompare(bd);
+    if (statusFilter !== "all") {
+      list = list.filter((a) => (a.status || "planerad") === statusFilter);
+    }
+
+    if (dateFilter) {
+      list = list.filter((a) =>
+        isSameDay(a.dueDate || a.date, dateFilter.slice(0, 10))
+      );
+    } else if (rangeFilter === "today") {
+      const today = todayISO();
+      list = list.filter((a) =>
+        isSameDay(a.dueDate || a.date, today)
+      );
+    } else if (rangeFilter === "7") {
+      list = list.filter((a) =>
+        inNext7(a.dueDate || a.date, a.dueTime || a.time)
+      );
+    } // rangeFilter === "all" => ingen extra datum-filtrering
+
+    // sortera på datum + tid
+    list.sort((a, b) => {
+      const da = (a.dueDate || a.date || "") + "T" + (a.dueTime || "");
+      const db = (b.dueDate || b.date || "") + "T" + (b.dueTime || "");
+      return da.localeCompare(db);
     });
-    return arr;
-  }, [activities, respFilter, rangeFilter, dateFilter, statusFilter, mode]);
 
-  const softDelete = (a) => {
-    if (
-      !window.confirm(
-        "Ta bort denna aktivitet? Den hamnar i Arkiv och kan tas bort permanent därifrån (Inställningar)."
-      )
-    )
-      return;
-    const upd = { ...a, deletedAt: new Date().toISOString() };
-    setState((s) => ({
-      ...s,
-      activities: (s.activities || []).map((x) => (x.id === a.id ? upd : x)),
-    }));
-    if (openItem?.id === a.id) {
-      setOpenItem(null);
-      setDraft(null);
-    }
-  };
+    return list;
+  }, [activities, mode, respFilter, statusFilter, rangeFilter, dateFilter]);
 
-  const hardDelete = (a) => {
-    if (
-      !window.confirm(
-        "Ta bort denna aktivitet PERMANENT? Detta går inte att ångra."
-      )
-    )
-      return;
-    setState((s) => ({
-      ...s,
-      activities: (s.activities || []).filter((x) => x.id !== a.id),
-    }));
-    if (openItem?.id === a.id) {
-      setOpenItem(null);
-      setDraft(null);
+  const today = todayISO();
+
+  const overdue = visible.filter(
+    (a) =>
+      !a.deletedAt &&
+      (a.status || "planerad") !== "klar" &&
+      (a.dueDate || a.date) &&
+      (a.dueDate || a.date) < today
+  );
+
+  const todayActivities = visible.filter((a) =>
+    isSameDay(a.dueDate || a.date, today)
+  );
+
+  const upcoming7 = visible.filter(
+    (a) =>
+      (a.dueDate || a.date) &&
+      (a.dueDate || a.date) > today &&
+      inNext7(a.dueDate || a.date, a.dueTime || a.time)
+  );
+
+  const ensureDateAndTimes = (obj) => {
+    const now = new Date();
+    let date = obj.dueDate || obj.date;
+    let startTime = obj.dueTime || obj.time;
+    let endTime = obj.endTime;
+
+    if (!date) {
+      const m = `${now.getMonth() + 1}`.padStart(2, "0");
+      const d = `${now.getDate()}`.padStart(2, "0");
+      date = `${now.getFullYear()}-${m}-${d}`;
     }
+
+    if (!startTime) {
+      // närmaste hel timme, minuter = 00
+      const h = `${now.getHours()}`.padStart(2, "0");
+      startTime = `${h}:00`;
+    }
+
+    if (!endTime && startTime) {
+      // default 30 min efter start
+      const [hh, mm] = startTime.split(":").map((x) => parseInt(x || "0", 10));
+      const startDt = new Date(2000, 0, 1, hh, mm || 0);
+      const endDt = new Date(startDt.getTime() + 30 * 60 * 1000);
+      const eh = `${endDt.getHours()}`.padStart(2, "0");
+      const em = `${endDt.getMinutes()}`.padStart(2, "0");
+      endTime = `${eh}:${em}`;
+    }
+
+    return {
+      ...obj,
+      dueDate: date,
+      dueTime: startTime,
+      endTime,
+    };
   };
 
   const openEdit = (a) => {
@@ -367,360 +347,332 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     setDraft({
       id: a.id,
       title: a.title || "",
-      responsible: a.responsible || "Övrig",
-      dueDate: a.dueDate || "",
-      dueTime: a.dueTime || "",
-      priority: a.priority || "medium",
-      status: a.status || "",
       description: a.description || "",
+      responsible: a.responsible || "",
+      priority: a.priority || "medel",
+      status: a.status || "planerad",
+      dueDate: a.dueDate || a.date || "",
+      dueTime: a.dueTime || a.time || "",
+      endTime: a.endTime || "",
+      reminder: !!a.reminder,
       customerId: a.customerId || "",
       supplierId: a.supplierId || "",
       contactName: a.contactName || "",
-      isPhone: !!a.isPhone,
-      isEmail: !!a.isEmail,
-      isLunch: !!a.isLunch,
-      isMeeting: !!a.isMeeting,
+      phone: a.phone || "",
+      email: a.email || "",
     });
   };
 
+  const softDelete = (a) => {
+    if (
+      !window.confirm(
+        "Ta bort denna aktivitet? Den hamnar i arkiv (kan återställas via Inställningar)."
+      )
+    )
+      return;
+
+    setState((s) => ({
+      ...s,
+      activities: (s.activities || []).map((x) =>
+        x.id === a.id ? { ...x, deletedAt: new Date().toISOString() } : x
+      ),
+    }));
+    if (openItem?.id === a.id) {
+      setOpenItem(null);
+      setDraft(null);
+    }
+  };
+
   const Icons = ({ a }) => (
-    <div className="flex items-center gap-1 text-xs text-gray-600">
-      {a.isPhone ? <span title="Telefon">📞</span> : null}
-      {a.isEmail ? <span title="E-post">✉️</span> : null}
-      {a.isLunch ? <span title="Lunch">🥪</span> : null}
-      {a.isMeeting ? <span title="Möte">📅</span> : null}
+    <div className="flex items-center gap-1 text-sm">
+      {a.reminder && (
+        <span
+          className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-yellow-200 text-yellow-900"
+          title="Påminnelse"
+        >
+          ⏰
+        </span>
+      )}
+      {a.responsible && (
+        <span
+          className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-slate-200 text-slate-800"
+          title={a.responsible}
+        >
+          {a.responsible.slice(0, 1)}
+        </span>
+      )}
     </div>
   );
 
-  const activeActivities = useMemo(
-    () => (activities || []).filter((a) => !a?.deletedAt),
-    [activities]
-  );
-
-  const isDoneStatus = (a) => a?.priority === "klar" || a?.status === "klar";
-
-  const addDays = (ymd, days) => {
-    if (!ymd) return "";
-    const d = new Date(ymd + "T00:00:00");
-    d.setDate(d.getDate() + days);
-    const m = `${d.getMonth() + 1}`.padStart(2, "0");
-    const day = `${d.getDate()}`.padStart(2, "0");
-    return `${d.getFullYear()}-${m}-${day}`;
+  const timeRangeLabel = (a) => {
+    const date = a.dueDate || a.date;
+    if (!date) return "";
+    const start = a.dueTime || a.time || "00:00";
+    let end = a.endTime;
+    if (!end && (a.dueTime || a.time)) {
+      const [hh, mm] = start.split(":").map((x) => parseInt(x || "0", 10));
+      const startDt = new Date(2000, 0, 1, hh, mm || 0);
+      const endDt = new Date(startDt.getTime() + 30 * 60 * 1000);
+      const eh = `${endDt.getHours()}`.padStart(2, "0");
+      const em = `${endDt.getMinutes()}`.padStart(2, "0");
+      end = `${eh}:${em}`;
+    }
+    if (end) {
+      return `${fmtDateTime(date, start)} – ${end}`;
+    }
+    return fmtDateTime(date, start);
   };
 
-  const todayYMD = todayISO();
-  const next7YMD = addDays(todayYMD, 7);
+  const createNewDraft = () => {
+    const now = new Date();
+    const m = `${now.getMonth() + 1}`.padStart(2, "0");
+    const d = `${now.getDate()}`.padStart(2, "0");
+    const date = `${now.getFullYear()}-${m}-${d}`;
+    const h = `${now.getHours()}`.padStart(2, "0");
 
-  const overdueActivities = activeActivities
-    .filter((a) => a.dueDate && a.dueDate < todayYMD && !isDoneStatus(a))
-    .sort((a, b) =>
-      ((a.dueDate || "") + "T" + (a.dueTime || "")).localeCompare(
-        (b.dueDate || "") + "T" + (b.dueTime || "")
-      )
-    );
+    const newItem = {
+      id: crypto?.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2),
+      title: "",
+      description: "",
+      responsible: "",
+      priority: "medel",
+      status: "planerad",
+      dueDate: date,
+      dueTime: `${h}:00`,
+      endTime: "",
+      reminder: false,
+      customerId: "",
+      supplierId: "",
+      contactName: "",
+      phone: "",
+      email: "",
+      createdAt: new Date().toISOString(),
+    };
 
-  const todayActivities = activeActivities
-    .filter((a) => isSameDay(a.dueDate, todayYMD) && !isDoneStatus(a))
-    .sort((a, b) =>
-      ((a.dueDate || "") + "T" + (a.dueTime || "")).localeCompare(
-        (b.dueDate || "") + "T" + (b.dueTime || "")
-      )
-    );
+    setState((s) => ({
+      ...s,
+      activities: [...(s.activities || []), newItem],
+    }));
+    setOpenItem(newItem);
+    setDraft(newItem);
+  };
 
-  const upcoming7Activities = activeActivities
-    .filter(
-      (a) =>
-        a.dueDate &&
-        a.dueDate > todayYMD &&
-        a.dueDate <= next7YMD &&
-        !isDoneStatus(a)
-    )
-    .sort((a, b) =>
-      ((a.dueDate || "") + "T" + (a.dueTime || "")).localeCompare(
-        (b.dueDate || "") + "T" + (b.dueTime || "")
-      )
-    );
+  const updateDraft = (key, value) =>
+    setDraft((d) => ({
+      ...d,
+      [key]: value,
+    }));
+
+  const applyUpdateAndClose = (mutator) => {
+    if (!openItem || !draft) return;
+    const merged = ensureDateAndTimes({ ...openItem, ...draft });
+    const updated = mutator(merged);
+
+    setState((s) => ({
+      ...s,
+      activities: (s.activities || []).map((x) =>
+        x.id === updated.id ? updated : x
+      ),
+    }));
+    setOpenItem(null);
+    setDraft(null);
+  };
+
+  const saveAndMarkDone = () =>
+    applyUpdateAndClose((obj) => ({
+      ...obj,
+      priority: "klar",
+      status: "klar",
+      completedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+
+  const saveAndFollowUp = () =>
+    applyUpdateAndClose((obj) => ({
+      ...obj,
+      status: "återkoppling",
+      updatedAt: new Date().toISOString(),
+    }));
+
+  const saveOnly = () =>
+    applyUpdateAndClose((obj) => ({
+      ...obj,
+      updatedAt: new Date().toISOString(),
+    }));
 
   return (
-    <div className="bg-white rounded-2xl shadow p-4">
-      {/* rubrik + läge (Aktiva/Arkiv) + filter */}
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <h2 className="font-semibold">Aktiviteter</h2>
-          <div className="flex rounded-xl overflow-hidden border">
-            <button
-              type="button"
-              className={`px-3 py-1 text-sm ${
-                mode === "active"
-                  ? "bg-black text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-              onClick={() => setMode("active")}
-            >
-              Aktiva
-            </button>
-            <button
-              type="button"
-              className={`px-3 py-1 text-sm ${
-                mode === "archive"
-                  ? "bg-black text-white"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-              onClick={() => setMode("archive")}
-            >
-              Arkiv
-            </button>
-          </div>
+    <div className="space-y-4">
+      {/* Filterrad */}
+      <div className="flex flex-wrap gap-2 items-end">
+        <div>
+          <label className="block text-xs text-gray-600">Ansvarig</label>
+          <select
+            className="border rounded-xl px-3 py-2"
+            value={respFilter}
+            onChange={(e) => setRespFilter(e.target.value)}
+          >
+            <option value="all">Alla</option>
+            <option value="Cralle">Cralle</option>
+            <option value="Mattias">Mattias</option>
+            <option value="Annat">Annat</option>
+          </select>
         </div>
 
-        {mode === "active" && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex rounded-xl overflow-hidden border">
-              {[
-                { k: "today", label: "Idag" },
-                { k: "7", label: "7 dagar" },
-                { k: "all", label: "Alla" },
-              ].map((o) => (
-                <button
-                  key={o.k}
-                  className={`px-3 py-2 ${
-                    rangeFilter === o.k
-                      ? "bg-black text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                  onClick={() => {
-                    setRangeFilter(o.k);
-                    if (o.k !== "date") setDateFilter("");
-                  }}
-                  title={o.label}
-                  type="button"
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
+        <div>
+          <label className="block text-xs text-gray-600">Datum</label>
+          <input
+            type="date"
+            className="border rounded-xl px-3 py-2"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+          />
+        </div>
 
-            <div className="flex items-center gap-2 border rounded-xl px-2 py-1">
-              <label className="text-sm">Dag:</label>
-              <input
-                type="date"
-                className="text-sm border rounded px-2 py-1"
-                value={dateFilter}
-                onChange={(e) => {
-                  setDateFilter(e.target.value);
-                  setRangeFilter("date");
-                }}
-              />
-              {dateFilter && (
-                <button
-                  className="text-xs underline"
-                  onClick={() => {
-                    setDateFilter("");
-                    setRangeFilter("all");
-                  }}
-                  type="button"
-                >
-                  Rensa datum
-                </button>
-              )}
-            </div>
+        <div>
+          <label className="block text-xs text-gray-600">Tidsspann</label>
+          <select
+            className="border rounded-xl px-3 py-2"
+            value={rangeFilter}
+            onChange={(e) => setRangeFilter(e.target.value)}
+          >
+            <option value="today">Idag</option>
+            <option value="7">7 dagar</option>
+            <option value="all">Alla</option>
+          </select>
+        </div>
 
-            <div className="flex items-center gap-2 border rounded-xl px-2 py-1">
-              <label className="text-sm">Status:</label>
-              <select
-                className="text-sm border rounded px-2 py-1"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                title="Filtrera på status"
-              >
-                <option value="all">Alla</option>
-                <option value="done">Endast klara</option>
-                <option value="followup">Endast återkoppling</option>
-                <option value="done_or_followup">Klara + Återkoppling</option>
-                <option value="all_except_done">Alla utom klara</option>
-              </select>
-            </div>
+        <div>
+          <label className="block text-xs text-gray-600">Status</label>
+          <select
+            className="border rounded-xl px-3 py-2"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">Alla</option>
+            <option value="planerad">Planerad</option>
+            <option value="återkoppling">Återkoppling</option>
+            <option value="klar">Klar</option>
+            <option value="inställd">Inställd</option>
+          </select>
+        </div>
 
-            <div className="flex rounded-xl overflow-hidden border">
-              {["all", "Mattias", "Cralle", "Övrig"].map((r) => (
-                <button
-                  key={r}
-                  className={`px-3 py-2 ${
-                    respFilter === r
-                      ? "bg-black text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                  onClick={() => setRespFilter(r)}
-                  title={r === "all" ? "Visa alla" : `Visa endast ${r}`}
-                  type="button"
-                >
-                  {r === "all" ? "Alla" : r}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="ml-auto flex gap-2">
+          <button
+            className={`px-3 py-2 rounded-xl border text-sm ${
+              mode === "active"
+                ? "bg-slate-800 text-white"
+                : "bg-white text-slate-700"
+            }`}
+            onClick={() => setMode("active")}
+            type="button"
+          >
+            Aktiva
+          </button>
+          <button
+            className={`px-3 py-2 rounded-xl border text-sm ${
+              mode === "archive"
+                ? "bg-slate-800 text-white"
+                : "bg-white text-slate-700"
+            }`}
+            onClick={() => setMode("archive")}
+            type="button"
+          >
+            Arkiv
+          </button>
+          <button
+            className="px-3 py-2 rounded-xl border text-sm bg-gray-200 hover:bg-gray-300"
+            onClick={createNewDraft}
+            type="button"
+          >
+            + Ny aktivitet
+          </button>
+        </div>
       </div>
 
-      {/* sammanfattning (Idag / Försenade / Kommande 7 dagar) */}
-      {mode === "active" && (
-        <div className="mb-3 space-y-3 text-sm">
-          {/* Idag – bara när filtret = Alla */}
-          {rangeFilter === "all" && todayActivities.length > 0 && (
-            <div>
-              <div className="font-semibold flex items-center gap-2">
-                <span>⏰ Idag</span>
-                <span className="text-xs text-gray-500">
-                  {todayActivities.length} st
-                </span>
-              </div>
-              <ul className="list-disc ml-5">
-                {todayActivities.slice(0, 5).map((a) => (
-                  <li key={a.id} className="text-gray-700">
-                    {buildTitle(a)}{" "}
-                    <span className="text-gray-500">
-                      {fmt(a.dueDate, a.dueTime)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Försenade – låter vi ligga kvar alltid */}
-          {overdueActivities.length > 0 && (
-            <div>
-              <div className="font-semibold flex items-center gap-2 text-rose-700">
-                <span>⚠️ Försenade</span>
-                <span className="text-xs text-gray-500">
-                  {overdueActivities.length} st
-                </span>
-              </div>
-              <ul className="list-disc ml-5">
-                {overdueActivities.slice(0, 5).map((a) => (
-                  <li key={a.id} className="text-gray-700">
-                    {buildTitle(a)}{" "}
-                    <span className="text-gray-500">
-                      {fmt(a.dueDate, a.dueTime)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Kommande 7 dagar – bara när filtret = Alla */}
-          {rangeFilter === "all" && upcoming7Activities.length > 0 && (
-            <div>
-              <div className="font-semibold flex items-center gap-2">
-                <span>📅 Kommande 7 dagar</span>
-                <span className="text-xs text-gray-500">
-                  {upcoming7Activities.length} st
-                </span>
-              </div>
-              <ul className="list-disc ml-5">
-                {upcoming7Activities.slice(0, 7).map((a) => (
-                  <li key={a.id} className="text-gray-700">
-                    {fmt(a.dueDate, a.dueTime)} – {buildTitle(a)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      {/* Små sammanfattningar – Kommande 7 dagar bara när filtret = Alla */}
+      {mode === "active" && rangeFilter === "all" && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-gray-700">
+          <div className="border rounded-xl p-2">
+            <div className="font-semibold mb-1">Försenade</div>
+            <div>{overdue.length} st</div>
+          </div>
+          <div className="border rounded-xl p-2">
+            <div className="font-semibold mb-1">Idag</div>
+            <div>{todayActivities.length} st</div>
+          </div>
+          <div className="border rounded-xl p-2">
+            <div className="font-semibold mb-1">Kommande 7 dagar</div>
+            <div>{upcoming7.length} st</div>
+          </div>
         </div>
       )}
 
-      {/* lista */}
-      <ul className="divide-y">
-        {list.map((a) => (
-          <li key={a.id} className="py-3">
-            <div className="flex items-center justify-between gap-3">
-              <button
-                className="text-left min-w-0 flex-1 hover:bg-gray-50 rounded px-1"
-                onClick={() => openEdit(a)}
-                title="Öppna aktiviteten"
-                type="button"
-              >
-                <div className="font-medium truncate">
-                  {buildTitle(a)}
-                  {mode === "archive" ? " (Arkiv)" : ""}
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-xs text-gray-500">
-                    {fmt(a.dueDate, a.dueTime)}
-                  </div>
-                  <Icons a={a} />
-                </div>
-              </button>
+      {/* Lista */}
+      <div className="space-y-3">
+        {visible.length === 0 && (
+          <div className="text-sm text-gray-500">
+            Inga aktiviteter matchar filtren.
+          </div>
+        )}
 
-              <div className="flex items-center gap-2 shrink-0">
-                <span className={prBadge(a.priority)}>
-                  {a.priority || "normal"}
+        {visible.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => openEdit(a)}
+            className="w-full text-left border rounded-xl px-3 py-2 flex flex-col gap-1 hover:bg-gray-50"
+          >
+            <div className="flex items-center gap-2">
+              <div className="font-medium truncate">
+                {a.title || "(ingen titel)"}
+              </div>
+              {a.customerId && (
+                <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                  Kund kopplad
                 </span>
-                <span className={respChip(a.responsible)}>
-                  {a.responsible || "Övrig"}
+              )}
+              {a.supplierId && (
+                <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
+                  Leverantör kopplad
                 </span>
-                {a.status ? (
-                  <span className={statusBadge(a.status)}>{a.status}</span>
-                ) : null}
-
-                {mode === "active" ? (
-                  <button
-                    className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                    onClick={() => softDelete(a)}
-                    title="Ta bort (flyttas till Arkiv)"
-                    type="button"
-                  >
-                    Ta bort
-                  </button>
-                ) : (
-                  <button
-                    className="text-xs px-2 py-1 rounded bg-rose-700 text-white"
-                    onClick={() => hardDelete(a)}
-                    title="Ta bort permanent"
-                    type="button"
-                  >
-                    Ta bort permanent
-                  </button>
-                )}
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <span className={prBadge(a.priority)}>{a.priority}</span>
+                <span className={statusBadge(a.status || "planerad")}>
+                  {a.status || "planerad"}
+                </span>
               </div>
             </div>
-          </li>
+            <div className="flex items-center gap-2 text-xs text-gray-600">
+              <Icons a={a} />
+              <span className="truncate">
+                {timeRangeLabel(a)}
+              </span>
+              <span className="ml-auto text-[11px] text-gray-500">
+                Ansvarig: {respLabel(a.responsible)}
+              </span>
+            </div>
+          </button>
         ))}
+      </div>
 
-        {list.length === 0 && (
-          <li className="py-6 text-sm text-gray-500">
-            {mode === "active"
-              ? "Inga aktiviteter att visa."
-              : "Inga arkiverade aktiviteter."}
-          </li>
-        )}
-      </ul>
-
-      {/* popup */}
+      {/* Popup */}
       {openItem && draft && (
-        <div
-          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
-          onClick={() => {
-            setOpenItem(null);
-            setDraft(null);
-          }}
-        >
-          <div
-            className="bg-white rounded-2xl shadow p-4 w-full max-w-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-semibold">Redigera aktivitet</div>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-30">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-semibold text-lg">Redigera aktivitet</div>
               <button
-                className="text-sm"
+                className="text-sm text-gray-500"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
                 }}
                 type="button"
               >
-                Stäng
+                Stäng ✕
               </button>
             </div>
 
@@ -730,52 +682,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 <input
                   className="w-full border rounded px-3 py-2"
                   value={draft.title}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, title: e.target.value }))
-                  }
-                  placeholder="Vad handlar aktiviteten om?"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Ansvarig</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.responsible}
-                  onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      responsible: e.target.value,
-                    }))
-                  }
-                >
-                  <option>Mattias</option>
-                  <option>Cralle</option>
-                  <option>Övrig</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Datum</label>
-                <input
-                  type="date"
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.dueDate}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, dueDate: e.target.value }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Tid</label>
-                <input
-                  type="time"
-                  className="w-full border rounded px-3 py-2"
-                  value={draft.dueTime}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, dueTime: e.target.value }))
-                  }
+                  onChange={(e) => updateDraft("title", e.target.value)}
                 />
               </div>
 
@@ -784,91 +691,77 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 <select
                   className="w-full border rounded px-3 py-2"
                   value={draft.priority}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, priority: e.target.value }))
-                  }
+                  onChange={(e) => updateDraft("priority", e.target.value)}
                 >
-                  <option value="low">Låg</option>
-                  <option value="medium">Normal</option>
-                  <option value="high">Hög</option>
+                  <option value="hög">Hög</option>
+                  <option value="medel">Medel</option>
+                  <option value="låg">Låg</option>
                   <option value="klar">Klar</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-sm font-medium">Status</label>
+                <label className="text-sm font-medium">Ansvarig</label>
                 <select
                   className="w-full border rounded px-3 py-2"
-                  value={draft.status}
+                  value={draft.responsible}
                   onChange={(e) =>
-                    setDraft((d) => ({ ...d, status: e.target.value }))
+                    updateDraft("responsible", e.target.value)
                   }
                 >
                   <option value="">—</option>
-                  <option value="återkoppling">Återkoppling</option>
-                  <option value="klar">Klar</option>
+                  <option value="Cralle">Cralle</option>
+                  <option value="Mattias">Mattias</option>
+                  <option value="Annat">Annat</option>
                 </select>
               </div>
 
-              <div className="col-span-2">
-                <div className="text-sm font-medium mb-1">Typ</div>
-                <div className="flex flex-wrap gap-4 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!draft.isPhone}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          isPhone: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>📞 Telefon</span>
-                  </label>
+              <div>
+                <label className="text-sm font-medium">Datum</label>
+                <input
+                  type="date"
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.dueDate || ""}
+                  onChange={(e) => updateDraft("dueDate", e.target.value)}
+                />
+              </div>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!draft.isEmail}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          isEmail: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>✉️ Mail</span>
-                  </label>
+              <div>
+                <label className="text-sm font-medium">Starttid</label>
+                <input
+                  type="time"
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.dueTime || ""}
+                  onChange={(e) => updateDraft("dueTime", e.target.value)}
+                />
+              </div>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!draft.isLunch}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          isLunch: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>🥪 Lunch</span>
-                  </label>
+              <div>
+                <label className="text-sm font-medium">Sluttid</label>
+                <input
+                  type="time"
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.endTime || ""}
+                  onChange={(e) => updateDraft("endTime", e.target.value)}
+                />
+              </div>
 
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!draft.isMeeting}
-                      onChange={(e) =>
-                        setDraft((d) => ({
-                          ...d,
-                          isMeeting: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span>📅 Möte</span>
-                  </label>
-                </div>
+              <div className="col-span-2 flex items-center gap-2 mt-1">
+                <input
+                  id="reminder-checkbox"
+                  type="checkbox"
+                  className="w-4 h-4"
+                  checked={!!draft.reminder}
+                  onChange={(e) =>
+                    updateDraft("reminder", e.target.checked)
+                  }
+                />
+                <label
+                  htmlFor="reminder-checkbox"
+                  className="text-sm text-gray-700"
+                >
+                  Påminnelse
+                </label>
               </div>
 
               <div>
@@ -877,10 +770,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   className="w-full border rounded px-3 py-2"
                   value={draft.customerId}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      customerId: e.target.value,
-                    }))
+                    updateDraft("customerId", e.target.value)
                   }
                 >
                   <option value="">—</option>
@@ -898,10 +788,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   className="w-full border rounded px-3 py-2"
                   value={draft.supplierId}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      supplierId: e.target.value,
-                    }))
+                    updateDraft("supplierId", e.target.value)
                   }
                 >
                   <option value="">—</option>
@@ -917,14 +804,29 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 <label className="text-sm font-medium">Kontakt</label>
                 <input
                   className="w-full border rounded px-3 py-2"
-                  value={draft.contactName}
+                  value={draft.contactName || ""}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      contactName: e.target.value,
-                    }))
+                    updateDraft("contactName", e.target.value)
                   }
                   placeholder="Namn på kontaktperson"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Telefon</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.phone || ""}
+                  onChange={(e) => updateDraft("phone", e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">E-post</label>
+                <input
+                  className="w-full border rounded px-3 py-2"
+                  value={draft.email || ""}
+                  onChange={(e) => updateDraft("email", e.target.value)}
                 />
               </div>
 
@@ -932,12 +834,9 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 <label className="text-sm font-medium">Beskrivning</label>
                 <textarea
                   className="w-full border rounded px-3 py-2 min-h-[100px]"
-                  value={draft.description}
+                  value={draft.description || ""}
                   onChange={(e) =>
-                    setDraft((d) => ({
-                      ...d,
-                      description: e.target.value,
-                    }))
+                    updateDraft("description", e.target.value)
                   }
                 />
               </div>
@@ -946,52 +845,18 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
             <div className="mt-4 flex gap-2">
               <button
                 className="px-3 py-2 rounded bg-green-600 text-white"
-                onClick={() => {
-                  const baseUpd = {
-                    ...openItem,
-                    ...draft,
-                    updatedAt: new Date().toISOString(),
-                    priority: "klar",
-                    status: "klar",
-                    completedAt: new Date().toISOString(),
-                  };
-                  setState((s) => ({
-                    ...s,
-                    activities: (s.activities || []).map((x) =>
-                      x.id === baseUpd.id ? baseUpd : x
-                    ),
-                  }));
-                  setOpenItem(null);
-                  setDraft(null);
-                }}
+                onClick={saveAndMarkDone}
                 type="button"
               >
                 Spara & Markera Klar
               </button>
-
               <button
                 className="px-3 py-2 rounded bg-orange-500 text-white"
-                onClick={() => {
-                  const baseUpd = {
-                    ...openItem,
-                    ...draft,
-                    updatedAt: new Date().toISOString(),
-                    status: "återkoppling",
-                  };
-                  setState((s) => ({
-                    ...s,
-                    activities: (s.activities || []).map((x) =>
-                      x.id === baseUpd.id ? baseUpd : x
-                    ),
-                  }));
-                  setOpenItem(null);
-                  setDraft(null);
-                }}
+                onClick={saveAndFollowUp}
                 type="button"
               >
                 Spara & Återkoppling
               </button>
-
               <button
                 className="px-3 py-2 rounded bg-rose-600 text-white"
                 onClick={() => softDelete(openItem)}
@@ -999,29 +864,13 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
               >
                 Ta bort
               </button>
-
               <button
                 className="ml-auto px-3 py-2 rounded border"
-                onClick={() => {
-                  const baseUpd = {
-                    ...openItem,
-                    ...draft,
-                    updatedAt: new Date().toISOString(),
-                  };
-                  setState((s) => ({
-                    ...s,
-                    activities: (s.activities || []).map((x) =>
-                      x.id === baseUpd.id ? baseUpd : x
-                    ),
-                  }));
-                  setOpenItem(null);
-                  setDraft(null);
-                }}
+                onClick={saveOnly}
                 type="button"
               >
                 Spara
               </button>
-
               <button
                 className="px-3 py-2 rounded border"
                 onClick={() => {
@@ -1030,7 +879,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 }}
                 type="button"
               >
-                Avbryt
+                Avbryt utan att spara
               </button>
             </div>
           </div>
