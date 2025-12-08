@@ -1976,168 +1976,155 @@ export default function App() {
   }
 
   return (
-<header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
-  <h1 className="text-xl font-semibold">Mach CRM</h1>
+    <div className="mx-auto max-w-7xl p-4">
+      {/* HEADER */}
+      <header className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+        <h1 className="text-xl font-semibold">Mach CRM</h1>
 
-  {/* HÖGER DEL – KNAPPAR + SENAST SYNKAD */}
-  <div className="flex flex-col items-end gap-1">
-    {/* Knapprad */}
-    <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex flex-col items-end gap-1">
+          {/* Knapprad */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
+              onClick={createActivity}
+              title="Skapa ny aktivitet"
+              type="button"
+            >
+              + Ny aktivitet
+            </button>
 
-      <button
-        className="border rounded-xl px-3 py-2 bg-gray-200 hover:bg-gray-300"
-        onClick={createActivity}
-        title="Skapa ny aktivitet"
-        type="button"
-      >
-        + Ny aktivitet
-      </button>
+            <button
+              className="border rounded-xl px-3 py-2 bg-orange-300 hover:bg-orange-400"
+              onClick={createOffer}
+              title="Skapa ny offert"
+              type="button"
+            >
+              + Ny offert
+            </button>
 
-      <button
-        className="border rounded-xl px-3 py-2 bg-orange-300 hover:bg-orange-400"
-        onClick={createOffer}
-        title="Skapa ny offert"
-        type="button"
-      >
-        + Ny offert
-      </button>
+            <button
+              className="border rounded-xl px-3 py-2 bg-green-200 hover:bg-green-300"
+              onClick={createProjectEmpty}
+              title="Skapa nytt projekt"
+              type="button"
+            >
+              + Nytt projekt
+            </button>
 
-      <button
-        className="border rounded-xl px-3 py-2 bg-green-200 hover:bg-green-300"
-        onClick={createProjectEmpty}
-        title="Skapa nytt projekt"
-        type="button"
-      >
-        + Nytt projekt
-      </button>
+            <button
+              className="border rounded-xl px-3 py-2 bg-blue-200 hover:bg-blue-300"
+              onClick={createCustomer}
+              title="Lägg till kund"
+              type="button"
+            >
+              + Ny kund
+            </button>
 
-      <button
-        className="border rounded-xl px-3 py-2 bg-blue-200 hover:bg-blue-300"
-        onClick={createCustomer}
-        title="Lägg till kund"
-        type="button"
-      >
-        + Ny kund
-      </button>
+            <button
+              className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300"
+              onClick={createSupplier}
+              title="Lägg till leverantör"
+              type="button"
+            >
+              + Ny leverantör
+            </button>
 
-      <button
-        className="border rounded-xl px-3 py-2 bg-amber-200 hover:bg-amber-300"
-        onClick={createSupplier}
-        title="Lägg till leverantör"
-        type="button"
-      >
-        + Ny leverantör
-      </button>
+            <button
+              className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
+              onClick={() => setView("settings")}
+              title="Inställningar"
+              type="button"
+            >
+              🛠️
+            </button>
+          </div>
 
-      <button
-        className="ml-2 border rounded-xl px-3 py-2 hover:bg-gray-50"
-        onClick={() => setView("settings")}
-        title="Inställningar"
-        type="button"
-      >
-        🛠️
-      </button>
-
-    </div>
-
-    {/* NY RAD – SENAST SYNKAD */}
-    <div className="text-xs text-gray-500">
-      Senast synkad: {lastSyncedText}
-    </div>
-  </div>
-</header>
+          {/* Senast synkad-raden */}
+          <div className="text-xs text-gray-500">
+            Senast synkad: {lastSyncedText}
+          </div>
+        </div>
+      </header>
 
       {/* NY LAYOUT: menyrad överst, innehåll under */}
       <div className="flex flex-col gap-4">
         {/* Meny-knappar (ersätter sidomenyn) */}
-        <div className="flex flex-wrap gap-2">
-  {/* Aktiviteter – ljusgrå som + Ny aktivitet */}
-  <button
-    type="button"
-    onClick={() => setView("activities")}
-    className={
-      "px-3 py-2 rounded-full text-sm border " +
-      (view === "activities"
-        ? "bg-gray-300 text-black"
-        : "bg-gray-200 text-black hover:bg-gray-300")
-    }
-  >
-    Aktiviteter
-  </button>
+        <div className="flex flex-wrap gap-2 mb-2">
+          <button
+            type="button"
+            onClick={() => setView("activities")}
+            className={`px-3 py-2 rounded-xl border text-sm ${
+              view === "activities"
+                ? "bg-gray-200 text-gray-900"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            Aktiviteter
+          </button>
 
-  {/* Kalender – grå */}
-  <button
-    type="button"
-    onClick={() => setView("activitiesCalendar")}
-    className={
-      "px-3 py-2 rounded-full text-sm border " +
-      (view === "activitiesCalendar"
-        ? "bg-gray-300 text-black"
-        : "bg-gray-200 text-black hover:bg-gray-300")
-    }
-  >
-    Kalender
-  </button>
+          <button
+            type="button"
+            onClick={() => setView("activitiesCalendar")}
+            className={`px-3 py-2 rounded-xl border text-sm ${
+              view === "activitiesCalendar"
+                ? "bg-gray-400 text-white"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            Kalender
+          </button>
 
-  {/* Kunder – samma ljusblå som + Ny kund */}
-  <button
-    type="button"
-    onClick={() => setView("customers")}
-    className={
-      "px-3 py-2 rounded-full text-sm border " +
-      (view === "customers"
-        ? "bg-blue-300 text-black"
-        : "bg-blue-200 text-black hover:bg-blue-300")
-    }
-  >
-    Kunder
-  </button>
+          <button
+            type="button"
+            onClick={() => setView("customers")}
+            className={`px-3 py-2 rounded-xl border text-sm ${
+              view === "customers"
+                ? "bg-blue-200 text-blue-900"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            Kunder
+          </button>
 
-  {/* Leverantörer – samma gul som + Ny leverantör */}
-  <button
-    type="button"
-    onClick={() => setView("suppliers")}
-    className={
-      "px-3 py-2 rounded-full text-sm border " +
-      (view === "suppliers"
-        ? "bg-amber-300 text-black"
-        : "bg-amber-200 text-black hover:bg-amber-300")
-    }
-  >
-    Leverantörer
-  </button>
+          <button
+            type="button"
+            onClick={() => setView("suppliers")}
+            className={`px-3 py-2 rounded-xl border text-sm ${
+              view === "suppliers"
+                ? "bg-amber-200 text-amber-900"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            Leverantörer
+          </button>
 
-  {/* Offerter – samma orange som + Ny offert */}
-  <button
-    type="button"
-    onClick={() => setView("offers")}
-    className={
-      "px-3 py-2 rounded-full text-sm border " +
-      (view === "offers"
-        ? "bg-orange-400 text-black"
-        : "bg-orange-300 text-black hover:bg-orange-400")
-    }
-  >
-    Offerter
-  </button>
+          <button
+            type="button"
+            onClick={() => setView("offers")}
+            className={`px-3 py-2 rounded-xl border text-sm ${
+              view === "offers"
+                ? "bg-orange-300 text-orange-900"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            Offerter
+          </button>
 
-  {/* Projekt – samma grön som + Nytt projekt */}
-  <button
-    type="button"
-    onClick={() => setView("projects")}
-    className={
-      "px-3 py-2 rounded-full text-sm border " +
-      (view === "projects"
-        ? "bg-green-300 text-black"
-        : "bg-green-200 text-black hover:bg-green-300")
-    }
-  >
-    Projekt
-  </button>
-</div>
+          <button
+            type="button"
+            onClick={() => setView("projects")}
+            className={`px-3 py-2 rounded-xl border text-sm ${
+              view === "projects"
+                ? "bg-green-200 text-green-900"
+                : "bg-white text-gray-700"
+            }`}
+          >
+            Projekt
+          </button>
+        </div>
 
-        {/* Innehåll */}
-        <main className="space-y-4">
+        {/* Själva innehållet/panelerna */}
+        <div className="bg-slate-50 rounded-2xl p-3">
           {view === "activities" && (
             <ActivitiesPanel
               activities={state.activities || []}
@@ -2149,8 +2136,8 @@ export default function App() {
           {view === "activitiesCalendar" && (
             <ActivitiesCalendarPanel
               activities={state.activities || []}
+              entities={state.entities || []}
               setState={setState}
-              setView={setView}
             />
           )}
 
@@ -2179,22 +2166,16 @@ export default function App() {
           {view === "projects" && (
             <ProjectsPanel
               projects={state.projects || []}
-              setState={setState}
-              entities={state.entities || []}
               offers={state.offers || []}
+              entities={state.entities || []}
+              setState={setState}
             />
           )}
 
           {view === "settings" && (
-            <SettingsPanel
-              entities={state.entities || []}
-              offers={state.offers || []}
-              projects={state.projects || []}
-              activities={state.activities || []}
-              setState={setState}
-            />
+            <SettingsPanel state={state} setState={setState} />
           )}
-        </main>
+        </div>
       </div>
     </div>
   );
