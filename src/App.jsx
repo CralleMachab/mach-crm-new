@@ -1765,42 +1765,51 @@ export default function App() {
 
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-2">
-              <button
-                className="border rounded-xl px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-xs"
-                onClick={createActivity}
-                type="button"
-              >
-                + Ny aktivitet
-              </button>
-              <button
-                className="border rounded-xl px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-xs"
-                onClick={createCustomer}
-                type="button"
-              >
-                + Ny kund
-              </button>
-              <button
-                className="border rounded-xl px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-xs"
-                onClick={createSupplier}
-                type="button"
-              >
-                + Ny leverantör
-              </button>
-              <button
-                className="border rounded-xl px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-xs"
-                onClick={createOffer}
-                type="button"
-              >
-                + Ny offert
-              </button>
-              <button
-                className="border rounded-xl px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-xs"
-                onClick={createProjectFromScratch}
-                type="button"
-              >
-                + Nytt projekt
-              </button>
-            </div>
+  {/* Aktiviteter – ljusgrå */}
+  <button
+    className="border border-gray-300 rounded-xl px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-xs text-gray-800"
+    onClick={createActivity}
+    type="button"
+  >
+    + Ny aktivitet
+  </button>
+
+  {/* Kund – ljusblå */}
+  <button
+    className="border border-sky-300 rounded-xl px-3 py-1.5 bg-sky-100 hover:bg-sky-200 text-xs text-sky-800"
+    onClick={createCustomer}
+    type="button"
+  >
+    + Ny kund
+  </button>
+
+  {/* Leverantör – ljusbrun (amber) */}
+  <button
+    className="border border-amber-300 rounded-xl px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-xs text-amber-800"
+    onClick={createSupplier}
+    type="button"
+  >
+    + Ny leverantör
+  </button>
+
+  {/* Offert – orange */}
+  <button
+    className="border border-orange-300 rounded-xl px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-xs text-orange-800"
+    onClick={createOffer}
+    type="button"
+  >
+    + Ny offert
+  </button>
+
+  {/* Projekt – ljusgrön */}
+  <button
+    className="border border-green-300 rounded-xl px-3 py-1.5 bg-green-100 hover:bg-green-200 text-xs text-green-800"
+    onClick={createProjectFromScratch}
+    type="button"
+  >
+    + Nytt projekt
+  </button>
+</div>
 
             <div className="text-[11px] text-right text-gray-500 flex items-center gap-2">
               <span>Molnsynk:</span>
