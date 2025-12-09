@@ -109,8 +109,6 @@ function customerCategoryBadge(cat) {
     case "Totalentreprenad":
     case "TotalEntreprenad":
       return `${base} bg-orange-500`; // Orange
-    case "Bygg":
-      return `${base} bg-orange-500`;
     case "Turbovex":
       return `${base} bg-blue-500`; // Blå
     case "Övrigt":
@@ -156,6 +154,21 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
+
+  // Öppna direkt om _shouldOpen är satt (skapad från huvudmenyn)
+  useEffect(() => {
+    const a = (activities || []).find((x) => x._shouldOpen);
+    if (!a) return;
+    // Öppna i popup
+    openEdit(a);
+    // Rensa flaggan så den inte öppnas igen
+    setState((s) => ({
+      ...s,
+      activities: (s.activities || []).map((x) =>
+        x.id === a.id ? { ...x, _shouldOpen: undefined } : x
+      ),
+    }));
+  }, [activities, setState]);
 
   const customers = useMemo(
     () => (entities || []).filter((e) => e?.type === "customer"),
@@ -241,6 +254,21 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   };
 
   const respLabel = (r) => r || "—";
+
+  const respPillClass = (r) => {
+    const base = "px-2 py-0.5 rounded-full text-[11px] font-medium";
+    if (r === "Cralle") return base + " bg-blue-500 text-white";
+    if (r === "Mattias") return base + " bg-green-500 text-white";
+    return base + " bg-slate-200 text-slate-800";
+  };
+
+  const respInitialClass = (r) => {
+    const base =
+      "inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full";
+    if (r === "Cralle") return base + " bg-blue-500 text-white";
+    if (r === "Mattias") return base + " bg-green-500 text-white";
+    return base + " bg-slate-200 text-slate-800";
+  };
 
   // Normaliserad lista med filter
   const visible = useMemo(() => {
@@ -357,10 +385,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       dueTime: a.dueTime || a.time || "",
       endTime: a.endTime || "",
       reminder: !!a.reminder,
-      isPhone: !!a.isPhone,
-      isMeeting: !!a.isMeeting,
-      isEmail: !!a.isEmail,
-      isLunch: !!a.isLunch,
       customerId: a.customerId || "",
       supplierId: a.supplierId || "",
       contactName: a.contactName || "",
@@ -391,26 +415,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
   const Icons = ({ a }) => (
     <div className="flex items-center gap-1 text-sm">
-      {a.isPhone && (
-        <span className="inline-block text-gray-700" title="Telefon">
-          📞
-        </span>
-      )}
-      {a.isMeeting && (
-        <span className="inline-block text-gray-700" title="Möte">
-          📅
-        </span>
-      )}
-      {a.isEmail && (
-        <span className="inline-block text-gray-700" title="Mail">
-          ✉️
-        </span>
-      )}
-      {a.isLunch && (
-        <span className="inline-block text-gray-700" title="Lunch">
-          🍽️
-        </span>
-      )}
       {a.reminder && (
         <span
           className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-yellow-200 text-yellow-900"
@@ -421,7 +425,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       )}
       {a.responsible && (
         <span
-          className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-slate-200 text-slate-800"
+          className={respInitialClass(a.responsible)}
           title={a.responsible}
         >
           {a.responsible.slice(0, 1)}
@@ -469,10 +473,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       dueTime: `${h}:00`,
       endTime: "",
       reminder: false,
-      isPhone: false,
-      isMeeting: false,
-      isEmail: false,
-      isLunch: false,
       customerId: "",
       supplierId: "",
       contactName: "",
@@ -680,8 +680,15 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
               <span className="truncate">
                 {timeRangeLabel(a)}
               </span>
-              <span className="ml-auto text-[11px] text-gray-500">
-                Ansvarig: {respLabel(a.responsible)}
+              <span className="ml-auto flex items-center gap-1 text-[11px] text-gray-500">
+                <span>Ansvarig:</span>
+                {a.responsible ? (
+                  <span className={respPillClass(a.responsible)}>
+                    {a.responsible}
+                  </span>
+                ) : (
+                  <span>—</span>
+                )}
               </span>
             </div>
           </button>
@@ -776,55 +783,21 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 />
               </div>
 
-              <div className="col-span-2 flex items-center flex-wrap gap-4 mt-1">
-                <label className="flex items-center gap-1 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4"
-                    checked={!!draft.isPhone}
-                    onChange={(e) => updateDraft("isPhone", e.target.checked)}
-                  />
-                  📞 Telefon
-                </label>
-
-                <label className="flex items-center gap-1 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4"
-                    checked={!!draft.isMeeting}
-                    onChange={(e) => updateDraft("isMeeting", e.target.checked)}
-                  />
-                  📅 Möte
-                </label>
-
-                <label className="flex items-center gap-1 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4"
-                    checked={!!draft.isEmail}
-                    onChange={(e) => updateDraft("isEmail", e.target.checked)}
-                  />
-                  ✉️ Mail
-                </label>
-
-                <label className="flex items-center gap-1 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4"
-                    checked={!!draft.isLunch}
-                    onChange={(e) => updateDraft("isLunch", e.target.checked)}
-                  />
-                  🍽️ Lunch
-                </label>
-
-                <label className="flex items-center gap-1 text-sm text-gray-700">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4"
-                    checked={!!draft.reminder}
-                    onChange={(e) => updateDraft("reminder", e.target.checked)}
-                  />
-                  ⏰ Påminnelse
+              <div className="col-span-2 flex items-center gap-2 mt-1">
+                <input
+                  id="reminder-checkbox"
+                  type="checkbox"
+                  className="w-4 h-4"
+                  checked={!!draft.reminder}
+                  onChange={(e) =>
+                    updateDraft("reminder", e.target.checked)
+                  }
+                />
+                <label
+                  htmlFor="reminder-checkbox"
+                  className="text-sm text-gray-700"
+                >
+                  Påminnelse
                 </label>
               </div>
 
@@ -908,35 +881,35 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
             <div className="mt-4 flex gap-2">
               <button
-                className="px-2 py-1 text-sm rounded bg-green-600 text-white"
+                className="px-3 py-2 rounded bg-green-600 text-white"
                 onClick={saveAndMarkDone}
                 type="button"
               >
                 Spara & Markera Klar
               </button>
               <button
-                className="px-2 py-1 text-sm rounded bg-orange-500 text-white"
+                className="px-3 py-2 rounded bg-orange-500 text-white"
                 onClick={saveAndFollowUp}
                 type="button"
               >
                 Spara & Återkoppling
               </button>
               <button
-                className="px-2 py-1 text-sm rounded bg-rose-600 text-white"
+                className="px-3 py-2 rounded bg-rose-600 text-white"
                 onClick={() => softDelete(openItem)}
                 type="button"
               >
                 Ta bort
               </button>
               <button
-                className="ml-auto px-2 py-1 text-sm rounded bg-blue-500 text-white"
+                className="ml-auto px-3 py-2 rounded border"
                 onClick={saveOnly}
                 type="button"
               >
                 Spara
               </button>
               <button
-                className="px-2 py-1 text-sm rounded border"
+                className="px-3 py-2 rounded border"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
@@ -1002,10 +975,7 @@ function CustomersPanel({ entities = [], setState }) {
         (e) =>
           (e.companyName || "").toLowerCase().includes(s) ||
           (e.orgNo || "").toLowerCase().includes(s) ||
-          (e.city || "").toLowerCase().includes(s) ||
-          (e.firstName || "").toLowerCase().includes(s) ||
-          (e.lastName || "").toLowerCase().includes(s) ||
-          `${e.firstName || ""} ${e.lastName || ""}`.toLowerCase().includes(s)
+          (e.city || "").toLowerCase().includes(s)
       );
     }
     if (cat !== "all") {
@@ -1454,10 +1424,7 @@ function SuppliersPanel({ entities = [], setState }) {
         (e) =>
           (e.companyName || "").toLowerCase().includes(s) ||
           (e.orgNo || "").toLowerCase().includes(s) ||
-          (e.city || "").toLowerCase().includes(s) ||
-          (e.firstName || "").toLowerCase().includes(s) ||
-          (e.lastName || "").toLowerCase().includes(s) ||
-          `${e.firstName || ""} ${e.lastName || ""}`.toLowerCase().includes(s)
+          (e.city || "").toLowerCase().includes(s)
       );
     }
 
@@ -2123,7 +2090,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("activities")}
-            className={`px-4 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl border text-sm ${
               view === "activities"
                 ? "bg-gray-200 text-gray-900"
                 : "bg-white text-gray-700"
@@ -2135,7 +2102,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("activitiesCalendar")}
-            className={`px-4 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl border text-sm ${
               view === "activitiesCalendar"
                 ? "bg-gray-400 text-white"
                 : "bg-white text-gray-700"
@@ -2147,7 +2114,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("customers")}
-            className={`px-4 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl border text-sm ${
               view === "customers"
                 ? "bg-blue-200 text-blue-900"
                 : "bg-white text-gray-700"
@@ -2159,7 +2126,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("suppliers")}
-            className={`px-4 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl border text-sm ${
               view === "suppliers"
                 ? "bg-amber-200 text-amber-900"
                 : "bg-white text-gray-700"
@@ -2171,7 +2138,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("offers")}
-            className={`px-4 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl border text-sm ${
               view === "offers"
                 ? "bg-orange-300 text-orange-900"
                 : "bg-white text-gray-700"
@@ -2183,7 +2150,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("projects")}
-            className={`px-4 py-2 rounded-xl border text-sm ${
+            className={`px-3 py-2 rounded-xl border text-sm ${
               view === "projects"
                 ? "bg-green-200 text-green-900"
                 : "bg-white text-gray-700"
@@ -2192,7 +2159,6 @@ export default function App() {
             Projekt
           </button>
         </div>
-
 
         {/* Själva innehållet/panelerna */}
         <div className="bg-slate-50 rounded-2xl p-3">
