@@ -1840,74 +1840,85 @@ export default function App() {
 
       <div className="max-w-5xl mx-auto px-4 pb-4 pt-3">
         <div className="flex items-center justify-between mb-3 gap-3">
-          <nav className="flex flex-wrap gap-1">
-            <button
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                view === "activities"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white border text-gray-700"
-              }`}
-              onClick={() => setView("activities")}
-              type="button"
-            >
-              Aktiviteter (lista)
-            </button>
-            <button
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                view === "activitiesCalendar"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white border text-gray-700"
-              }`}
-              onClick={() => setView("activitiesCalendar")}
-              type="button"
-            >
-              Aktiviteter (kalender)
-            </button>
-            <button
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                view === "customers"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white border text-gray-700"
-              }`}
-              onClick={() => setView("customers")}
-              type="button"
-            >
-              Kunder
-            </button>
-            <button
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                view === "suppliers"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white border text-gray-700"
-              }`}
-              onClick={() => setView("suppliers")}
-              type="button"
-            >
-              Leverantörer
-            </button>
-            <button
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                view === "offers"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white border text-gray-700"
-              }`}
-              onClick={() => setView("offers")}
-              type="button"
-            >
-              Offerter
-            </button>
-            <button
-              className={`px-3 py-1.5 rounded-full text-xs font-medium ${
-                view === "projects"
-                  ? "bg-blue-600 text-white"
-                  : "bg-white border text-gray-700"
-              }`}
-              onClick={() => setView("projects")}
-              type="button"
-            >
-              Projekt
-            </button>
-          </nav>
+         <nav className="flex flex-wrap gap-2">
+  {/* Aktiviteter (lista) – ljusgrå, större */}
+  <button
+    className={`px-4 py-2 rounded-full text-sm font-medium border ${
+      view === "activities"
+        ? "bg-gray-300 text-gray-900 border-gray-400"
+        : "bg-gray-100 text-gray-800 border-gray-300"
+    }`}
+    onClick={() => setView("activities")}
+    type="button"
+  >
+    Aktiviteter (lista)
+  </button>
+
+  {/* Aktiviteter (kalender) – också grå, men lite neutral */}
+  <button
+    className={`px-4 py-2 rounded-full text-sm font-medium border ${
+      view === "activitiesCalendar"
+        ? "bg-gray-300 text-gray-900 border-gray-400"
+        : "bg-gray-100 text-gray-800 border-gray-300"
+    }`}
+    onClick={() => setView("activitiesCalendar")}
+    type="button"
+  >
+    Aktiviteter (kalender)
+  </button>
+
+  {/* Kunder – ljusblå */}
+  <button
+    className={`px-4 py-2 rounded-full text-sm font-medium border ${
+      view === "customers"
+        ? "bg-sky-300 text-sky-900 border-sky-400"
+        : "bg-sky-100 text-sky-800 border-sky-300"
+    }`}
+    onClick={() => setView("customers")}
+    type="button"
+  >
+    Kunder
+  </button>
+
+  {/* Leverantörer – ljusbrun (amber) */}
+  <button
+    className={`px-4 py-2 rounded-full text-sm font-medium border ${
+      view === "suppliers"
+        ? "bg-amber-300 text-amber-900 border-amber-400"
+        : "bg-amber-100 text-amber-800 border-amber-300"
+    }`}
+    onClick={() => setView("suppliers")}
+    type="button"
+  >
+    Leverantörer
+  </button>
+
+  {/* Offerter – orange */}
+  <button
+    className={`px-4 py-2 rounded-full text-sm font-medium border ${
+      view === "offers"
+        ? "bg-orange-300 text-orange-900 border-orange-400"
+        : "bg-orange-100 text-orange-800 border-orange-300"
+    }`}
+    onClick={() => setView("offers")}
+    type="button"
+  >
+    Offerter
+  </button>
+
+  {/* Projekt – ljusgrön */}
+  <button
+    className={`px-4 py-2 rounded-full text-sm font-medium border ${
+      view === "projects"
+        ? "bg-green-300 text-green-900 border-green-400"
+        : "bg-green-100 text-green-800 border-green-300"
+    }`}
+    onClick={() => setView("projects")}
+    type="button"
+  >
+    Projekt
+  </button>
+</nav>
 
           <button
             className={`w-8 h-8 flex items-center justify-center rounded-full border text-gray-600 hover:bg-gray-50 ${
