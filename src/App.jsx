@@ -109,6 +109,8 @@ function customerCategoryBadge(cat) {
     case "Totalentreprenad":
     case "TotalEntreprenad":
       return `${base} bg-orange-500`; // Orange
+    case "Bygg":
+      return `${base} bg-orange-500`;
     case "Turbovex":
       return `${base} bg-blue-500`; // Blå
     case "Övrigt":
@@ -588,7 +590,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
         <div className="ml-auto flex gap-2">
           <button
-            className={`px-3 py-2 rounded-xl border text-base ${
+            className={`px-3 py-2 rounded-xl border text-sm ${
               mode === "active"
                 ? "bg-slate-800 text-white"
                 : "bg-white text-slate-700"
@@ -599,7 +601,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
             Aktiva
           </button>
           <button
-            className={`px-3 py-2 rounded-xl border text-base ${
+            className={`px-3 py-2 rounded-xl border text-sm ${
               mode === "archive"
                 ? "bg-slate-800 text-white"
                 : "bg-white text-slate-700"
@@ -610,7 +612,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
             Arkiv
           </button>
           <button
-            className="px-3 py-2 rounded-xl border text-base bg-gray-200 hover:bg-gray-300"
+            className="px-3 py-2 rounded-xl border text-sm bg-gray-200 hover:bg-gray-300"
             onClick={createNewDraft}
             type="button"
           >
@@ -774,8 +776,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 />
               </div>
 
-              <div className="col-span-2 flex items-center gap-6 mt-1">
-                {/* Telefon */}
+              <div className="col-span-2 flex items-center flex-wrap gap-4 mt-1">
                 <label className="flex items-center gap-1 text-sm text-gray-700">
                   <input
                     type="checkbox"
@@ -786,7 +787,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   📞 Telefon
                 </label>
 
-                {/* Möte */}
                 <label className="flex items-center gap-1 text-sm text-gray-700">
                   <input
                     type="checkbox"
@@ -797,7 +797,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   📅 Möte
                 </label>
 
-                {/* Mail */}
                 <label className="flex items-center gap-1 text-sm text-gray-700">
                   <input
                     type="checkbox"
@@ -808,7 +807,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   ✉️ Mail
                 </label>
 
-                {/* Lunch */}
                 <label className="flex items-center gap-1 text-sm text-gray-700">
                   <input
                     type="checkbox"
@@ -819,16 +817,12 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                   🍽️ Lunch
                 </label>
 
-                {/* Påminnelse */}
                 <label className="flex items-center gap-1 text-sm text-gray-700">
                   <input
-                    id="reminder-checkbox"
                     type="checkbox"
                     className="w-4 h-4"
                     checked={!!draft.reminder}
-                    onChange={(e) =>
-                      updateDraft("reminder", e.target.checked)
-                    }
+                    onChange={(e) => updateDraft("reminder", e.target.checked)}
                   />
                   ⏰ Påminnelse
                 </label>
@@ -914,35 +908,35 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
             <div className="mt-4 flex gap-2">
               <button
-                className="px-3 py-2 text-sm rounded bg-green-600 text-white"
+                className="px-2 py-1 text-sm rounded bg-green-600 text-white"
                 onClick={saveAndMarkDone}
                 type="button"
               >
                 Spara & Markera Klar
               </button>
               <button
-                className="px-3 py-2 text-sm rounded bg-orange-500 text-white"
+                className="px-2 py-1 text-sm rounded bg-orange-500 text-white"
                 onClick={saveAndFollowUp}
                 type="button"
               >
                 Spara & Återkoppling
               </button>
               <button
-                className="px-3 py-2 text-sm rounded bg-rose-600 text-white"
+                className="px-2 py-1 text-sm rounded bg-rose-600 text-white"
                 onClick={() => softDelete(openItem)}
                 type="button"
               >
                 Ta bort
               </button>
               <button
-                className="ml-auto px-3 py-2 text-sm rounded bg-blue-600 text-white"
+                className="ml-auto px-2 py-1 text-sm rounded bg-blue-500 text-white"
                 onClick={saveOnly}
                 type="button"
               >
                 Spara
               </button>
               <button
-                className="px-3 py-2 text-sm rounded border"
+                className="px-2 py-1 text-sm rounded border"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
@@ -1008,7 +1002,10 @@ function CustomersPanel({ entities = [], setState }) {
         (e) =>
           (e.companyName || "").toLowerCase().includes(s) ||
           (e.orgNo || "").toLowerCase().includes(s) ||
-          (e.city || "").toLowerCase().includes(s)
+          (e.city || "").toLowerCase().includes(s) ||
+          (e.firstName || "").toLowerCase().includes(s) ||
+          (e.lastName || "").toLowerCase().includes(s) ||
+          `${e.firstName || ""} ${e.lastName || ""}`.toLowerCase().includes(s)
       );
     }
     if (cat !== "all") {
@@ -1457,7 +1454,10 @@ function SuppliersPanel({ entities = [], setState }) {
         (e) =>
           (e.companyName || "").toLowerCase().includes(s) ||
           (e.orgNo || "").toLowerCase().includes(s) ||
-          (e.city || "").toLowerCase().includes(s)
+          (e.city || "").toLowerCase().includes(s) ||
+          (e.firstName || "").toLowerCase().includes(s) ||
+          (e.lastName || "").toLowerCase().includes(s) ||
+          `${e.firstName || ""} ${e.lastName || ""}`.toLowerCase().includes(s)
       );
     }
 
@@ -2123,7 +2123,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("activities")}
-            className={`px-3 py-2 rounded-xl border text-base ${
+            className={`px-4 py-2 rounded-xl border text-sm ${
               view === "activities"
                 ? "bg-gray-200 text-gray-900"
                 : "bg-white text-gray-700"
@@ -2135,7 +2135,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("activitiesCalendar")}
-            className={`px-3 py-2 rounded-xl border text-base ${
+            className={`px-4 py-2 rounded-xl border text-sm ${
               view === "activitiesCalendar"
                 ? "bg-gray-400 text-white"
                 : "bg-white text-gray-700"
@@ -2147,7 +2147,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("customers")}
-            className={`px-3 py-2 rounded-xl border text-base ${
+            className={`px-4 py-2 rounded-xl border text-sm ${
               view === "customers"
                 ? "bg-blue-200 text-blue-900"
                 : "bg-white text-gray-700"
@@ -2159,7 +2159,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("suppliers")}
-            className={`px-3 py-2 rounded-xl border text-base ${
+            className={`px-4 py-2 rounded-xl border text-sm ${
               view === "suppliers"
                 ? "bg-amber-200 text-amber-900"
                 : "bg-white text-gray-700"
@@ -2171,7 +2171,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("offers")}
-            className={`px-3 py-2 rounded-xl border text-base ${
+            className={`px-4 py-2 rounded-xl border text-sm ${
               view === "offers"
                 ? "bg-orange-300 text-orange-900"
                 : "bg-white text-gray-700"
@@ -2183,7 +2183,7 @@ export default function App() {
           <button
             type="button"
             onClick={() => setView("projects")}
-            className={`px-3 py-2 rounded-xl border text-base ${
+            className={`px-4 py-2 rounded-xl border text-sm ${
               view === "projects"
                 ? "bg-green-200 text-green-900"
                 : "bg-white text-gray-700"
@@ -2192,6 +2192,7 @@ export default function App() {
             Projekt
           </button>
         </div>
+
 
         {/* Själva innehållet/panelerna */}
         <div className="bg-slate-50 rounded-2xl p-3">
