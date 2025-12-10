@@ -111,6 +111,8 @@ function customerCategoryBadge(cat) {
       return `${base} bg-orange-500`; // Orange
     case "Turbovex":
       return `${base} bg-blue-500`; // Blå
+    case "Bygg":
+      return `${base} bg-orange-500`; // Orange för Bygg
     case "Övrigt":
       return "text-xs px-2 py-1 rounded bg-white text-gray-700 border";
     default:
@@ -378,13 +380,17 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       id: a.id,
       title: a.title || "",
       description: a.description || "",
-      responsible: a.responsible || "",
+      responsible: a.responsible || "Cralle",
       priority: a.priority || "medel",
       status: a.status || "planerad",
       dueDate: a.dueDate || a.date || "",
       dueTime: a.dueTime || a.time || "",
       endTime: a.endTime || "",
       reminder: !!a.reminder,
+      isPhone: !!a.isPhone,
+      isMeeting: !!a.isMeeting,
+      isEmail: !!a.isEmail,
+      isLunch: !!a.isLunch,
       customerId: a.customerId || "",
       supplierId: a.supplierId || "",
       contactName: a.contactName || "",
@@ -415,6 +421,26 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
   const Icons = ({ a }) => (
     <div className="flex items-center gap-1 text-sm">
+      {a.isPhone && (
+        <span className="inline-block text-gray-700" title="Telefon">
+          📞
+        </span>
+      )}
+      {a.isMeeting && (
+        <span className="inline-block text-gray-700" title="Möte">
+          📅
+        </span>
+      )}
+      {a.isEmail && (
+        <span className="inline-block text-gray-700" title="Mail">
+          ✉️
+        </span>
+      )}
+      {a.isLunch && (
+        <span className="inline-block text-gray-700" title="Lunch">
+          🍽️
+        </span>
+      )}
       {a.reminder && (
         <span
           className="inline-flex items-center justify-center w-5 h-5 text-[11px] rounded-full bg-yellow-200 text-yellow-900"
@@ -466,13 +492,17 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
         : Math.random().toString(36).slice(2),
       title: "",
       description: "",
-      responsible: "",
+      responsible: "Cralle",
       priority: "medel",
       status: "planerad",
       dueDate: date,
       dueTime: `${h}:00`,
       endTime: "",
       reminder: false,
+      isPhone: false,
+      isMeeting: false,
+      isEmail: false,
+      isLunch: false,
       customerId: "",
       supplierId: "",
       contactName: "",
@@ -783,21 +813,55 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
                 />
               </div>
 
-              <div className="col-span-2 flex items-center gap-2 mt-1">
-                <input
-                  id="reminder-checkbox"
-                  type="checkbox"
-                  className="w-4 h-4"
-                  checked={!!draft.reminder}
-                  onChange={(e) =>
-                    updateDraft("reminder", e.target.checked)
-                  }
-                />
-                <label
-                  htmlFor="reminder-checkbox"
-                  className="text-sm text-gray-700"
-                >
-                  Påminnelse
+              <div className="col-span-2 flex items-center flex-wrap gap-4 mt-1">
+                <label className="flex items-center gap-1 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.isPhone}
+                    onChange={(e) => updateDraft("isPhone", e.target.checked)}
+                  />
+                  📞 Telefon
+                </label>
+
+                <label className="flex items-center gap-1 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.isMeeting}
+                    onChange={(e) => updateDraft("isMeeting", e.target.checked)}
+                  />
+                  📅 Möte
+                </label>
+
+                <label className="flex items-center gap-1 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.isEmail}
+                    onChange={(e) => updateDraft("isEmail", e.target.checked)}
+                  />
+                  ✉️ Mail
+                </label>
+
+                <label className="flex items-center gap-1 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.isLunch}
+                    onChange={(e) => updateDraft("isLunch", e.target.checked)}
+                  />
+                  🍽️ Lunch
+                </label>
+
+                <label className="flex items-center gap-1 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={!!draft.reminder}
+                    onChange={(e) => updateDraft("reminder", e.target.checked)}
+                  />
+                  ⏰ Påminnelse
                 </label>
               </div>
 
@@ -881,35 +945,35 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
 
             <div className="mt-4 flex gap-2">
               <button
-                className="px-3 py-2 rounded bg-green-600 text-white"
+                className="px-2 py-1 text-sm rounded bg-green-600 text-white"
                 onClick={saveAndMarkDone}
                 type="button"
               >
                 Spara & Markera Klar
               </button>
               <button
-                className="px-3 py-2 rounded bg-orange-500 text-white"
+                className="px-2 py-1 text-sm rounded bg-orange-500 text-white"
                 onClick={saveAndFollowUp}
                 type="button"
               >
                 Spara & Återkoppling
               </button>
               <button
-                className="px-3 py-2 rounded bg-rose-600 text-white"
+                className="px-2 py-1 text-sm rounded bg-rose-600 text-white"
                 onClick={() => softDelete(openItem)}
                 type="button"
               >
                 Ta bort
               </button>
               <button
-                className="ml-auto px-3 py-2 rounded border"
+                className="ml-auto px-2 py-1 text-sm rounded bg-blue-500 text-white"
                 onClick={saveOnly}
                 type="button"
               >
                 Spara
               </button>
               <button
-                className="px-3 py-2 rounded border"
+                className="px-2 py-1 text-sm rounded border"
                 onClick={() => {
                   setOpenItem(null);
                   setDraft(null);
@@ -975,7 +1039,10 @@ function CustomersPanel({ entities = [], setState }) {
         (e) =>
           (e.companyName || "").toLowerCase().includes(s) ||
           (e.orgNo || "").toLowerCase().includes(s) ||
-          (e.city || "").toLowerCase().includes(s)
+          (e.city || "").toLowerCase().includes(s) ||
+          (e.firstName || "").toLowerCase().includes(s) ||
+          (e.lastName || "").toLowerCase().includes(s) ||
+          `${e.firstName || ""} ${e.lastName || ""}`.toLowerCase().includes(s)
       );
     }
     if (cat !== "all") {
@@ -1424,7 +1491,10 @@ function SuppliersPanel({ entities = [], setState }) {
         (e) =>
           (e.companyName || "").toLowerCase().includes(s) ||
           (e.orgNo || "").toLowerCase().includes(s) ||
-          (e.city || "").toLowerCase().includes(s)
+          (e.city || "").toLowerCase().includes(s) ||
+          (e.firstName || "").toLowerCase().includes(s) ||
+          (e.lastName || "").toLowerCase().includes(s) ||
+          `${e.firstName || ""} ${e.lastName || ""}`.toLowerCase().includes(s)
       );
     }
 
