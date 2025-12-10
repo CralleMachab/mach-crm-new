@@ -153,6 +153,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const [dateFilter, setDateFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all | planerad | återkoppling | klar | inställd
   const [mode, setMode] = useState("active"); // active | archive
+  const [activityQuery, setActivityQuery] = useState("");
 
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -239,6 +240,14 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     }
   };
 
+
+  const customerLabel = (id) => {
+    if (!id) return "";
+    const c = customers.find((x) => x.id === id);
+    if (!c) return "";
+    const parts = [c.companyName, c.firstName, c.lastName].filter(Boolean);
+    return parts.join(" ") || "Kund";
+  };
   const statusBadge = (s) => {
     const base = "text-xs px-2 py-1 rounded";
     switch (s) {
@@ -307,6 +316,20 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       );
     } // rangeFilter === "all" => ingen extra datum-filtrering
 
+    if (activityQuery.trim()) {
+      const s = activityQuery.trim().toLowerCase();
+      list = list.filter((a) => {
+        const title = (a.title || "").toLowerCase();
+        const desc = (a.description || "").toLowerCase();
+        const custText = (a.customerId ? customerLabel(a.customerId) : "").toLowerCase();
+        return (
+          title.includes(s) ||
+          desc.includes(s) ||
+          custText.includes(s)
+        );
+      });
+    }
+
     // sortera på datum + tid
     list.sort((a, b) => {
       const da = (a.dueDate || a.date || "") + "T" + (a.dueTime || "");
@@ -315,7 +338,15 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     });
 
     return list;
-  }, [activities, mode, respFilter, statusFilter, rangeFilter, dateFilter]);
+  }, [
+    activities,
+    mode,
+    respFilter,
+    statusFilter,
+    rangeFilter,
+    dateFilter,
+    activityQuery,
+  ]);
 
   const today = todayISO();
 
@@ -383,7 +414,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
       responsible: a.responsible || "Cralle",
       priority: a.priority || "medel",
       status: a.status || "planerad",
-      dueDate: a.dueDate || a.date || "",
+      dueDate: a.dueDate || a.date || todayISO(),
       dueTime: a.dueTime || a.time || "",
       endTime: a.endTime || "",
       reminder: !!a.reminder,
@@ -618,6 +649,16 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
           </select>
         </div>
 
+        <div>
+          <label className="block text-xs text-gray-600">Sök</label>
+          <input
+            className="border rounded-xl px-3 py-2"
+            placeholder="Sök..."
+            value={activityQuery}
+            onChange={(e) => setActivityQuery(e.target.value)}
+          />
+        </div>
+
         <div className="ml-auto flex gap-2">
           <button
             className={`px-3 py-2 rounded-xl border text-sm ${
@@ -690,7 +731,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
               </div>
               {a.customerId && (
                 <span className="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
-                  Kund kopplad
+                  {customerLabel(a.customerId)}
                 </span>
               )}
               {a.supplierId && (
@@ -1975,13 +2016,16 @@ export default function App() {
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, "0");
     const defaultTime = `${hh}:00`;
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    const today = `${now.getFullYear()}-${m}-${d}`;
     const a = {
       id,
       title: "",
       responsible: "Cralle",
-      priority: "medium",
-      status: "",
-      dueDate: "",
+      priority: "medel",
+      status: "planerad",
+      dueDate: today,
       dueTime: defaultTime,
       description: "",
       customerId: "",
