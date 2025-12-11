@@ -158,6 +158,19 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
   const [openItem, setOpenItem] = useState(null);
   const [draft, setDraft] = useState(null);
 
+  // När man klickar + Ny aktivitet i huvudmenyn ökas _newActivityRequestId.
+  // Här plockar vi upp den signalen och skapar ett nytt utkast i popupen,
+  // utan att lägga till aktiviteten i listan förrän den sparas.
+  const newActivityRequestId = state._newActivityRequestId || 0;
+  const [lastHandledNewId, setLastHandledNewId] = useState(newActivityRequestId);
+
+  useEffect(() => {
+    if (!newActivityRequestId) return;
+    if (newActivityRequestId === lastHandledNewId) return;
+    createNewDraft();
+    setLastHandledNewId(newActivityRequestId);
+  }, [newActivityRequestId, lastHandledNewId]);
+
   // Öppna direkt om _shouldOpen är satt (skapad från huvudmenyn)
   useEffect(() => {
     const a = (activities || []).find((x) => x._shouldOpen);
@@ -240,7 +253,6 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     }
   };
 
-
   const customerLabel = (id) => {
     if (!id) return "";
     const c = customers.find((x) => x.id === id);
@@ -248,6 +260,7 @@ function ActivitiesPanel({ activities = [], entities = [], setState }) {
     const parts = [c.companyName, c.firstName, c.lastName].filter(Boolean);
     return parts.join(" ") || "Kund";
   };
+
   const statusBadge = (s) => {
     const base = "text-xs px-2 py-1 rounded";
     switch (s) {
@@ -2012,33 +2025,12 @@ export default function App() {
       : Math.random().toString(36).slice(2);
 
   function createActivity() {
-    const id = newId();
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const defaultTime = `${hh}:00`;
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    const today = `${now.getFullYear()}-${m}-${d}`;
-    const a = {
-      id,
-      title: "",
-      responsible: "Cralle",
-      priority: "medel",
-      status: "planerad",
-      dueDate: today,
-      dueTime: defaultTime,
-      description: "",
-      customerId: "",
-      supplierId: "",
-      contactName: "",
-      isPhone: false,
-      isEmail: false,
-      isLunch: false,
-      isMeeting: false,
-      createdAt: new Date().toISOString(),
-      _shouldOpen: true,
-    };
-    setState((s) => ({ ...s, activities: [...(s.activities || []), a] }));
+    // Signalera till ActivitiesPanel att en ny aktivitet ska skapas i popup,
+    // men lägg INTE till den i listan förrän den sparas.
+    setState((s) => ({
+      ...s,
+      _newActivityRequestId: (s._newActivityRequestId || 0) + 1,
+    }));
     setView("activities");
   }
 
