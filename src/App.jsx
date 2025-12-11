@@ -4,6 +4,8 @@ import { fetchRemoteState, pushRemoteState } from "./lib/cloud";
 
 import OffersPanel from "./panels/OffersPanel.jsx";
 import ProjectsPanel from "./panels/ProjectsPanel.jsx";
+const ENABLE_REMOTE_SYNC = false;
+
 import ActivitiesCalendarPanel from "./panels/ActivitiesCalendarPanel.jsx";
 import SettingsPanel from "./panels/SettingsPanel.jsx";
 
@@ -51,8 +53,9 @@ function useStore() {
     } catch {}
   }, [state]);
 
-  // Push till SharePoint (debounce)
+  // Push till SharePoint (debounce) – avstängd när ENABLE_REMOTE_SYNC = false
   useEffect(() => {
+    if (!ENABLE_REMOTE_SYNC) return;
     const t = setTimeout(async () => {
       try {
         const withVersion = {
@@ -69,6 +72,7 @@ function useStore() {
 
   // Poll från SharePoint
   useEffect(() => {
+    if (!ENABLE_REMOTE_SYNC) return;
     let stopped = false;
     const tick = async () => {
       try {
@@ -93,6 +97,7 @@ function useStore() {
       stopped = true;
     };
   }, []); // bara första gången
+
 
   return [state, setState];
 }
@@ -555,11 +560,8 @@ function ActivitiesPanel({ activities = [], entities = [], state, setState }) {
       createdAt: new Date().toISOString(),
     };
 
-    setState((s) => ({
-      ...s,
-      activities: [...(s.activities || []), newItem],
-    }));
-    setOpenItem(newItem);
+    // Lägg INTE till i listan ännu – vänta tills användaren sparar.
+    setOpenItem(null);
     setDraft(newItem);
   };
 
@@ -570,16 +572,33 @@ function ActivitiesPanel({ activities = [], entities = [], state, setState }) {
     }));
 
   const applyUpdateAndClose = (mutator) => {
-    if (!openItem || !draft) return;
-    const merged = ensureDateAndTimes({ ...openItem, ...draft });
+    if (!draft) return;
+
+    // Om vi redigerar en befintlig aktivitet finns openItem.
+    // Om vi skapar en ny är openItem null och vi använder draft som bas.
+    const base = openItem || {
+      id:
+        draft.id ||
+        (crypto?.randomUUID
+          ? crypto.randomUUID()
+          : Math.random().toString(36).slice(2)),
+      createdAt: new Date().toISOString(),
+    };
+
+    const merged = ensureDateAndTimes({ ...base, ...draft });
     const updated = mutator(merged);
 
-    setState((s) => ({
-      ...s,
-      activities: (s.activities || []).map((x) =>
-        x.id === updated.id ? updated : x
-      ),
-    }));
+    setState((s) => {
+      const list = s.activities || [];
+      const exists = list.some((x) => x.id === updated.id);
+      return {
+        ...s,
+        activities: exists
+          ? list.map((x) => (x.id === updated.id ? updated : x))
+          : [...list, updated],
+      };
+    });
+
     setOpenItem(null);
     setDraft(null);
   };
