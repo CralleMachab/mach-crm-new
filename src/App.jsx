@@ -147,7 +147,7 @@ function supplierCategoryBadge(cat) {
 /* ==========================================================
    Aktiviteter — lista + arkiv-läge (NY VERSION)
    ========================================================== */
-function ActivitiesPanel({ activities = [], entities = [], setState }) {
+function ActivitiesPanel({ activities = [], entities = [], state, setState }) {
   const [respFilter, setRespFilter] = useState("all");
   const [rangeFilter, setRangeFilter] = useState("7"); // today | 7 | all
   const [dateFilter, setDateFilter] = useState("");
@@ -2272,6 +2272,7 @@ export default function App() {
             <ActivitiesPanel
               activities={state.activities || []}
               entities={state.entities || []}
+              state={state}
               setState={setState}
             />
           )}
