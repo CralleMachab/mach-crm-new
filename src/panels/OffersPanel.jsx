@@ -72,6 +72,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
       filesList,
       supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
       kind: o.kind || "", // Entreprenadform
+      offerNumber: o.offerNumber || null,
     });
     setState((s) => ({
       ...s,
@@ -95,18 +96,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
 
   const openEdit = (o) => {
     const filesList = flattenFiles(o.files);
-    const supplierIds = Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [];
-    const supplierStatus = (() => {
-      if (o.supplierStatus && typeof o.supplierStatus === "object") {
-        return { ...o.supplierStatus };
-      }
-      const base = {};
-      supplierIds.forEach((id) => {
-        base[id] = { sent: false, followedUp: false };
-      });
-      return base;
-    })();
-
     setOpenItem(o);
     setDraft({
       id: o.id,
@@ -117,9 +106,9 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
       note: o.note || "",
       nextActionDate: o.nextActionDate || "",
       filesList,
-      supplierIds,
-      supplierStatus,
+      supplierIds: Array.isArray(o.supplierIds) ? o.supplierIds.slice() : [],
       kind: o.kind || "", // Entreprenadform
+      offerNumber: o.offerNumber || null,
     });
   };
 
@@ -184,42 +173,17 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
     setDraft((d) => {
       const set = new Set(d.supplierIds || []);
       set.add(supplierId);
-      const supplierIds = Array.from(set);
-
-      const prevStatus = d.supplierStatus && typeof d.supplierStatus === "object" ? d.supplierStatus : {};
-      const nextStatus = { ...prevStatus };
-      if (!nextStatus[supplierId]) {
-        nextStatus[supplierId] = { sent: false, followedUp: false };
-      }
-
-      return { ...d, supplierIds, supplierStatus: nextStatus };
+      return { ...d, supplierIds: Array.from(set) };
     });
   };
 
   const removeSupplierFromOffer = (supplierId) => {
-    setDraft((d) => {
-      const supplierIds = (d.supplierIds || []).filter((id) => id !== supplierId);
-      const prevStatus = d.supplierStatus && typeof d.supplierStatus === "object" ? d.supplierStatus : {};
-      const nextStatus = { ...prevStatus };
-      if (nextStatus[supplierId]) {
-        delete nextStatus[supplierId];
-      }
-      return { ...d, supplierIds, supplierStatus: nextStatus };
-    });
+    setDraft((d) => ({
+      ...d,
+      supplierIds: (d.supplierIds || []).filter((id) => id !== supplierId),
+    }));
   };
 
-
-  const updateSupplierStatus = (supplierId, field, value) => {
-    setDraft((d) => {
-      const prev = d.supplierStatus && typeof d.supplierStatus === "object" ? d.supplierStatus : {};
-      const current = prev[supplierId] || { sent: false, followedUp: false };
-      const next = {
-        ...prev,
-        [supplierId]: { ...current, [field]: value },
-      };
-      return { ...d, supplierStatus: next };
-    });
-  };
   const saveDraft = () => {
     if (!draft) return;
     const files = groupFiles(draft.filesList || []);
@@ -240,10 +204,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
               supplierIds: Array.isArray(draft.supplierIds)
                 ? draft.supplierIds.slice()
                 : [],
-              supplierStatus:
-                draft.supplierStatus && typeof draft.supplierStatus === "object"
-                  ? draft.supplierStatus
-                  : o.supplierStatus || {},
               kind: draft.kind || "",
               updatedAt: new Date().toISOString(),
             }
@@ -295,33 +255,49 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
   function createProjectFromOffer() {
     if (!draft) return;
     const files = groupFiles(draft.filesList || []);
-    const proj = {
-      id:
-        (typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : Math.random().toString(36).slice(0, 8)),
-      name: draft.title || "Projekt",
-      customerId: draft.customerId || "",
-      status: "pågående",
-      budget: Number(draft.value) || 0,
-      note: draft.note || "",
-      files,
-      originatingOfferId: draft.id,
-      supplierIds: Array.isArray(draft.supplierIds)
-        ? draft.supplierIds.slice()
-        : [],
-      kind: draft.kind || "",
-      createdAt: new Date().toISOString(),
-    };
-    setState((s) => ({
-      ...s,
-      projects: [...(s.projects || []), proj],
-      offers: (s.offers || []).map((o) =>
-        o.id === draft.id
-          ? { ...o, status: "vunnen", updatedAt: new Date().toISOString() }
-          : o
-      ),
-    }));
+    setState((s) => {
+      const base = 653001;
+      const existing = (s.projects || [])
+        .map((p) => Number(p.projectNumber))
+        .filter((n) => Number.isFinite(n) && n >= base);
+      const nextNumber = existing.length ? Math.max(...existing) + 1 : base;
+
+      const proj = {
+        id:
+          (typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Math.random().toString(36).slice(0, 8)),
+        projectNumber: nextNumber,
+        name: draft.title || "Projekt",
+        customerId: draft.customerId || "",
+        status: "pågående",
+        budget: Number(draft.value) || 0,
+        note: draft.note || "",
+        files,
+        originatingOfferId: draft.id,
+        supplierIds: Array.isArray(draft.supplierIds)
+          ? draft.supplierIds.slice()
+          : [],
+        kind: draft.kind || "",
+        offerNumber: draft.offerNumber || null,
+        createdAt: new Date().toISOString(),
+      };
+
+      return {
+        ...s,
+        projects: [...(s.projects || []), proj],
+        offers: (s.offers || []).map((o) =>
+          o.id === draft.id
+            ? {
+                ...o,
+                status: "vunnen",
+                updatedAt: new Date().toISOString(),
+                offerNumber: o.offerNumber || draft.offerNumber || null,
+              }
+            : o
+        ),
+      };
+    });
     setOpenItem(null);
     setDraft(null);
     alert("Projekt skapat från offert (öppnas inte automatiskt).");
@@ -637,6 +613,7 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                   {o.title || "Offert"}
                 </div>
                 <div className="text-xs text-gray-500">
+                  {o.offerNumber ? `Nr: ${o.offerNumber} · ` : ""}
                   Kund: {customerName(o.customerId)} ·{" "}
                   {(o.value || 0).toLocaleString("sv-SE")} kr ·{" "}
                   {o.status || "utkast"}
@@ -840,9 +817,6 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                 <ul className="text-sm space-y-1">
                   {draft.supplierIds.map((id) => {
                     const sup = suppliers.find((s) => s.id === id);
-                    const st =
-                      (draft.supplierStatus && draft.supplierStatus[id]) ||
-                      { sent: false, followedUp: false };
                     return (
                       <li
                         key={id}
@@ -851,41 +825,13 @@ export default function OffersPanel({ offers = [], entities = [], setState }) {
                         <span className="truncate">
                           {sup?.companyName || id}
                         </span>
-                        <div className="flex items-center gap-3">
-                          <label className="flex items-center gap-1 text-xs text-orange-600">
-                            <input
-                              type="checkbox"
-                              checked={!!st.sent}
-                              onChange={(e) =>
-                                updateSupplierStatus(id, "sent", e.target.checked)
-                              }
-                            />
-                            Offert skickad
-                          </label>
-
-                          <label className="flex items-center gap-1 text-xs text-green-600">
-                            <input
-                              type="checkbox"
-                              checked={!!st.followedUp}
-                              onChange={(e) =>
-                                updateSupplierStatus(
-                                  id,
-                                  "followedUp",
-                                  e.target.checked
-                                )
-                              }
-                            />
-                            Återkopplat
-                          </label>
-
-                          <button
-                            className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
-                            onClick={() => removeSupplierFromOffer(id)}
-                            type="button"
-                          >
-                            Ta bort
-                          </button>
-                        </div>
+                        <button
+                          className="text-xs px-2 py-1 rounded bg-rose-500 text-white"
+                          onClick={() => removeSupplierFromOffer(id)}
+                          type="button"
+                        >
+                          Ta bort
+                        </button>
                       </li>
                     );
                   })}
