@@ -561,7 +561,9 @@ function ActivitiesPanel({ activities = [], entities = [], state, setState }) {
     };
 
     // Lägg INTE till i listan ännu – vänta tills användaren sparar.
-    setOpenItem(null);
+    // Vi använder newItem som openItem + draft, och räknar ut i save-funktionerna
+    // om posten ska läggas till eller uppdateras.
+    setOpenItem(newItem);
     setDraft(newItem);
   };
 
@@ -2054,52 +2056,70 @@ export default function App() {
   }
 
   function createOffer() {
-    const id = newId();
-    const o = {
-      id,
-      title: "",
-      customerId: "",
-      value: 0,
-      status: "utkast",
-      note: "",
-      nextActionDate: "",
-      files: {
-        Ritningar: [],
-        Offerter: [],
-        Kalkyler: [],
-        KMA: [],
-      },
-      supplierIds: [],
-      createdAt: new Date().toISOString(),
-      _shouldOpen: true,
-    };
+    setState((s) => {
+      const base = 353001;
+      const existing = (s.offers || [])
+        .map((o) => Number(o.offerNumber))
+        .filter((n) => Number.isFinite(n) && n >= base);
+      const nextNumber = existing.length ? Math.max(...existing) + 1 : base;
 
-    setState((s) => ({ ...s, offers: [...(s.offers || []), o] }));
+      const id = newId();
+      const o = {
+        id,
+        title: "",
+        customerId: "",
+        value: 0,
+        status: "utkast",
+        note: "",
+        nextActionDate: "",
+        files: {
+          Ritningar: [],
+          Offerter: [],
+          Kalkyler: [],
+          KMA: [],
+        },
+        supplierIds: [],
+        offerNumber: nextNumber,
+        createdAt: new Date().toISOString(),
+        _shouldOpen: true,
+      };
+
+      return { ...s, offers: [...(s.offers || []), o] };
+    });
     setView("offers");
   }
 
   function createProjectEmpty() {
-    const id = newId();
-    const p = {
-      id,
-      name: "",
-      customerId: "",
-      status: "pågående",
-      budget: 0,
-      startDate: "",
-      endDate: "",
-      note: "",
-      files: {
-        Ritningar: [],
-        Offerter: [],
-        Kalkyler: [],
-        KMA: [],
-      },
-      createdAt: new Date().toISOString(),
-      _shouldOpen: true,
-    };
+    setState((s) => {
+      const base = 653001;
+      const existing = (s.projects || [])
+        .map((p) => Number(p.projectNumber))
+        .filter((n) => Number.isFinite(n) && n >= base);
+      const nextNumber = existing.length ? Math.max(...existing) + 1 : base;
 
-    setState((s) => ({ ...s, projects: [...(s.projects || []), p] }));
+      const id = newId();
+      const p = {
+        id,
+        projectNumber: nextNumber,
+        name: "",
+        customerId: "",
+        status: "pågående",
+        budget: 0,
+        startDate: "",
+        endDate: "",
+        note: "",
+        files: {
+          Ritningar: [],
+          Offerter: [],
+          Kalkyler: [],
+          KMA: [],
+        },
+        createdAt: new Date().toISOString(),
+        _shouldOpen: true,
+      };
+
+      return { ...s, projects: [...(s.projects || []), p] };
+    });
     setView("projects");
   }
 
