@@ -1,0 +1,18 @@
+/* Tvinga ljus bakgrund + mörk text överallt */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  color: #111111;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+button, input, select {
+  font-family: inherit;
+  color: #111111;
+}
